@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arbiter review</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fafaf9; --card: #fff; --ink: #1c1917; --muted: #78716c; --line: #e7e5e4;
+    --accent: #1c1917; --accent-ink: #fff; --ok: #15803d; --warn: #b45309; --bad: #b91c1c;
+    --tag: #f5f5f4; --shot: #f5f5f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c0a09; --card: #1c1917; --ink: #fafaf9; --muted: #a8a29e; --line: #292524;
+      --accent: #fafaf9; --accent-ink: #0c0a09; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
+      --tag: #292524; --shot: #0c0a09;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    padding: 0 16px 80px;
+  }
+  header {
+    max-width: 800px; margin: 0 auto; padding: 28px 0 8px;
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  header .project { color: var(--muted); }
+  header .count { color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+  nav { max-width: 800px; margin: 12px auto 0; display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+  nav button {
+    border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted);
+    padding: 8px 12px; margin-bottom: -1px; font-weight: 500;
+  }
+  nav button:hover { border-color: var(--line); color: var(--ink); }
+  nav button.on { color: var(--ink); border-bottom-color: var(--ink); }
+  main { max-width: 800px; margin: 0 auto; }
+  h2 {
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin: 32px 0 10px;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px 16px; margin-bottom: 12px;
+  }
+  .card.done { opacity: 0.55; padding: 12px 20px; }
+  .card h3 { font-size: 16px; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .card .why { margin: 0 0 8px; }
+  .lines { margin: 0 0 10px; display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; }
+  .lines dt { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; padding-top: 3px; }
+  .lines dd { margin: 0; }
+  .lines dd.muted { color: var(--muted); }
+  .level { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--tag); color: var(--muted); vertical-align: 2px; margin-left: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+  .level.feature { color: var(--ink); }
+  .group { display: flex; align-items: baseline; gap: 10px; margin: 32px 0 10px; }
+  .group h2 { margin: 0; text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--ink); }
+  .group span { color: var(--muted); font-size: 13px; }
+  .polish { background: var(--card); border: 1px dashed var(--line); border-radius: 12px; padding: 12px 20px; margin-bottom: 12px; }
+  .polish .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .polish .row .n { color: var(--muted); flex: 1; }
+  .polish ul { list-style: none; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); }
+  .polish li { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+  .polish li span { flex: 1; }
+  .polish li button { padding: 3px 10px; font-size: 13px; }
+  .card ul { margin: 0 0 10px; padding: 0; list-style: none; }
+  .card ul.rejected li { padding-left: 18px; position: relative; }
+  .card ul.rejected li::before { content: "✗"; position: absolute; left: 0; color: var(--muted); }
+  .split { display: flex; gap: 18px; align-items: flex-start; }
+  .split .body { flex: 1; min-width: 0; }
+  .thumb {
+    flex: 0 0 180px; max-width: 40%; border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+    background: var(--shot); cursor: zoom-in;
+  }
+  .thumb img { display: block; width: 100%; height: auto; }
+  .thumb .cap { font-size: 12px; color: var(--muted); padding: 4px 8px; border-top: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta { color: var(--muted); font-size: 13px; display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .meta .tag { background: var(--tag); padding: 1px 8px; border-radius: 4px; cursor: help; }
+  .meta a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  .meta a:hover { color: var(--ink); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 14px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); padding: 7px 14px; cursor: pointer;
+  }
+  button:hover { border-color: var(--ink); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button.quiet { color: var(--muted); border-color: transparent; }
+  button.quiet:hover { border-color: var(--line); }
+  textarea {
+    font: inherit; width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); color: var(--ink); padding: 10px 12px; margin: 10px 0; resize: vertical;
+  }
+  .panel { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
+  .panel p { margin: 0 0 10px; }
+  .panel .rule { padding: 10px 12px; background: var(--tag); border-radius: 8px; margin-bottom: 10px; }
+  .panel .rule b { display: block; }
+  .conf { font-size: 12px; padding: 1px 6px; border-radius: 4px; background: var(--tag); color: var(--muted); }
+  .conf.exact { color: var(--ok); }
+  .conf.possible { color: var(--warn); }
+  .result { display: flex; align-items: center; gap: 10px; }
+  .result .ok { color: var(--ok); }
+  .result .skip { color: var(--muted); }
+  .bad { color: var(--bad); }
+  .empty { text-align: center; color: var(--muted); padding: 80px 0; }
+  .empty h2 { text-transform: none; letter-spacing: 0; font-size: 18px; color: var(--ink); }
+  /* candidates */
+  .cand { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 18px; }
+  @media (max-width: 640px) { .cand { grid-template-columns: 1fr; } .split { flex-direction: column; } .thumb { max-width: 100%; flex-basis: auto; } }
+  .cand .shot { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--shot); cursor: zoom-in; min-height: 80px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
+  .cand .shot img { display: block; width: 100%; height: auto; }
+  .state { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--tag); color: var(--muted); vertical-align: middle; margin-left: 8px; font-weight: 500; }
+  .state.approved { color: var(--ok); }
+  .state.rejected, .state.superseded { color: var(--bad); }
+  .state.in_review { color: var(--warn); }
+  .cand .decs { margin: 8px 0 12px; padding: 0; list-style: none; font-size: 14px; }
+  .cand .decs li { color: var(--muted); }
+  .cand .decs b { color: var(--ink); font-weight: 500; }
+  .reason { color: var(--muted); font-style: italic; margin: 0 0 10px; }
+  .comments { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; font-size: 14px; }
+  .comments .ok { color: var(--ok); }
+  .comments p { margin: 4px 0; } .comments b { font-weight: 500; }
+  #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; cursor: zoom-out; z-index: 10; padding: 24px; }
+  #lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; }
+  footer {
+    position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg);
+    border-top: 1px solid var(--line); padding: 12px 16px;
+  }
+  footer div { max-width: 800px; margin: 0 auto; display: flex; justify-content: flex-end; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Arbiter</h1>
+  <span class="project" id="project"></span>
+  <span class="count" id="count"></span>
+</header>
+<nav id="nav"></nav>
+<main id="main"></main>
+<div id="lightbox" onclick="this.style.display='none'"><img alt=""></div>
+<footer><div><button id="done" class="primary">Done</button></div></footer>
+
+<script>
+const DIMS = ['structure','interaction','states','content','visual','motion','access'];
+const LABEL = { structure:'Structure', interaction:'Interaction', states:'States', content:'Content', visual:'Visual', motion:'Motion', access:'Accessibility' };
+const STATE_LABEL = { generated:'Generated', in_review:'In review', approved:'Approved', rejected:'Rejected', superseded:'Superseded' };
+const results = {};   // pending id -> {item, kind, text}
+let state = null;
+let tab = 'decisions';
+
+async function load() {
+  state = await (await fetch('/api/state')).json();
+  render();
+}
+
+function render() {
+  document.getElementById('project').textContent = state.project;
+  document.getElementById('count').textContent = `${state.active} of ${state.cap} rules`;
+  const nav = document.getElementById('nav');
+  nav.innerHTML = '';
+  nav.appendChild(tabBtn('decisions', `Decisions · ${state.pending.length}`));
+  nav.appendChild(tabBtn('candidates', `Candidates · ${state.candidates.length}`));
+  const main = document.getElementById('main');
+  main.innerHTML = '';
+  (tab === 'decisions' ? renderDecisions : renderCandidates)(main);
+}
+
+function tabBtn(id, label) {
+  const b = btn(label, tab === id ? 'on' : '', () => { tab = id; render(); });
+  return b;
+}
+
+/* ── helpers ─────────────────────────────────────────────────────────── */
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function btn(label, cls, onClick) { const b = el('button', cls, label); b.onclick = onClick; return b; }
+function clearPanel(c) { c.querySelectorAll('.panel').forEach(p => p.remove()); }
+function zoom(src) { const lb = document.getElementById('lightbox'); lb.querySelector('img').src = src; lb.style.display = 'flex'; }
+/* A ticket ref: a link when it's a URL (labelled host · last path segment), plain text for a bare key like ENG-123. */
+function refLink(ref) {
+  if (!/^https?:\/\//i.test(ref)) return el('span', null, ref);
+  const a = el('a'); a.href = ref; a.target = '_blank'; a.rel = 'noreferrer'; a.title = ref;
+  try { const u = new URL(ref); const last = u.pathname.split('/').filter(Boolean).pop(); a.textContent = u.hostname.replace(/^www\./, '') + (last ? ' · ' + last : ''); }
+  catch { a.textContent = ref; }
+  return a;
+}
+function scopeWords(scope) {
+  if (scope === 'global') return 'Everywhere';
+  const i = scope.indexOf(':'); const kind = scope.slice(0, i), target = scope.slice(i + 1);
+  if (kind === 'file') return target.split('/').pop();
+  return target.replace(/[-_]+/g, ' ').replace(/^\w/, ch => ch.toUpperCase()) + ' pattern';
+}
+function messagePanel(c, text, cls) {
+  clearPanel(c);
+  const p = el('div', 'panel');
+  p.appendChild(el('p', cls, text));
+  p.appendChild(btn('OK', 'quiet', () => clearPanel(c)));
+  c.appendChild(p);
+}
+
+/* ── decisions tab ───────────────────────────────────────────────────── */
+const open = {};   // trigger -> polish list expanded
+const promoted = {}; // polish id -> shown as a full card
+
+function renderDecisions(main) {
+  const done = Object.keys(results).filter(id => !state.pending.some(p => p.id === id)).map(id => results[id].item);
+  const all = [...state.pending, ...done];
+  if (!all.length) {
+    main.innerHTML = '<div class="empty"><h2>All caught up.</h2><p>Nothing pending. The agent queues decisions here when work settles.</p></div>';
+    return;
+  }
+  const polishTotal = state.pending.filter(d => d.level === 'polish').length;
+  if (polishTotal > 1) {
+    const bar = el('div', 'actions'); bar.style.margin = '20px 0 0';
+    bar.appendChild(btn(`Confirm all ${polishTotal} polish`, null, () => sendAll({ as: 'accept', level: 'polish' })));
+    main.appendChild(bar);
+  }
+  for (const g of groupByTrigger(all)) {
+    const items = g.items, polish = g.polish.filter(d => !results[d.id] || promoted[d.id]);
+    const head = el('div', 'group');
+    head.appendChild(el('h2', null, g.trigger));
+    const n = items.filter(d => !results[d.id]).length;
+    head.appendChild(el('span', null, `${n} decision${n === 1 ? '' : 's'}${polish.length ? ` · +${polish.length} polish` : ''}`));
+    main.appendChild(head);
+    for (const d of items) main.appendChild(results[d.id] ? doneCard(d) : card(d));
+    for (const d of g.polish.filter(d => promoted[d.id])) main.appendChild(results[d.id] ? doneCard(d) : card(d));
+    const rest = g.polish.filter(d => !promoted[d.id]);
+    if (rest.length) main.appendChild(polishRow(g.trigger, rest));
+  }
+}
+
+function groupByTrigger(list) {
+  const out = [];
+  for (const d of list) {
+    let g = out.find(x => x.trigger === d.trigger);
+    if (!g) { g = { trigger: d.trigger, items: [], polish: [] }; out.push(g); }
+    (d.level === 'polish' ? g.polish : g.items).push(d);
+  }
+  return out;
+}
+
+function polishRow(trigger, list) {
+  const pending = list.filter(d => !results[d.id]);
+  const box = el('div', 'polish');
+  const row = el('div', 'row');
+  row.appendChild(el('span', 'n', pending.length ? `${pending.length} polish — one-off fixes, no rules come from these` : 'Polish confirmed'));
+  if (pending.length) {
+    row.appendChild(btn('Confirm all', 'primary', () => sendAll({ as: 'accept', level: 'polish', trigger })));
+    row.appendChild(btn(open[trigger] ? 'Hide' : 'Show', 'quiet', () => { open[trigger] = !open[trigger]; render(); }));
+  }
+  box.appendChild(row);
+  if (open[trigger] || !pending.length) {
+    const ul = el('ul');
+    for (const d of list) {
+      const li = el('li');
+      const r = results[d.id];
+      li.appendChild(el('span', r ? 'muted' : '', (r ? (r.kind === 'ok' ? '✓ ' : '— ') : '') + (d.change || d.decision)));
+      if (!r) {
+        li.appendChild(btn('Confirm', 'quiet', () => sendRow(d, li, { as: 'accept' })));
+        li.appendChild(btn('Skip', 'quiet', () => sendRow(d, li, { as: 'skip' })));
+        li.appendChild(btn('More', 'quiet', () => { promoted[d.id] = true; render(); }));
+      }
+      ul.appendChild(li);
+    }
+    box.appendChild(ul);
+  }
+  return box;
+}
+
+function card(d) {
+  const c = el('div', 'card'); c.dataset.id = d.id;
+  const split = el('div', 'split');
+  const body = el('div', 'body');
+  const h = el('h3', null, d.change || d.decision);
+  h.appendChild(el('span', 'level ' + d.level, d.level));
+  body.appendChild(h);
+  const dl = el('dl', 'lines');
+  const line = (k, v, cls) => { dl.appendChild(el('dt', null, k)); dl.appendChild(el('dd', cls, v)); };
+  if (d.change) line('Pattern', d.decision);
+  for (const r of d.rejected) line('Rejected', r);
+  line('Why', d.rationale, 'muted');
+  body.appendChild(dl);
+  const meta = el('div', 'meta');
+  const tag = el('span', 'tag', scopeWords(d.scope)); tag.title = d.scope; meta.appendChild(tag);
+  meta.appendChild(el('span', null, d.class));
+  if (d.verified === false) { const v = el('span', 'bad', '· unverified'); v.title = 'The files did not match this claim when it was queued'; meta.appendChild(v); }
+  meta.appendChild(el('span', null, '· ' + d.author + ', ' + d.date.slice(0, 10)));
+  if (d.ref) { meta.appendChild(el('span', null, '·')); meta.appendChild(refLink(d.ref)); }
+  body.appendChild(meta);
+  body.appendChild(actions(d, c));
+  split.appendChild(body);
+  if (d.snapshotUrl) {
+    const t = el('div', 'thumb'); t.onclick = () => zoom(d.snapshotUrl);
+    const img = el('img'); img.src = d.snapshotUrl; img.alt = d.candidateName || d.candidate; t.appendChild(img);
+    t.appendChild(el('div', 'cap', `${d.candidate} · ${d.candidateName || ''}`));
+    split.appendChild(t);
+  }
+  c.appendChild(split);
+  return c;
+}
+
+async function sendAll(body) {
+  const res = await (await fetch('/api/judge-all', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })).json();
+  const targets = state.pending.filter(d => (!body.level || d.level === body.level) && (!body.trigger || d.trigger === body.trigger));
+  for (const d of targets) if (!(res.failed || []).some(f => f.id === d.id)) results[d.id] = { item: d, kind: body.as === 'skip' ? 'skip' : 'ok', text: body.as === 'skip' ? 'Skipped' : 'Confirmed' };
+  await load();
+}
+
+async function sendRow(d, li, body) {
+  li.querySelectorAll('button').forEach(b => b.disabled = true);
+  const res = await (await fetch('/api/judge', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: d.id, ...body }) })).json();
+  if (res.exitCode !== 0) { li.querySelectorAll('button').forEach(b => b.disabled = false); return; }
+  results[d.id] = { item: d, kind: res.status === 'skipped' ? 'skip' : 'ok', text: res.status === 'skipped' ? 'Skipped' : `Recorded ${res.id}` };
+  await load();
+}
+
+function actions(d, c) {
+  const a = el('div', 'actions');
+  a.appendChild(btn('Confirm', d.level === 'polish' ? 'primary' : null, () => send(d, c, { as: 'accept' })));
+  if (d.level !== 'polish') a.appendChild(btn('Make it a rule', 'primary', () => send(d, c, { as: 'rule' })));
+  a.appendChild(btn('Skip', 'quiet', () => send(d, c, { as: 'skip' })));
+  a.appendChild(btn('Fix', 'quiet', () => fixPanel(d, c)));
+  return a;
+}
+
+function fixPanel(d, c) {
+  clearPanel(c);
+  const p = el('div', 'panel');
+  p.appendChild(el('p', null, 'What should it be instead?'));
+  const ta = el('textarea'); ta.placeholder = d.decision; p.appendChild(ta);
+  const row = el('div', 'actions');
+  row.appendChild(btn('Save fix', 'primary', () => { if (ta.value.trim()) send(d, c, { as: 'fix', to: ta.value.trim() }); }));
+  row.appendChild(btn('Cancel', 'quiet', () => clearPanel(c)));
+  p.appendChild(row);
+  c.appendChild(p); ta.focus();
+}
+
+function overlapPanel(d, c, res, body) {
+  clearPanel(c);
+  const p = el('div', 'panel');
+  p.appendChild(el('p', null, `Overlaps ${res.overlaps.length} active rule${res.overlaps.length === 1 ? '' : 's'}:`));
+  for (const o of res.overlaps) {
+    const r = el('div', 'rule');
+    r.appendChild(el('b', null, `${o.id} · ${o.decision}`));
+    r.appendChild(el('span', 'conf ' + o.confidence, (o.confidence === 'exact' ? 'exact — ' : 'possible — ') + o.reason));
+    p.appendChild(r);
+  }
+  const row = el('div', 'actions');
+  for (const o of res.overlaps) row.appendChild(btn(`Replace ${o.id}`, 'primary', () => send(d, c, { ...body, supersedes: o.id })));
+  row.appendChild(btn('Keep both', null, () => send(d, c, { ...body, keepBoth: true })));
+  row.appendChild(btn('Cancel', 'quiet', () => clearPanel(c)));
+  p.appendChild(row);
+  c.appendChild(p);
+}
+
+function contradictedPanel(d, c, res) {
+  clearPanel(c);
+  const p = el('div', 'panel');
+  p.appendChild(el('p', 'bad', 'The files don\'t match this claim:'));
+  const ul = el('ul', 'rejected');
+  for (const f of res.failed) ul.appendChild(el('li', null, `${f.kind}${f.needle ? ` "${f.needle}"` : ''} — ${f.file}${f.detail ? ` (${f.detail})` : ''}`));
+  p.appendChild(ul);
+  p.appendChild(el('p', null, 'Ask the agent to fix the code, or confirm it as an exception instead.'));
+  p.appendChild(btn('OK', 'quiet', () => clearPanel(c)));
+  c.appendChild(p);
+}
+
+async function send(d, c, body) {
+  c.querySelectorAll('button').forEach(b => b.disabled = true);
+  const res = await (await fetch('/api/judge', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: d.id, ...body }) })).json();
+  c.querySelectorAll('button').forEach(b => b.disabled = false);
+  if (res.exitCode === 2) return overlapPanel(d, c, res, body);
+  if (res.exitCode === 3) return messagePanel(c, res.message, 'bad');
+  if (res.exitCode === 4) return contradictedPanel(d, c, res);
+  if (res.exitCode !== 0) return messagePanel(c, (res.errors || ['Something went wrong']).join(' · '), 'bad');
+  results[d.id] = { item: d, kind: res.status === 'skipped' ? 'skip' : 'ok',
+    text: res.status === 'skipped' ? 'Skipped' : `Recorded ${res.id} as ${res.verdict}${res.supersedes ? ', replacing ' + res.supersedes : ''}` };
+  await load();
+}
+
+function doneCard(d) {
+  const r = results[d.id];
+  const c = el('div', 'card done');
+  const row = el('div', 'result');
+  row.appendChild(el('span', r.kind, r.kind === 'ok' ? '✓' : '—'));
+  row.appendChild(el('span', null, d.change || d.decision));
+  row.appendChild(el('span', 'meta', r.text));
+  c.appendChild(row);
+  return c;
+}
+
+/* ── candidates tab ──────────────────────────────────────────────────── */
+function renderCandidates(main) {
+  const all = state.candidates;
+  if (!all.length) {
+    main.innerHTML = '<div class="empty"><h2>No candidates yet.</h2><p>When the agent explores several directions for one feature, each one shows up here with its picture, its decisions, and — once you pick — why the others lost.</p></div>';
+    return;
+  }
+  const features = [...new Set(all.map(c => c.feature || '—'))];
+  for (const f of features) {
+    main.appendChild(el('h2', null, f));
+    for (const c of all.filter(c => (c.feature || '—') === f)) main.appendChild(candCard(c));
+  }
+}
+
+function candCard(c) {
+  const card = el('div', 'card'); card.dataset.id = c.id;
+  const grid = el('div', 'cand');
+  const body = el('div');
+  const h = el('h3', null, `${c.name}`);
+  const st = el('span', 'state ' + c.state, STATE_LABEL[c.state] + (c.state === 'superseded' && c.supersededBy ? ` → ${c.supersededBy}` : ''));
+  h.appendChild(st); body.appendChild(h);
+  if (c.reason) body.appendChild(el('p', 'reason', '“' + c.reason + '”'));
+  const decs = el('ul', 'decs');
+  if (!c.decisions.length) decs.appendChild(el('li', null, 'No decisions linked yet.'));
+  for (const d of c.decisions) { const li = el('li'); li.appendChild(el('b', null, d.decision)); li.appendChild(document.createTextNode(` · ${d.id} · ${d.verdict}`)); decs.appendChild(li); }
+  body.appendChild(decs);
+  const meta = el('div', 'meta');
+  meta.appendChild(el('span', null, c.id));
+  meta.appendChild(el('span', null, '· ' + c.author + ', ' + c.date.slice(0, 10)));
+  if (c.commit) meta.appendChild(el('span', null, '· ' + c.commit));
+  body.appendChild(meta);
+  if (c.comments && c.comments.length) {
+    const box = el('div', 'comments');
+    const stale = x => !!(x.board_version && state.boardVersion && x.board_version !== state.boardVersion);
+    const approvals = c.comments.filter(x => x.kind === 'approve' && !stale(x));
+    const earlier = c.comments.filter(x => x.kind === 'approve' && stale(x));
+    if (approvals.length) box.appendChild(el('p', 'ok', '✓ Looks good to ' + approvals.map(a => a.author_name).join(', ')));
+    if (earlier.length) box.appendChild(el('p', 'muted', 'Looked good to ' + earlier.map(a => a.author_name).join(', ') + ' on an earlier version'));
+    for (const x of c.comments.filter(x => x.kind === 'comment')) { const p = el('p'); p.appendChild(el('b', null, x.author_name + (x.decision_id ? ' on ' + x.decision_id : '') + ' ')); p.appendChild(document.createTextNode(x.body + (stale(x) ? ' (earlier version)' : ''))); box.appendChild(p); }
+    body.appendChild(box);
+  }
+  if (c.state === 'generated' || c.state === 'in_review') {
+    const a = el('div', 'actions');
+    a.appendChild(btn('Approve', 'primary', () => whyPanel(card, c, 'approved', 'Why this one? (kept on the directions it replaces)')));
+    a.appendChild(btn('Reject', null, () => whyPanel(card, c, 'rejected', 'Why not?')));
+    if (c.state === 'generated') a.appendChild(btn('In review', 'quiet', () => sendCand(card, c, { state: 'in_review' })));
+    body.appendChild(a);
+  }
+  grid.appendChild(body);
+  const shot = el('div', 'shot');
+  if (c.snapshotUrl) { const img = el('img'); img.src = c.snapshotUrl; img.alt = c.name; shot.appendChild(img); shot.onclick = () => zoom(c.snapshotUrl); }
+  else { shot.textContent = 'No snapshot'; shot.style.cursor = 'default'; shot.title = `npx arbiter candidate ${c.id} --capture`; }
+  grid.appendChild(shot);
+  card.appendChild(grid);
+  return card;
+}
+
+function whyPanel(card, c, newState, prompt) {
+  clearPanel(card);
+  const p = el('div', 'panel');
+  p.appendChild(el('p', null, prompt));
+  const ta = el('textarea'); ta.placeholder = 'One line'; p.appendChild(ta);
+  const row = el('div', 'actions');
+  row.appendChild(btn(newState === 'approved' ? 'Approve' : 'Reject', 'primary', () => sendCand(card, c, { state: newState, why: ta.value.trim() || undefined })));
+  row.appendChild(btn('Cancel', 'quiet', () => clearPanel(card)));
+  p.appendChild(row);
+  card.appendChild(p); ta.focus();
+}
+
+async function sendCand(card, c, body) {
+  card.querySelectorAll('button').forEach(b => b.disabled = true);
+  const res = await (await fetch('/api/candidate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: c.id, ...body }) })).json();
+  card.querySelectorAll('button').forEach(b => b.disabled = false);
+  if (res.exitCode !== 0) return messagePanel(card, (res.errors || ['Something went wrong']).join(' · '), 'bad');
+  await load();
+}
+
+document.getElementById('done').onclick = async () => {
+  await fetch('/api/done', { method: 'POST' });
+  document.body.innerHTML = '<div class="empty"><h2>Review closed.</h2><p>You can close this tab.</p></div>';
+};
+
+load();
+</script>
+</body>
+</html>

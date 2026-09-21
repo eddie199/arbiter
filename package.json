@@ -1,0 +1,44 @@
+{
+  "name": "arbiterdesign",
+  "version": "0.1.0",
+  "description": "Records design decisions made during agent-assisted UI work and feeds them back into the agent's context.",
+  "homepage": "https://arbiter.design",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eddie199/arbiter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eddie199/arbiter/issues"
+  },
+  "keywords": [
+    "design",
+    "decisions",
+    "claude-code",
+    "cursor",
+    "agents",
+    "ui"
+  ],
+  "license": "MIT",
+  "bin": {
+    "arbiter": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build",
+    "test": "node --test \"dist/test/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  }
+}

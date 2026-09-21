@@ -1,0 +1,237 @@
+#!/usr/bin/env node
+import { Command } from 'commander';
+import { record, queue, queueFindings, judge, judgeAll, retire, interactiveInput, JudgeAction } from './commands/record';
+import { verifyCommand } from './commands/verify';
+import { sweepCommand } from './commands/sweep';
+import { addCandidate, updateCandidate } from './commands/candidate';
+import { board } from './commands/board';
+import { drift } from './commands/drift';
+import { exportBoard } from './commands/export';
+import { publish } from './commands/publish';
+import { pull } from './commands/pull';
+import { snapshotWork } from './commands/snapshot';
+import { rules } from './commands/rules';
+import { init } from './commands/init';
+import { review } from './commands/review';
+
+const program = new Command();
+
+program
+  .name('arbiter')
+  .description('Records design decisions made during agent-assisted UI work and feeds them back into the agent.')
+  .version(require('../package.json').version);
+
+program
+  .command('record [json-or-pending-id]')
+  .description('Append a decision (JSON), queue it (--pending), or judge a queued one (P-0003 --as rule). No input at a terminal: asks step by step.')
+  .option('--pending', 'queue in .arbiter/pending.md for later review instead of recording now')
+  .option('--findings <file>', "queue one pending decision per finding in a scanner's JSON output")
+  .option('--tool <name>', 'with --findings: the scanner name for the record')
+  .option('--candidate <id>', 'the candidate (C-0001) this decision was made for')
+  .option('--retire <rule-id>', 'drop an active rule with no replacement (needs --why)')
+  .option('--why <reason>', 'with --retire: why the rule is dead')
+  .option('--unverified', 'record even if the named files contradict the claim')
+  .option('--as <action>', 'judge a pending id: accept | rule | skip | fix')
+  .option('--all', 'with --as: judge every pending item the same way')
+  .option('--level <level>', 'with --all: only this level (feature | pattern | polish)')
+  .option('--trigger <text>', 'with --all: only items queued for this piece of work')
+  .option('--to <decision>', 'with --as fix: what it should be instead')
+  .option('--supersedes <id>', 'the active rule this one replaces')
+  .option('--ref <url|key>', 'the ticket this was for: a URL or an issue key like ENG-123')
+  .option('--keep-both', 'record alongside overlapping rules instead of replacing one')
+  .option('--author <name>', 'override the author')
+  .option('--dry-run', 'validate and check overlap without writing')
+  .action(async (arg: string | undefined, opts) => {
+    let result;
+    if (opts.retire) {
+      result = retire(opts.retire, opts.why, opts);
+    } else if (opts.findings) {
+      result = queueFindings(opts.findings, opts);
+    } else if (opts.all) {
+      const as = opts.as as JudgeAction | undefined;
+      if (!as || !['accept', 'rule', 'skip'].includes(as)) {
+        result = { exitCode: 1 as const, output: { status: 'invalid', errors: ['--all needs --as accept | rule | skip'] } };
+      } else {
+        result = judgeAll({ ...opts, as });
+      }
+    } else if (arg && /^P-\d{4,}$/.test(arg)) {
+      const as = opts.as as JudgeAction | undefined;
+      if (!as || !['accept', 'rule', 'skip', 'fix'].includes(as)) {
+        result = { exitCode: 1 as const, output: { status: 'invalid', errors: ['judging a pending id needs --as accept | rule | skip | fix'] } };
+      } else {
+        result = judge(arg, { ...opts, as });
+      }
+    } else {
+      let input = arg ?? (await readStdin());
+      if (!input.trim() && process.stdin.isTTY) input = await interactiveInput();
+      if (!input.trim()) {
+        process.stdout.write(JSON.stringify({ status: 'invalid', errors: ['no input — pass JSON as an argument or on stdin'] }, null, 2) + '\n');
+        process.exit(1);
+      }
+      result = opts.pending ? queue(input, opts) : record(input, opts);
+    }
+    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    process.exit(result.exitCode);
+  });
+
+program
+  .command('init')
+  .description('Install Arbiter into this project: skill, DECISIONS.md, .arbiter/, arbiter.json, one line in AGENTS.md.')
+  .option('--client <name>', 'claude-code or cursor (default: detected)')
+  .option('--author <name>', 'who decides rules (default: git user.name)')
+  .option('--destination <name>', 'local (default) or git — git also commits candidate pages and prints GitHub links')
+  .option('-y, --yes', 'no questions — use detected values')
+  .option('--skip-install', 'do not add the package to devDependencies')
+  .action(async (opts) => {
+    const steps = await init(opts);
+    const w = Math.max(...steps.map((s) => s.file.length));
+    for (const s of steps) {
+      process.stdout.write(`  ${s.file.padEnd(w)}  ${s.outcome}${s.note ? `  — ${s.note}` : ''}\n`);
+    }
+    process.stdout.write('\nDone. Start a new agent session — it will read DECISIONS.md before UI work.\n');
+    if (opts.destination === 'git') {
+      process.stdout.write([
+        '',
+        'Git destination: every candidate change commits its page, CANDIDATES.md, and the board page in docs/arbiter/.',
+        'To serve the board page publicly, once: GitHub → your repo → Settings → Pages → Source: "Deploy from a branch",',
+        'Branch: main, Folder: /docs → Save. Then push. `npx arbiter board` prints the URL.',
+        '',
+      ].join('\n'));
+    }
+  });
+
+program
+  .command('verify [id]')
+  .description("Re-check a decision's claim against its files. No id: every active rule with evidence.")
+  .option('--json', 'machine-readable output')
+  .action((id: string | undefined, opts) => {
+    const r = verifyCommand(id, opts);
+    process.stdout.write(r.text + '\n');
+    process.exit(r.ok ? 0 : 4);
+  });
+
+program
+  .command('sweep <rule-id>')
+  .description('Find existing violations of a mechanical rule. Read-only.')
+  .option('--queue', 'queue one pending decision per affected file for review')
+  .option('--author <name>', 'author for queued items')
+  .option('--json', 'machine-readable output')
+  .action((id: string, opts) => {
+    const r = sweepCommand(id, opts);
+    process.stdout.write(r.text + '\n');
+  });
+
+program
+  .command('snapshot <work>')
+  .description('Attach a picture to a piece of work, named as its decisions named it: snapshot "Settings build" --file shot.png')
+  .option('--file <image>', 'screenshot to keep beside the work')
+  .option('--capture', 'macOS: drag-select a region of the screen')
+  .action((work: string, opts) => {
+    const result = snapshotWork(work, opts);
+    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    process.exit(result.exitCode);
+  });
+
+program
+  .command('candidate <id-or-add> [name]')
+  .description('Track a generated screen. `candidate add "<name>"` creates one; `candidate C-0002 --state approved` updates one.')
+  .option('--feature <name>', 'group directions for one feature together')
+  .option('--snapshot <image>', 'screenshot to keep beside the candidate')
+  .option('--capture', 'macOS: drag-select a region of the screen as the snapshot')
+  .option('--notes <text>', 'free text')
+  .option('--state <state>', 'generated | in_review | approved | rejected | superseded')
+  .option('--why <reason>', 'why it was rejected or superseded (kept forever)')
+  .option('--by <id>', 'with --state superseded: the candidate that replaced it')
+  .option('--keep-others', "approving doesn't supersede sibling directions")
+  .option('--author <name>', 'override the author')
+  .action((idOrAdd: string, name: string | undefined, opts) => {
+    const result = idOrAdd === 'add' ? addCandidate(name ?? '', opts) : updateCandidate(idOrAdd, opts);
+    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    process.exit(result.exitCode);
+  });
+
+program
+  .command('board')
+  .description('Candidates and their states.')
+  .option('--feature <name>', 'one feature only')
+  .option('--json', 'machine-readable output')
+  .action((opts) => {
+    process.stdout.write(board(opts) + '\n');
+  });
+
+program
+  .command('drift')
+  .description('Deviations per screen: accepted exceptions, unverified claims, rules currently broken.')
+  .option('--feature <name>', 'one feature only')
+  .option('--json', 'machine-readable output')
+  .action((opts) => {
+    process.stdout.write(drift(opts) + '\n');
+  });
+
+program
+  .command('export')
+  .description('Write a static, self-contained folder of the board for people without the repo. Opens anywhere.')
+  .option('--out <dir>', 'output folder (default: arbiter-export)')
+  .option('--feature <name>', 'one feature only')
+  .option('--include-rules', 'append the standing rules')
+  .option('--open', 'open it in the browser')
+  .action((opts) => {
+    const r = exportBoard(opts);
+    process.stdout.write(`Exported ${r.candidates} screen${r.candidates === 1 ? '' : 's'}, ${r.snapshots} snapshot${r.snapshots === 1 ? '' : 's'} → ${r.dir}\nOpen ${r.index}, or put the folder on any static host.\n`);
+  });
+
+program
+  .command('publish')
+  .description('Put the board online. Default: GitHub Pages (git destination, export, commit, push). --to <url>: a hosted Arbiter board with comments.')
+  .option('--to <url>', 'hosted board service (the hosted/ app); saved to .arbiter/hosted.json on first publish')
+  .option('--admin-token <token>', 'the site\'s admin token, needed once to create the project (or set ARBITER_ADMIN_TOKEN)')
+  .option('--no-push', 'GitHub Pages mode: do everything except push')
+  .action(async (opts) => {
+    const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken });
+    const w = Math.max(...r.steps.map((s) => s.step.length));
+    for (const s of r.steps) process.stdout.write(`  ${s.step.padEnd(w)}  ${s.outcome}${s.note ? `  — ${s.note}` : ''}\n`);
+    if (r.url) process.stdout.write(`\n${r.ok ? 'Live in about a minute' : 'Once the failed step is fixed'}: ${r.url}\n`);
+    process.exit(r.ok ? 0 : 1);
+  });
+
+program
+  .command('pull')
+  .description('Fetch comments and "looks good" reactions from the hosted board into .arbiter/comments.json.')
+  .action(async () => {
+    process.stdout.write((await pull()) + '\n');
+  });
+
+program
+  .command('review')
+  .description('Open a local page to judge pending decisions.')
+  .option('--port <n>', 'port (default: any free port)', (v) => Number(v))
+  .option('--no-open', "print the URL, don't open a browser")
+  .action(async (opts) => {
+    await review(opts);
+  });
+
+program
+  .command('rules [id]')
+  .description('Read decisions. No args: active rules. An id (D-0003): that one in full.')
+  .option('--dimension <name>', 'only one dimension (structure, interaction, states, content, visual, motion, access)')
+  .option('--archive', 'everything ever recorded — accepts, fixes, superseded — oldest first')
+  .option('--pending', 'queued decisions not yet judged')
+  .option('--json', 'machine-readable output')
+  .action((id: string | undefined, opts) => {
+    process.stdout.write(rules(id, opts) + '\n');
+  });
+
+program.parseAsync(process.argv).catch((e: Error) => {
+  process.stderr.write(`arbiter: ${e.message}\n`);
+  process.exit(1);
+});
+
+function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) return Promise.resolve('');
+  return new Promise((resolve) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (c) => (data += c));
+    process.stdin.on('end', () => resolve(data));
+  });
+}
