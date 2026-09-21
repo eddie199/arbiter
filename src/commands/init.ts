@@ -72,7 +72,7 @@ export async function init(opts: InitOptions = {}): Promise<Step[]> {
     }
 
     // ── arbiter.json ─────────────────────────────────────────────────────
-    const config: Config = { version: 1, destination: 'local', ...existing, author, client, ...(opts.destination && { destination: opts.destination }) };
+    const config: Config = { version: 1, destination: 'local', hosted: { url: 'https://arbiter.design' }, ...existing, author, client, ...(opts.destination && { destination: opts.destination }) };
     if (!existing) {
       writeConfig(paths, config);
       steps.push({ file: 'arbiter.json', outcome: 'created' });

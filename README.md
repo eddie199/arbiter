@@ -53,8 +53,8 @@ arbiter candidate add "<name>"      track a generated direction  [--feature f] [
 arbiter candidate C-0002 --state …  generated | in_review | approved | rejected | superseded
 arbiter board                       candidates and their states
 arbiter export                      static folder of the board for people without the repo  [--feature f] [--include-rules] [--open]
-arbiter publish                     board online via GitHub Pages: git destination + export + commit + push
-arbiter publish --to <url>          board online at arbiter.design (or your own hosted Arbiter), with comments; prints the share link
+arbiter publish                     board online at arbiter.design, with comments; prints the share link. Nothing to set up.
+arbiter publish --to <url|pages>    your own hosted Arbiter, or GitHub Pages (git destination + export + commit + push)
 arbiter pull                        bring comments and "looks good" reactions down into .arbiter/comments.json
 arbiter drift                       deviations per screen: accepts, unverified claims, rules broken
 arbiter rules                       active rules   [--dimension <name>] [--json]
@@ -92,7 +92,7 @@ The scan set is the rule's `paths` (directories or files) if it names any, else 
 
 ## Hosted board
 
-The hosted board at [arbiter.design](https://arbiter.design) serves a board at a share link and lets people comment or say "looks good" after a magic-link sign-in. Git stays the record: the service holds one board version per project and the comments, nothing else. `npx arbiter publish --to https://arbiter.design` uploads; `npx arbiter pull` brings comments back, where `arbiter review` shows them beside each screen. Only `publish` and `pull` ever touch the network. The service itself is a separate, private codebase.
+The hosted board at [arbiter.design](https://arbiter.design) serves a board at a share link and lets people comment or say "looks good" after a magic-link sign-in. Git stays the record: the service holds one board version per project and the comments, nothing else. `npx arbiter publish` uploads; `npx arbiter pull` brings comments back, where `arbiter review` shows them beside each screen. Only `publish` and `pull` ever touch the network. The service itself is a separate, private codebase.
 
 ## Candidates
 

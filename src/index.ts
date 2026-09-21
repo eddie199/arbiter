@@ -182,9 +182,9 @@ program
 
 program
   .command('publish')
-  .description('Put the board online. Default: GitHub Pages (git destination, export, commit, push). --to <url>: a hosted Arbiter board with comments.')
-  .option('--to <url>', 'hosted board service (the hosted/ app); saved to .arbiter/hosted.json on first publish')
-  .option('--admin-token <token>', 'the site\'s admin token, needed once to create the project (or set ARBITER_ADMIN_TOKEN)')
+  .description('Put the board online at arbiter.design and print the link. --to <url> for your own hosted Arbiter; --to pages for GitHub Pages (git destination, export, commit, push). Nothing to set up first.nts.')
+  .option('--to <url|pages>', 'where to publish: a hosted Arbiter (default arbiter.design), or `pages` for GitHub Pages')
+  .option('--admin-token <token>', 'only for a self-hosted Arbiter that gates board creation')
   .option('--no-push', 'GitHub Pages mode: do everything except push')
   .action(async (opts) => {
     const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken });

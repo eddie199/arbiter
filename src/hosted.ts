@@ -175,7 +175,8 @@ export async function publishHosted(paths: Paths, serviceUrl: string, opts: { ad
   if (!link || link.url !== base) {
     const admin = opts.admin ?? process.env[ADMIN_ENV];
     const r = await api(`${base}/api/projects`, { method: 'POST', body: JSON.stringify({ name: path.basename(paths.root) }), admin });
-    if (r.status === 401) throw new Error(`${base} needs an admin token to create projects. Ask whoever runs it, then: ${ADMIN_ENV}=<token> npx arbiter publish --to ${base}`);
+    if (r.status === 401) throw new Error(`${base} only lets an admin create boards. Ask whoever runs it for the token, then: npx arbiter publish --to ${base} --admin-token <token>`);
+    if (r.status === 429) throw new Error(`${base} is busy right now — try again in an hour`);
     if (!r.ok) throw new Error(`could not create project on ${base}: ${r.body.error ?? r.status}`);
     link = { url: base, projectId: String(r.body.id), slug: String(r.body.slug), shareUrl: String(r.body.url) };
     writeLink(paths, link);

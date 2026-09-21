@@ -17,9 +17,12 @@ import { deliver, pagesUrl } from '../destination';
 import { findRoot, readConfig, resolvePaths, writeConfig } from '../store';
 import { publishHosted } from '../hosted';
 
+/** Where `arbiter publish` goes when nothing says otherwise. */
+export const DEFAULT_HOST = 'https://arbiter.design';
+
 export interface PublishOptions {
   noPush?: boolean;
-  /** A hosted board (the hosted/ app). Publishes there instead of GitHub Pages. */
+  /** A hosted board. `--to pages` picks GitHub Pages instead. */
   to?: string;
   admin?: string;
   cwd?: string;
@@ -39,7 +42,9 @@ export async function publish(opts: PublishOptions = {}): Promise<PublishResult>
   const skip = (step: string, note: string) => steps.push({ step, outcome: 'skipped', note });
   const fail = (step: string, note: string) => steps.push({ step, outcome: 'failed', note });
 
-  const to = opts.to ?? readConfig(paths)?.hosted?.url;
+  // Hosted by default: the flag, then arbiter.json, then arbiter.design. `--to pages` is the git route.
+  const chosen = opts.to ?? readConfig(paths)?.hosted?.url ?? DEFAULT_HOST;
+  const to = chosen === 'pages' || chosen === 'git' ? null : chosen;
   if (to) {
     try {
       const r = await publishHosted(paths, to, { admin: opts.admin });

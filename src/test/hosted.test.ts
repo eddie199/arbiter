@@ -167,7 +167,7 @@ test('a site with an admin token refuses project creation without it, with a cle
   try {
     const r = await publish({ cwd, to: url });
     assert.equal(r.ok, false);
-    assert.ok(r.steps[0].note!.includes('ARBITER_ADMIN_TOKEN'));
+    assert.ok(r.steps[0].note!.includes('--admin-token'));
     const r2 = await publish({ cwd, to: url, admin: 'admin-1' });
     assert.ok(r2.steps.some((s) => s.step === 'project' && s.outcome === 'done'));
   } finally {
