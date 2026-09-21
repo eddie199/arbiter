@@ -7,7 +7,8 @@ import http from 'node:http';
 import { queue, judge, judgeAll, record } from '../commands/record';
 import { groupByTrigger, rules } from '../commands/rules';
 import { review } from '../commands/review';
-import { readActive, readArchive, readPending, resolvePaths } from '../store';
+import { setup } from '../commands/setup';
+import { readActive, readArchive, readPending, resolvePaths, writeConfig } from '../store';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'arbiter-pending-'));
 const input = (over: Record<string, unknown> = {}) =>
@@ -217,4 +218,20 @@ test('a ticket ref rides from the flag or the payload through queue and judge', 
   assert.deepEqual(readArchive(p).map((d) => [d.id, d.ref]), [['D-0001', 'ENG-2'], ['D-0002', 'ENG-9'], ['D-0003', 'ENG-9']]);
   // And it's in the file as its own line, so a URL never collides with the separator.
   assert.match(fs.readFileSync(p.archive, 'utf8'), /^- \*\*Ref:\*\* ENG-2$/m);
+});
+
+test('first /arbiter: the queue reports firstRun until setup records the check-in answer', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'arbiter-onboard-'));
+  writeConfig(resolvePaths(cwd), { version: 1, destination: 'local', author: 'test' });
+  const before = JSON.parse(rules(undefined, { cwd, pending: true, json: true }));
+  assert.equal(before.firstRun, true);
+  assert.equal(before.checkin, 'feature');
+  const r = setup({ cwd, checkin: 'quiet' });
+  assert.equal(r.exitCode, 0);
+  const after = JSON.parse(rules(undefined, { cwd, pending: true, json: true }));
+  assert.equal(after.firstRun, false);
+  assert.equal(after.checkin, 'quiet');
+  const queued = queue(JSON.stringify({ change: 'c', decision: 'd', rationale: 'r', trigger: 'T', scope: 'global', dimension: 'visual', class: 'judgment', level: 'polish' }), { cwd, author: 'test' });
+  assert.equal((queued.output as { checkin: string }).checkin, 'quiet', 'record --pending tells the agent the setting');
+  assert.equal(setup({ cwd, checkin: 'loud' }).exitCode, 1, 'unknown modes are refused');
 });

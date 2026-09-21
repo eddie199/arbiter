@@ -14,6 +14,8 @@ import { DIMENSION_LABELS, formatEntry } from '../format';
 import { findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, ACTIVE_CAP } from '../store';
 
 export interface RulesOptions {
+  /** Filled in by rules(); the queue's JSON reports firstRun and checkin from it. */
+  config?: import('../store').Config | null;
   json?: boolean;
   dimension?: string;
   archive?: boolean;
@@ -23,6 +25,7 @@ export interface RulesOptions {
 
 export function rules(id: string | undefined, opts: RulesOptions = {}): string {
   const paths = resolvePaths(findRoot(opts.cwd));
+  opts = { ...opts, config: readConfig(paths) };
   const cap = readConfig(paths)?.activeCap ?? ACTIVE_CAP;
 
   if (id) return one(id, paths, opts.json);
@@ -64,6 +67,8 @@ function pendingList(pending: Decision[], opts: RulesOptions): string {
   if (opts.json) {
     return JSON.stringify(
       {
+        firstRun: !opts.config?.onboarded,
+        checkin: opts.config?.checkin ?? 'feature',
         count: pending.length,
         polish: pending.filter((d) => d.level === 'polish').length,
         groups: groups.map((g) => ({ trigger: g.trigger, items: g.items, polish: g.polish })),

@@ -10,6 +10,7 @@ import { exportBoard } from './commands/export';
 import { publish } from './commands/publish';
 import { pull } from './commands/pull';
 import { snapshotWork } from './commands/snapshot';
+import { setup } from './commands/setup';
 import { rules } from './commands/rules';
 import { init } from './commands/init';
 import { review } from './commands/review';
@@ -119,6 +120,16 @@ program
   .action((id: string, opts) => {
     const r = sweepCommand(id, opts);
     process.stdout.write(r.text + '\n');
+  });
+
+program
+  .command('setup')
+  .description('Save how Arbiter checks in while you work: --checkin feature (one line after big work) | quiet | every. Marks the project as onboarded.')
+  .option('--checkin <mode>', 'feature | quiet | every')
+  .action((opts) => {
+    const result = setup(opts);
+    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    process.exit(result.exitCode);
   });
 
 program

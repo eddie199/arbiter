@@ -102,6 +102,7 @@ export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
       dimension: entry.dimension,
       verified: entry.verified,
       pending: pending.length + 1,
+      checkin: readConfig(paths)?.checkin ?? 'feature',
       review: 'npx arbiter review',
     },
   };

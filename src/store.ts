@@ -26,6 +26,10 @@ export interface Config {
   author?: string;
   client?: 'claude-code' | 'cursor' | 'unknown';
   activeCap?: number;
+  /** When the agent adds its one line: after feature-level work (default), never, or after every piece of work. */
+  checkin?: 'feature' | 'quiet' | 'every';
+  /** Set the first time /arbiter runs — the intro has been shown. */
+  onboarded?: string;
   /** Project words too common to signal overlap: ["audit", "journey"]. */
   overlap?: { ignore?: string[] };
   /** Globs never swept: ["app/globals.css", "design-reference/**", "docs/**"]. */

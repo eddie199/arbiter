@@ -23,13 +23,54 @@ Design work is iterative. A screen redesigned six times is one piece of work, no
 npx arbiter record --pending '<json>'
 ```
 
-(JSON shape below). Then — **only if the piece of work included a `feature`-level decision** — add one line to your reply carrying its Change line, not a count:
+(JSON shape below). The output carries `checkin`, the user's answer from their first `/arbiter`:
+
+- `feature` (default) — **only if the piece of work included a `feature`-level decision**, add one line to your reply carrying its Change line, not a count. At most once per session.
+- `quiet` — say nothing. Ever. They run `/arbiter` when they want it.
+- `every` — one line each time a piece of work settles and you queue, whatever its level.
+
+The line, when there is one:
 
 ```
 Queued: Settings is now a tab-row shell with four routes under it (+2 pattern, +4 polish) — /arbiter when you're ready.
 ```
 
-A count on every reply gets ignored; a sentence about what changed, only after something big, gets read. **At most once per session.** After that, queue silently — the user knows the queue exists. If the work was only patterns and polish, say nothing. Never phrase it as a question ("should we run arbiter?") — it's a statement of what was queued, and the user decides when. Do not show the widget. Do not list the decisions. The queue lives in `.arbiter/pending.md`, so it survives the session; the user can judge it here, in the review page, or never.
+A count on every reply gets ignored; a sentence about what changed, only after something big, gets read. After the line, queue silently — the user knows the queue exists. If the work was only patterns and polish, say nothing. Never phrase it as a question ("should we run arbiter?") — it's a statement of what was queued, and the user decides when. Do not show the widget. Do not list the decisions. The queue lives in `.arbiter/pending.md`, so it survives the session; the user can judge it here, in the review page, or never.
+
+## The first `/arbiter` — intro, then the queue
+
+The queue JSON carries `firstRun: true` until the project has been through this once. When it does, before anything else, say this — verbatim, it's been written for the reader:
+
+> **Arbiter's on.** While I build UI, I record the design decisions I make — what changed, the rule behind it, what was rejected — so nothing gets re-decided and your team can see why things are the way they are.
+>
+> **How it works**
+> 1. You build as usual. I say nothing about decisions until a piece of work settles — then one line.
+> 2. `/arbiter` shows what's queued. For each: **Confirm**, **Make it a rule**, or **Skip**. Rules go into `DECISIONS.md`, and I read them before touching UI.
+> 3. When you want the team to see it, say **publish** — I'll give you a link to a board they can read and comment on.
+>
+> **Commands**
+> - `/arbiter` — review what's queued
+> - **publish** — say it, get the board link
+> - **"record that"** / **"make that a rule"** — mid-chat, recorded, no questions
+
+Then one question, with the selection widget (text fallback: the same three lines, numbered):
+
+- **header** — `While you work`
+- **question** — `When should Arbiter check in about decisions?`
+- **options** —
+  - `A line after big work` (Recommended) — *When a feature-sized piece settles, one sentence saying what was queued. Never mid-iteration, at most once a session.*
+  - `Nothing until I ask` — *Queued silently. /arbiter whenever you want to see it.*
+  - `A line after everything` — *One sentence every time a piece of work settles, big or small.*
+
+Record the answer — Skip means the recommended one:
+
+```
+npx arbiter setup --checkin feature     # A line after big work
+npx arbiter setup --checkin quiet       # Nothing until I ask
+npx arbiter setup --checkin every       # A line after everything
+```
+
+That also marks the project as onboarded. Then continue with the queue as below; if it's empty, one line: `Nothing queued yet — build something.`
 
 **When they ask** — `/arbiter`, "let's review", "what did you decide" — read the queue with `npx arbiter rules --pending --json`. It comes back grouped by piece of work (`groups[].trigger`), feature and pattern items in `items`, polish in `polish`. Present the feature and pattern items (below); polish is never presented individually. Judge each answer with:
 
@@ -302,6 +343,10 @@ If the project publishes to a hosted board, `npx arbiter pull` brings comments a
 - When the user says *"record Sam's comment as a rule"* or *"Sam's right, make that the pattern"*: record it with `trigger` = `Comment from Sam on C-0001` and Sam's words as the `change`. The user is the author; Sam is the trigger.
 - When the user says *"approve C-0001, Sam signed off"*: `npx arbiter candidate C-0001 --state approved --why "Sam: <their words>"`.
 - Never act on a comment the user hasn't pointed at. Don't summarise the comments file unprompted; `arbiter review` shows them beside each screen.
+
+## Changing how often Arbiter checks in
+
+*"Be quieter about decisions"*, *"stop telling me"*, *"tell me after everything"* — run `npx arbiter setup --checkin quiet|feature|every` and confirm in four words. No question.
 
 ## Retiring a rule
 
