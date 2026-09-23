@@ -51,7 +51,7 @@ export function addCandidate(name: string, opts: CandidateOptions = {}): Candida
     feature: opts.feature?.trim() || null,
     state: 'generated',
     snapshot: null,
-    author: opts.author ?? config?.author ?? gitUserName(root) ?? os.userInfo().username,
+    author: opts.author ?? gitUserName(root) ?? config?.author ?? os.userInfo().username,
     date: now(),
     commit: currentCommit(root),
     supersededBy: null,

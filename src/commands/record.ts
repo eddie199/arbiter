@@ -45,6 +45,7 @@ import { parseFindings, toDecisionInput } from '../findings';
 import { Prompter } from './prompt';
 import fs from 'node:fs';
 import { refreshCandidates } from './candidate';
+import { updateNotice } from './update';
 
 export interface RecordOptions {
   supersedes?: string;
@@ -104,6 +105,8 @@ export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
       pending: pending.length + 1,
       checkin: readConfig(paths)?.checkin ?? 'feature',
       review: 'npx arbiter review',
+      // Present only when the project's skill file is from an older Arbiter than this one.
+      ...updateNotice(paths),
     },
   };
 }
@@ -377,7 +380,9 @@ function fill(input: DecisionInput, opts: RecordOptions, root: string): Omit<Dec
   const config = readConfig(resolvePaths(root));
   return {
     date: input.date ?? now(),
-    author: opts.author ?? input.author ?? config?.author ?? gitUserName(root) ?? os.userInfo().username,
+    // Whoever is at the keyboard. arbiter.json's author is committed, so in a shared repo it names
+    // whoever ran init — it's the fallback for a machine with no git identity, not the default.
+    author: opts.author ?? input.author ?? gitUserName(root) ?? config?.author ?? os.userInfo().username,
     class: input.class,
     dimension: input.dimension,
     decision: input.decision,

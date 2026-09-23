@@ -14,6 +14,7 @@ import { setup } from './commands/setup';
 import { rules } from './commands/rules';
 import { init } from './commands/init';
 import { review } from './commands/review';
+import { update } from './commands/update';
 
 const program = new Command();
 
@@ -193,12 +194,13 @@ program
 
 program
   .command('publish')
-  .description('Put the board online at arbiter.design and print the link. --to <url> for your own hosted Arbiter; --to pages for GitHub Pages (git destination, export, commit, push). Nothing to set up first.nts.')
+  .description('Put the board online at arbiter.design and print the link. --to <url> for your own hosted Arbiter; --to pages for GitHub Pages (git destination, export, commit, push). Nothing to set up first.')
   .option('--to <url|pages>', 'where to publish: a hosted Arbiter (default arbiter.design), or `pages` for GitHub Pages')
   .option('--admin-token <token>', 'only for a self-hosted Arbiter that gates board creation')
   .option('--no-push', 'GitHub Pages mode: do everything except push')
+  .option('--on-push', 'also write a GitHub Actions workflow that republishes on every push, and set its secret')
   .action(async (opts) => {
-    const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken });
+    const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken, onPush: opts.onPush });
     const w = Math.max(...r.steps.map((s) => s.step.length));
     for (const s of r.steps) process.stdout.write(`  ${s.step.padEnd(w)}  ${s.outcome}${s.note ? `  — ${s.note}` : ''}\n`);
     if (r.url) process.stdout.write(`\n${r.ok ? 'Live in about a minute' : 'Once the failed step is fixed'}: ${r.url}\n`);
@@ -219,6 +221,28 @@ program
   .option('--no-open', "print the URL, don't open a browser")
   .action(async (opts) => {
     await review(opts);
+  });
+
+program
+  .command('update')
+  .description('Bring this project up to the newest Arbiter: install it, refresh the skill file, re-pin the publish workflow. Settings and decisions untouched.')
+  .option('--check', 'report whether the skill file is behind the CLI; change nothing')
+  .option('--skip-install', 'refresh the skill from this copy without touching package.json')
+  .action(async (opts) => {
+    const r = await update(opts);
+    const ver = (v: string | null) => v ?? 'before 0.2';
+    if (opts.check) {
+      const s = r.before;
+      const line = s.file
+        ? `${s.file}: ${ver(s.skill)} · cli: ${s.cli} · ${s.stale ? 'behind — run: npx arbiter update' : 'current'}`
+        : 'no skill file — run: npx arbiter init';
+      process.stdout.write(line + '\n');
+      process.exit(s.stale ? 1 : 0);
+    }
+    const w = Math.max(...r.steps.map((s) => s.step.length));
+    for (const s of r.steps) process.stdout.write(`  ${s.step.padEnd(w)}  ${s.outcome}${s.note ? `  — ${s.note}` : ''}\n`);
+    process.stdout.write(`\n${r.after.file ?? 'skill'}: ${ver(r.before.skill)} → ${ver(r.after.skill)}${r.ok ? '. Start a new agent session to pick it up.' : ''}\n`);
+    process.exit(r.ok ? 0 : 1);
   });
 
 program
