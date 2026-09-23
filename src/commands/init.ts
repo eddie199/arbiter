@@ -205,11 +205,19 @@ export function detectPm(root: string): Pm {
   return fs.existsSync(path.join(root, 'pnpm-lock.yaml')) ? 'pnpm' : fs.existsSync(path.join(root, 'yarn.lock')) ? 'yarn' : 'npm';
 }
 
-/** Add a dev dependency. Quiet; true on success. (On Windows the package managers are .cmd shims, which need a shell.) */
+/**
+ * Add a dev dependency. Quiet; true on success.
+ *
+ * On Windows the package managers are .cmd shims, which execFile can't run on its own — it
+ * raises ENOENT. `shell: true` fixes that but makes Node warn about unescaped arguments
+ * (DEP0190) on every install, which is the first thing a new user would see. Going through
+ * cmd.exe resolves the shim with the arguments still a real array, so neither happens.
+ */
 export function addDevDependency(root: string, pm: Pm, spec: string): boolean {
   const args = pm === 'npm' ? ['install', '--save-dev', '--no-audit', '--no-fund', spec] : ['add', '-D', spec];
+  const win = process.platform === 'win32';
   try {
-    execFileSync(pm, args, { cwd: root, stdio: ['ignore', 'ignore', 'ignore'], shell: process.platform === 'win32' });
+    execFileSync(win ? 'cmd.exe' : pm, win ? ['/c', pm, ...args] : args, { cwd: root, stdio: ['ignore', 'ignore', 'ignore'] });
     return true;
   } catch {
     return false;
