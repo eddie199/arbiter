@@ -43,7 +43,7 @@ The output may also carry `update` — this skill file was written by an older A
 Arbiter's skill file is from 0.1.2 (the CLI is 0.2.0) — say "update arbiter" and I'll refresh it.
 ```
 
-Never run the update unasked. See *Updating Arbiter* below.
+Never run it unasked. When they say yes — or say *"update arbiter"* unprompted — run the command `update.command` names and relay what it prints. It leaves `DECISIONS.md`, the archive and the settings alone.
 
 ## The first `/arbiter` — intro, then the queue
 
@@ -345,10 +345,6 @@ npx arbiter publish
 It goes to arbiter.design. Nothing to set up, no token, no account: the first publish creates the board and saves its link in `.arbiter/hosted.json` (commit it) and a publish token in `.arbiter/hosted.token` (git-ignored — a teammate sets `ARBITER_PUBLISH_TOKEN` to republish). Later publishes replace the board. **Don't ask where to publish, and don't ask for a token.** Only a self-hosted Arbiter takes `--to <url>`; `--to pages` is GitHub Pages instead.
 
 *"Keep the board up to date"*, *"publish automatically"*, *"every time I push"* — `npx arbiter publish --on-push`. It publishes, writes `.github/workflows/arbiter.yml` (republishes when decisions land on the default branch), and sets the repository secret through `gh` if it's signed in — otherwise it prints the one-line instruction; relay it. Tell the user to commit the workflow and `.arbiter/hosted.json` together.
-
-## Updating Arbiter
-
-When the user says *"update arbiter"* — or when a queue output carried `update` and they said yes — run `npx arbiter update` and relay its steps. It installs the newest package, refreshes this skill file from it, and re-pins the publish workflow if there is one. `DECISIONS.md`, the archive, and `arbiter.json`'s settings are untouched. Then say: start a new session to pick up the new skill file. `npx arbiter update --check` reports without changing anything.
 
 ## Comments from stakeholders
 
