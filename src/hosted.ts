@@ -173,6 +173,11 @@ export async function publishHosted(paths: Paths, serviceUrl: string, opts: { ad
   let link = readLink(paths);
   let created = false;
   if (!link || link.url !== base) {
+    // Automation republishes an existing board; it never creates one. Without this, a repo where
+    // hosted.json wasn't committed would mint a fresh orphan board on every push.
+    if (process.env.CI && !process.env.ARBITER_CREATE_IN_CI) {
+      throw new Error(`no .arbiter/hosted.json for ${base} — publish once from a laptop and commit that file, so CI updates the existing board instead of creating a new one`);
+    }
     const admin = opts.admin ?? process.env[ADMIN_ENV];
     const r = await api(`${base}/api/projects`, { method: 'POST', body: JSON.stringify({ name: path.basename(paths.root) }), admin });
     if (r.status === 401) throw new Error(`${base} only lets an admin create boards. Ask whoever runs it for the token, then: npx arbiter publish --to ${base} --admin-token <token>`);

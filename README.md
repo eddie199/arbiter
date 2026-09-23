@@ -55,12 +55,14 @@ arbiter board                       candidates and their states
 arbiter export                      static folder of the board for people without the repo  [--feature f] [--include-rules] [--open]
 arbiter publish                     board online at arbiter.design, with comments; prints the share link. Nothing to set up.
 arbiter publish --to <url|pages>    your own hosted Arbiter, or GitHub Pages (git destination + export + commit + push)
+arbiter publish --on-push           also write a GitHub Actions workflow that republishes on every push, and set its secret
 arbiter pull                        bring comments and "looks good" reactions down into .arbiter/comments.json
 arbiter drift                       deviations per screen: accepts, unverified claims, rules broken
 arbiter rules                       active rules   [--dimension <name>] [--json]
 arbiter rules --pending             the queue
 arbiter rules --archive             everything ever
 arbiter rules D-0003                one decision in full
+arbiter update                      newest Arbiter: install it, refresh the skill file, re-pin the workflow  [--check]
 ```
 
 `record` exit codes: `0` recorded · `1` invalid · `2` overlap — re-run with `--supersedes <id>` or `--keep-both` · `3` cap reached · `4` contradicted — the named files don't match the claim.
@@ -93,6 +95,8 @@ The scan set is the rule's `paths` (directories or files) if it names any, else 
 ## Hosted board
 
 The hosted board at [arbiter.design](https://arbiter.design) serves a board at a share link and lets people comment or say "looks good" after a magic-link sign-in. Git stays the record: the service holds one board version per project and the comments, nothing else. `npx arbiter publish` uploads; `npx arbiter pull` brings comments back, where `arbiter review` shows them beside each screen. Only `publish` and `pull` ever touch the network. The service itself is a separate, private codebase.
+
+`npx arbiter publish --on-push` keeps the board current without anyone remembering: it writes `.github/workflows/arbiter.yml`, which runs `publish` when decisions land on the default branch, and sets the `ARBITER_PUBLISH_TOKEN` repository secret through `gh` if it's signed in (otherwise it prints the one-line instruction). Commit the workflow together with `.arbiter/hosted.json`. Under CI, `publish` only ever updates the board that file names — it refuses to create one, so a repo where the file wasn't committed can't mint orphan boards on every push.
 
 ## Candidates
 
@@ -133,6 +137,10 @@ Fixed before Stage 0 started, per the roadmap. Do not move.
 
 - **Stage 0** — if only mechanical verdicts get recorded after three weeks of use, the judgment layer isn't real.
 - **Stage 4 (candidates / board)** — build only if **5 or more** generated screens are in flight at once. If that never happens, cut it.
+
+## Updating
+
+Two things go stale independently: the package pinned in your devDependencies, and the skill file `init` copied into the project — the agent's whole protocol. `init` stamps the skill file with the version that wrote it, so Arbiter can tell the two apart with no network: when they differ, the queue's JSON carries `update`, and the agent says one line. `npx arbiter update` installs the newest package, refreshes the skill file from it, and re-pins the publish workflow if there is one. Settings, `DECISIONS.md`, and the archive are untouched. `--check` reports without changing anything. Nothing checks the registry on its own.
 
 ## Development
 

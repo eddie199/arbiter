@@ -11,7 +11,8 @@
 
 import { Decision, DIMENSIONS, Dimension, ID_PATTERN } from '../schema';
 import { DIMENSION_LABELS, formatEntry } from '../format';
-import { findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, ACTIVE_CAP } from '../store';
+import { findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, ACTIVE_CAP, type Paths } from '../store';
+import { updateNotice } from './update';
 
 export interface RulesOptions {
   /** Filled in by rules(); the queue's JSON reports firstRun and checkin from it. */
@@ -30,7 +31,7 @@ export function rules(id: string | undefined, opts: RulesOptions = {}): string {
 
   if (id) return one(id, paths, opts.json);
   if (opts.archive) return archive(readArchive(paths), readActive(paths), opts);
-  if (opts.pending) return pendingList(readPending(paths), opts);
+  if (opts.pending) return pendingList(readPending(paths), opts, paths);
 
   let active = readActive(paths);
   if (opts.dimension) {
@@ -62,13 +63,14 @@ export function rules(id: string | undefined, opts: RulesOptions = {}): string {
  *           Pattern  Half-width cards use icon-only action buttons
  *           Rejected A labelled button — wrapped under the text on mobile
  */
-function pendingList(pending: Decision[], opts: RulesOptions): string {
+function pendingList(pending: Decision[], opts: RulesOptions, paths: Paths): string {
   const groups = groupByTrigger(pending);
   if (opts.json) {
     return JSON.stringify(
       {
         firstRun: !opts.config?.onboarded,
         checkin: opts.config?.checkin ?? 'feature',
+        ...updateNotice(paths),
         count: pending.length,
         polish: pending.filter((d) => d.level === 'polish').length,
         groups: groups.map((g) => ({ trigger: g.trigger, items: g.items, polish: g.polish })),

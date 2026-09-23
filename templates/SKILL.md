@@ -37,6 +37,14 @@ Queued: Settings is now a tab-row shell with four routes under it (+2 pattern, +
 
 A count on every reply gets ignored; a sentence about what changed, only after something big, gets read. After the line, queue silently — the user knows the queue exists. If the work was only patterns and polish, say nothing. Never phrase it as a question ("should we run arbiter?") — it's a statement of what was queued, and the user decides when. Do not show the widget. Do not list the decisions. The queue lives in `.arbiter/pending.md`, so it survives the session; the user can judge it here, in the review page, or never.
 
+The output may also carry `update` — this skill file was written by an older Arbiter than the one installed (`update.skill` vs `update.cli`), so the protocol you're following is behind. Once per session, add one line, whatever `checkin` says:
+
+```
+Arbiter's skill file is from 0.1.2 (the CLI is 0.1.3) — say "update arbiter" and I'll refresh it.
+```
+
+Never run it unasked. When they say yes — or say *"update arbiter"* unprompted — run the command `update.command` names and relay what it prints. It leaves `DECISIONS.md`, the archive and the settings alone.
+
 ## The first `/arbiter` — intro, then the queue
 
 The queue JSON carries `firstRun: true` until the project has been through this once. When it does, before anything else, say this — verbatim, it's been written for the reader:
@@ -335,6 +343,8 @@ npx arbiter publish
 ```
 
 It goes to arbiter.design. Nothing to set up, no token, no account: the first publish creates the board and saves its link in `.arbiter/hosted.json` (commit it) and a publish token in `.arbiter/hosted.token` (git-ignored — a teammate sets `ARBITER_PUBLISH_TOKEN` to republish). Later publishes replace the board. **Don't ask where to publish, and don't ask for a token.** Only a self-hosted Arbiter takes `--to <url>`; `--to pages` is GitHub Pages instead.
+
+*"Keep the board up to date"*, *"publish automatically"*, *"every time I push"* — `npx arbiter publish --on-push`. It publishes, writes `.github/workflows/arbiter.yml` (republishes when decisions land on the default branch), and sets the repository secret through `gh` if it's signed in — otherwise it prints the one-line instruction; relay it. Tell the user to commit the workflow and `.arbiter/hosted.json` together.
 
 ## Comments from stakeholders
 

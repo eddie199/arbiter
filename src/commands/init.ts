@@ -32,8 +32,26 @@ const AGENTS_MARKER = '<!-- arbiter -->';
 const AGENTS_LINE =
   `Before any UI work, read \`DECISIONS.md\` — the design decisions this project has already made. Follow them; don't re-decide them. Record new ones with the \`arbiter\` skill. ${AGENTS_MARKER}`;
 
-const PKG_ROOT = path.join(__dirname, '..', '..');
+export const PKG_ROOT = path.join(__dirname, '..', '..');
 const SKILL_TEMPLATE = path.join(PKG_ROOT, 'templates', 'SKILL.md');
+
+/** The version of the package that's running. */
+export function selfVersion(): string {
+  return (JSON.parse(fs.readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf8')) as { version: string }).version;
+}
+
+/**
+ * The skill file is a copy: it goes stale when the package moves on and nobody re-runs init.
+ * A comment on its first body line says which version wrote it, so `update` can tell without
+ * touching the network. A skill file with no marker predates 0.1.3 — always stale.
+ */
+export const SKILL_MARKER = /<!-- arbiter skill (\S+) -->/;
+export const skillMarker = (version: string) => `<!-- arbiter skill ${version} -->`;
+
+/** Where the skill lives for a client. */
+export function skillPath(client: Client): string {
+  return client === 'cursor' ? path.join('.cursor', 'rules', 'arbiter.mdc') : path.join('.claude', 'skills', 'arbiter', 'SKILL.md');
+}
 
 export async function init(opts: InitOptions = {}): Promise<Step[]> {
   const root = path.resolve(opts.cwd ?? process.cwd());
@@ -64,7 +82,7 @@ export async function init(opts: InitOptions = {}): Promise<Step[]> {
     if (!author) {
       const guess = gitUserName(root) ?? os.userInfo().username;
       if (ask) {
-        const a = (await ask.question(`Who decides rules? (author on every record) (${guess}): `)).trim();
+        const a = (await ask.question(`Who decides rules? (the author when git has no user.name) (${guess}): `)).trim();
         author = a || guess;
       } else {
         author = guess;
@@ -135,25 +153,30 @@ export function detectClient(root: string): Client[] {
 const label = (c: Client) => (c === 'cursor' ? 'Cursor' : 'Claude Code');
 
 function skillFor(client: Client): { file: string; content: string } {
-  const template = fs.readFileSync(SKILL_TEMPLATE, 'utf8');
+  // A Windows checkout with autocrlf hands us CRLF; the frontmatter regex and the marker line assume LF.
+  const template = fs.readFileSync(SKILL_TEMPLATE, 'utf8').replace(/\r\n/g, '\n');
+  const m = /^---\n([\s\S]*?)\n---\n/.exec(template);
+  // The version marker is the first body line, under the frontmatter, so both clients carry it.
+  const body = skillMarker(selfVersion()) + '\n' + template.slice(m?.[0].length ?? 0);
   if (client === 'claude-code') {
-    return { file: path.join('.claude', 'skills', 'arbiter', 'SKILL.md'), content: template };
+    return { file: skillPath(client), content: (m?.[0] ?? '') + body };
   }
   // Cursor: same body, Cursor's rule frontmatter. "Agent requested" — picked by description.
-  const m = /^---\n([\s\S]*?)\n---\n/.exec(template);
   const desc = /^description:\s*(.*)$/m.exec(m?.[1] ?? '')?.[1] ?? 'Record design decisions made during UI work.';
-  const body = template.slice(m?.[0].length ?? 0);
   const front = `---\ndescription: ${desc}\nglobs:\nalwaysApply: false\n---\n`;
-  return { file: path.join('.cursor', 'rules', 'arbiter.mdc'), content: front + body };
+  return { file: skillPath(client), content: front + body };
 }
 
 function writeIfChanged(root: string, rel: string, content: string): Step {
   const abs = path.join(root, rel);
+  // The label is written with `/` on every platform, like the literals above it and
+  // updateStatus's file. Only the name shown changes; abs is the platform's own path.
+  const name = rel.split(path.sep).join('/');
   const before = fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : null;
-  if (before === content) return { file: rel, outcome: 'unchanged' };
+  if (before === content) return { file: name, outcome: 'unchanged' };
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   fs.writeFileSync(abs, content);
-  return { file: rel, outcome: before === null ? 'created' : 'updated' };
+  return { file: name, outcome: before === null ? 'created' : 'updated' };
 }
 
 function mergeAgentsLine(root: string, file: string, createIfMissing: boolean): Step {
@@ -175,6 +198,32 @@ const CURSOR_COMMAND = `# Arbiter — review queued design decisions
 Run \`npx arbiter rules --pending --json\` and present every queued decision, grouped by dimension, one line each with what it was chosen over. Ask the user to reply per number: confirm · rule · skip · or type what it should be. Then judge each with \`npx arbiter record P-xxxx --as accept|rule|skip|fix --to "…"\`. If the user wrote something after the command, treat it as "record that" and run \`npx arbiter record\` with it as a rule. Follow the arbiter rule file for the full protocol.
 `;
 
+export type Pm = 'npm' | 'pnpm' | 'yarn';
+
+/** Which package manager the host uses, by lockfile. */
+export function detectPm(root: string): Pm {
+  return fs.existsSync(path.join(root, 'pnpm-lock.yaml')) ? 'pnpm' : fs.existsSync(path.join(root, 'yarn.lock')) ? 'yarn' : 'npm';
+}
+
+/**
+ * Add a dev dependency. Quiet; true on success.
+ *
+ * On Windows the package managers are .cmd shims, which execFile can't run on its own — it
+ * raises ENOENT. `shell: true` fixes that but makes Node warn about unescaped arguments
+ * (DEP0190) on every install, which is the first thing a new user would see. Going through
+ * cmd.exe resolves the shim with the arguments still a real array, so neither happens.
+ */
+export function addDevDependency(root: string, pm: Pm, spec: string): boolean {
+  const args = pm === 'npm' ? ['install', '--save-dev', '--no-audit', '--no-fund', spec] : ['add', '-D', spec];
+  const win = process.platform === 'win32';
+  try {
+    execFileSync(win ? 'cmd.exe' : pm, win ? ['/c', pm, ...args] : args, { cwd: root, stdio: ['ignore', 'ignore', 'ignore'] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Add this package to the host's devDependencies so `npx arbiter` resolves locally. */
 function installSelf(root: string): Step {
   const self = JSON.parse(fs.readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf8')) as { name: string; version: string };
@@ -187,16 +236,8 @@ function installSelf(root: string): Step {
     return { file: 'package.json', outcome: 'unchanged', note: `${self.name} already a dependency` };
   }
 
-  const pm = fs.existsSync(path.join(root, 'pnpm-lock.yaml')) ? 'pnpm' : fs.existsSync(path.join(root, 'yarn.lock')) ? 'yarn' : 'npm';
-  const add = (spec: string): boolean => {
-    const args = pm === 'npm' ? ['install', '--save-dev', '--no-audit', '--no-fund', spec] : ['add', '-D', spec];
-    try {
-      execFileSync(pm, args, { cwd: root, stdio: ['ignore', 'ignore', 'ignore'] });
-      return true;
-    } catch {
-      return false;
-    }
-  };
+  const pm = detectPm(root);
+  const add = (spec: string): boolean => addDevDependency(root, pm, spec);
 
   // Registry first; fall back to the copy we're running from (unpublished / local dev).
   if (add(`${self.name}@^${self.version}`)) {
