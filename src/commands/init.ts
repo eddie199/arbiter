@@ -169,11 +169,14 @@ function skillFor(client: Client): { file: string; content: string } {
 
 function writeIfChanged(root: string, rel: string, content: string): Step {
   const abs = path.join(root, rel);
+  // The label is written with `/` on every platform, like the literals above it and
+  // updateStatus's file. Only the name shown changes; abs is the platform's own path.
+  const name = rel.split(path.sep).join('/');
   const before = fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : null;
-  if (before === content) return { file: rel, outcome: 'unchanged' };
+  if (before === content) return { file: name, outcome: 'unchanged' };
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   fs.writeFileSync(abs, content);
-  return { file: rel, outcome: before === null ? 'created' : 'updated' };
+  return { file: name, outcome: before === null ? 'created' : 'updated' };
 }
 
 function mergeAgentsLine(root: string, file: string, createIfMissing: boolean): Step {

@@ -78,13 +78,21 @@ function targetFiles(root: string, rule: Decision): { files: string[]; scanned: 
   const expand = (p: string): string[] => {
     const abs = path.resolve(root, p);
     if (!abs.startsWith(path.resolve(root)) || !fs.existsSync(abs)) return [];
-    return fs.statSync(abs).isFile() ? [path.relative(root, abs)] : walk(abs, root);
+    return fs.statSync(abs).isFile() ? [rel(root, abs)] : walk(abs, root);
   };
   if (rule.paths.length) return { files: [...new Set(rule.paths.flatMap(expand))], scanned: 'rule.paths' };
   const scope = parseScope(rule.scope);
   if (scope.kind === 'file') return { files: expand(scope.target!), scanned: 'scope' };
   return { files: walk(root, root), scanned: 'project' };
 }
+
+/**
+ * A path relative to the root, always with `/`. Windows' path.relative gives `docs\ref.html`,
+ * but excludes and rule.paths are written as globs with `/` — unnormalised, every exclude
+ * silently matched nothing there. It's also what gets recorded and published, so one project's
+ * violations shouldn't read differently depending on who swept.
+ */
+const rel = (root: string, abs: string): string => path.relative(root, abs).split(path.sep).join('/');
 
 function walk(dir: string, root: string, out: string[] = []): string[] {
   if (out.length >= MAX_FILES) return out;
@@ -99,7 +107,7 @@ function walk(dir: string, root: string, out: string[] = []): string[] {
     if (e.isDirectory()) {
       if (!SKIP_DIRS.has(e.name) && !e.name.startsWith('.')) walk(path.join(dir, e.name), root, out);
     } else if (e.isFile() && SOURCE_EXT.has(path.extname(e.name))) {
-      out.push(path.relative(root, path.join(dir, e.name)));
+      out.push(rel(root, path.join(dir, e.name)));
     }
   }
   return out;
