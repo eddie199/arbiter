@@ -1,5 +1,5 @@
 /**
- * 0.2: identity per person, the update notice + `arbiter update`, publish --on-push.
+ * 0.1.3: identity per person, the update notice + `arbiter update`, publish --on-push.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -76,10 +76,10 @@ test('init stamps the skill file; a stale stamp surfaces as `update` in the queu
   assert.deepEqual(q.output.update, { skill: '0.0.1', cli: selfVersion(), command: 'npx arbiter update' });
   assert.deepEqual(JSON.parse(rules(undefined, { cwd, pending: true, json: true })).update, q.output.update, 'the /arbiter read carries it too');
 
-  // A pre-0.2 skill file has no marker at all: stale, reported as such.
+  // A pre-0.1.3 skill file has no marker at all: stale, reported as such.
   fs.writeFileSync(skill, fs.readFileSync(skill, 'utf8').replace(/<!-- arbiter skill \S+ -->\n/, ''));
   assert.deepEqual(updateStatus(p), { cli: selfVersion(), skill: null, file: '.claude/skills/arbiter/SKILL.md', stale: true });
-  assert.equal((queue(decision({ scope: 'pattern:three', decision: 'Third' }), { cwd }).output.update as { skill: string }).skill, 'before 0.2');
+  assert.equal((queue(decision({ scope: 'pattern:three', decision: 'Third' }), { cwd }).output.update as { skill: string }).skill, 'before 0.1.3');
 
   // A workflow from publish --on-push pins a version; update re-pins it.
   fs.mkdirSync(path.join(cwd, '.github', 'workflows'), { recursive: true });

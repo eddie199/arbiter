@@ -43,7 +43,7 @@ export function selfVersion(): string {
 /**
  * The skill file is a copy: it goes stale when the package moves on and nobody re-runs init.
  * A comment on its first body line says which version wrote it, so `update` can tell without
- * touching the network. A skill file with no marker predates 0.2 — always stale.
+ * touching the network. A skill file with no marker predates 0.1.3 — always stale.
  */
 export const SKILL_MARKER = /<!-- arbiter skill (\S+) -->/;
 export const skillMarker = (version: string) => `<!-- arbiter skill ${version} -->`;

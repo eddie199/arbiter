@@ -25,7 +25,7 @@ import { findRoot, readConfig, resolvePaths, type Paths } from '../store';
 export interface UpdateStatus {
   /** The version running now. */
   cli: string;
-  /** The version that wrote the project's skill file; null = a pre-0.2 file with no marker. */
+  /** The version that wrote the project's skill file; null = a pre-0.1.3 file with no marker. */
   skill: string | null;
   /** The skill file, relative to the root, or null if init never wrote one. */
   file: string | null;
@@ -48,7 +48,7 @@ export function updateStatus(paths: Paths): UpdateStatus | null {
 /** What `record --pending` and `rules --pending --json` carry when the skill file is behind. */
 export function updateNotice(paths: Paths): { update?: { skill: string; cli: string; command: string } } {
   const s = updateStatus(paths);
-  return s?.stale ? { update: { skill: s.skill ?? 'before 0.2', cli: s.cli, command: 'npx arbiter update' } } : {};
+  return s?.stale ? { update: { skill: s.skill ?? 'before 0.1.3', cli: s.cli, command: 'npx arbiter update' } } : {};
 }
 
 export interface UpdateOptions {

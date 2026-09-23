@@ -1,14 +1,14 @@
 # Arbiter roadmap
 
-Build priority, top to bottom. Sized against 0.1.2. Gates are fixed; do not move.
+Build priority, top to bottom. Sized against 0.1.2. Shipped rows say which release carried them. Gates are fixed; do not move.
 
 | # | Item | What it does | Build | Feasibility | Where | Ship |
 |---|---|---|---|---|---|---|
-| 1 | Identity per person | Author = git user, not whoever ran `init`. Bug. | S | High | CLI | 0.2 |
-| 2 | `edit` — reword locally | Change the words of Change / Pattern / Rejected / Rationale without a correction. Pencil on review cards; relabel Fix → Correct. | S | High | CLI, review page | 0.2 |
+| 1 | Identity per person | Author = git user, not whoever ran `init`. Bug. | S | High | CLI | 0.1.3 |
+| 2 | `edit` — reword locally | Change the words of Change / Pattern / Rejected / Rationale without a correction. Pencil on review cards; relabel Fix → Correct. | S | High | CLI, review page | 0.3 |
 | 3 | Tier decisions on the card | Board card leads with the work summary, shows feature-level, folds pattern behind "+N". Send `level` on the wire. | S | High | CLI, service | Archived — a separate experience, later. Built on branch `archive/tiered-cards` |
-| 4 | Update notice + `arbiter update` | Agent says a newer version is out; one command bumps the package and refreshes the skill. Never auto-mutates. | S | High | CLI, skill | 0.2 |
-| 5 | Auto-publish on push | `init` offers a GitHub Actions workflow that runs `publish` on push. | S | High | CLI | 0.2 |
+| 4 | Update notice + `arbiter update` | Agent says a newer version is out; one command bumps the package and refreshes the skill. Never auto-mutates. | S | High | CLI, skill | 0.1.3 |
+| 5 | Auto-publish on push | `init` offers a GitHub Actions workflow that runs `publish` on push. | S | High | CLI | 0.1.3 |
 | 6 | Comments → queue → Apply | "Request change" on the board becomes a pending item; owner judges; **Apply** = agent makes the change and records it; `publish` sends resolution back. | M | High | CLI, skill, one board button | 0.3 |
 | 7 | Pin comments on the snapshot | Click a spot on the screen; comment attaches there. Stale pins fall back to the list after republish. | M | Medium | Service, review page | 0.3 |
 | 8 | Reword proposals from the board | Reader proposes new wording; owner accepts on pull; `edit` applies. Board never writes git directly. | M | Medium | Service, `pull` | 0.4 |

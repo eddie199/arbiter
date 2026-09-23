@@ -230,7 +230,7 @@ program
   .option('--skip-install', 'refresh the skill from this copy without touching package.json')
   .action(async (opts) => {
     const r = await update(opts);
-    const ver = (v: string | null) => v ?? 'before 0.2';
+    const ver = (v: string | null) => v ?? 'before 0.1.3';
     if (opts.check) {
       const s = r.before;
       const line = s.file
