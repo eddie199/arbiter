@@ -390,7 +390,9 @@ npx arbiter publish
 
 It goes to arbiter.design. Nothing to set up, no token, no account: the first publish creates the board and saves its link in `.arbiter/hosted.json` (commit it) and a publish token in `.arbiter/hosted.token` (git-ignored — a teammate sets `ARBITER_PUBLISH_TOKEN` to republish). Later publishes replace the board. **Don't ask where to publish, and don't ask for a token.** Only a self-hosted Arbiter takes `--to <url>`; `--to pages` is GitHub Pages instead.
 
-*"Keep the board up to date"*, *"publish automatically"*, *"every time I push"* — `npx arbiter publish --on-push`. It publishes, writes `.github/workflows/arbiter.yml` (republishes when decisions land on the default branch), and sets the repository secret through `gh` if it's signed in — otherwise it prints the one-line instruction; relay it. Tell the user to commit the workflow and `.arbiter/hosted.json` together.
+*"Keep the board up to date"*, *"publish automatically"* — `npx arbiter publish --auto`. The board then republishes whenever the record changes: after judging, after a screen changes state, after a picture is attached. It needs no GitHub, no CI and no git repository, so it's the right answer unless they specifically want it tied to pushes. `--no-auto` stops it.
+
+*"Every time I push"*, and the project is on GitHub — `npx arbiter publish --on-push`. That publishes, writes `.github/workflows/arbiter.yml` (republishes when decisions land on the default branch), and sets the repository secret through `gh` if it's signed in — otherwise it prints the one-line instruction; relay it. Tell the user to commit the workflow and `.arbiter/hosted.json` together.
 
 ## Comments from stakeholders
 

@@ -22,6 +22,7 @@ Board-side removal is out of scope here. Everything below is CLI, skill, or the 
 | 12 | Tell Arbiter where the app runs | CLI + skill | S | Not this release |
 | 13 | Document `--candidate` at judge time | docs | S | Built |
 | 14 | Two pictures of one screen | CLI + site | M | Gated — see below |
+| 15 | Auto-publish without GitHub | CLI | S | Built |
 
 ---
 
@@ -183,6 +184,19 @@ What's left is **one screen that needs two pictures**: desktop and mobile of the
 Build it when a screen has genuinely needed two pictures more than once. Until then #2 holds.
 
 The cost when it comes: the snapshot command takes a second name, storage goes from one file per piece of work to a folder, the manifest's single image becomes a list, and the card and detail page show several. CLI and service together — it can't ship in halves.
+
+### 15. Auto-publish without GitHub · CLI · S
+
+`--on-push` writes a GitHub Actions workflow, so it only works on GitHub. A tester with no GitHub — local, deployed to their own server — tried to set up automatic publishing and it *reported success*: it wrote `.github/workflows/arbiter.yml` into a project that wasn't even a git repository, told them to add a secret on github.com, and said the board would be live in a minute. None of it was true.
+
+Two halves:
+
+- `--on-push` now checks for a GitHub remote first. Without one it writes nothing and names what does work here.
+- `--auto` sets `hosted.auto` in `arbiter.json`, and the board republishes whenever the record changes — after judging, a screen changing state, a picture attached or removed. No GitHub, no CI, no git repository. Queueing doesn't trigger it, since the queue is never published. A failed republish never fails the command; the record is already written.
+
+Still only `publish` and `pull` touch the network, and `hosted.auto` is a committed line everyone on the project can see.
+
+**Found building it:** `autoPublish` called `publish` with no target, so it fell through to arbiter.design rather than the board the project is linked to. Anyone self-hosting would have had their board quietly published to the wrong service. Auto now always targets the link in `hosted.json`.
 
 ### 13. Document `--candidate` at judge time · docs · S
 

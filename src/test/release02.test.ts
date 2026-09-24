@@ -14,6 +14,7 @@ import { rules } from '../commands/rules';
 import { addCandidate } from '../commands/candidate';
 import { publish, WORKFLOW_FILE } from '../commands/publish';
 import { update, updateStatus } from '../commands/update';
+import { autoPublish, autoPublishOn } from '../autopublish';
 import { readArchive, resolvePaths, writeConfig } from '../store';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'arbiter-02-'));
@@ -105,48 +106,104 @@ test('init stamps the skill file; a stale stamp surfaces as `update` in the queu
 // ── 5. on-push ─────────────────────────────────────────────────────────────
 
 /** Just enough of the hosted service: create, upload, board. Records whether a project was created. */
-function fakeService(): Promise<{ url: string; created: number; close: () => void }> {
-  const state = { created: 0 };
+function fakeService(): Promise<{ url: string; created: number; boards: number; close: () => void }> {
+  const state = { created: 0, boards: 0 };
   return new Promise((resolve) => {
     const server = http.createServer(async (req, res) => {
       await new Promise<void>((r) => { req.on('data', () => {}); req.on('end', () => r()); });
       const send = (status: number, obj: unknown) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
       if (req.method === 'POST' && req.url === '/api/projects') { state.created++; return send(201, { id: 'p1', slug: 'abc', token: 'tok', url: 'http://x/p/abc' }); }
-      if (req.method === 'PUT' && req.url?.endsWith('/board')) return send(200, { ok: true, candidates: 0, url: 'http://x/p/abc' });
+      if (req.method === 'PUT' && req.url?.endsWith('/board')) { state.boards++; return send(200, { ok: true, candidates: 0, url: 'http://x/p/abc' }); }
       send(404, {});
     });
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address() as { port: number };
-      resolve({ url: `http://127.0.0.1:${port}`, get created() { return state.created; }, close: () => server.close() });
+      resolve({ url: `http://127.0.0.1:${port}`, get created() { return state.created; }, get boards() { return state.boards; }, close: () => server.close() });
     });
   });
 }
 
-test('publish --on-push writes the workflow once and says how to set the secret', async () => {
+test('--on-push refuses without GitHub and points at what does work there', async () => {
   const svc = await fakeService();
   try {
+    // The scenario a tester hit: no repository at all. This used to write a GitHub Actions file,
+    // tell them to add a secret on github.com, and report the board would be live in a minute.
     const cwd = tmp();
     writeConfig(resolvePaths(cwd), { version: 1, destination: 'local', author: 'test' });
     const r = await publish({ cwd, to: svc.url, onPush: true });
     assert.ok(r.ok, JSON.stringify(r.steps));
-    const byStep = Object.fromEntries(r.steps.map((s) => [s.step, s]));
+    const step = r.steps.find((x) => x.step === 'on-push');
+    assert.equal(step?.outcome, 'skipped');
+    assert.match(String(step?.note), /not a git repository/);
+    assert.match(String(step?.note), /publish --auto/, 'names the thing that works without GitHub');
+    assert.ok(!fs.existsSync(path.join(cwd, WORKFLOW_FILE)), 'no workflow for a project that cannot run one');
+
+    // A repo with a non-GitHub remote is the same story.
+    const gitlab = tmp();
+    writeConfig(resolvePaths(gitlab), { version: 1, destination: 'local', author: 'test' });
+    git(gitlab, 'init', '-q');
+    git(gitlab, 'remote', 'add', 'origin', 'git@gitlab.com:acme/app.git');
+    const g = await publish({ cwd: gitlab, to: svc.url, onPush: true });
+    assert.match(String(g.steps.find((x) => x.step === 'on-push')?.note), /is not GitHub/);
+    assert.ok(!fs.existsSync(path.join(gitlab, WORKFLOW_FILE)));
+  } finally {
+    svc.close();
+  }
+});
+
+test('publish --on-push writes the workflow once when the remote is GitHub', async () => {
+  const svc = await fakeService();
+  try {
+    const cwd = tmp();
+    writeConfig(resolvePaths(cwd), { version: 1, destination: 'local', author: 'test' });
+    git(cwd, 'init', '-q');
+    git(cwd, 'checkout', '-q', '-b', 'main');
+    git(cwd, 'remote', 'add', 'origin', 'git@github.com:acme/app.git');
+
+    const r = await publish({ cwd, to: svc.url, onPush: true });
+    const byStep = Object.fromEntries(r.steps.map((x) => [x.step, x]));
     assert.equal(byStep.workflow.outcome, 'done');
-    assert.equal(byStep.secret.outcome, 'skipped');
+    // Whether `gh` is installed and signed in depends on the machine, so only the wording is fixed.
     assert.ok(byStep.secret.note?.includes('ARBITER_PUBLISH_TOKEN'), 'the manual instruction names the secret');
 
     const wf = fs.readFileSync(path.join(cwd, WORKFLOW_FILE), 'utf8');
-    assert.ok(wf.includes('branches: [main]'), 'not a git repo → default branch');
+    assert.ok(wf.includes('branches: [main]'));
     assert.ok(wf.includes(`npx --yes arbiterdesign@${selfVersion()} publish`), 'pinned to this version');
     assert.ok(wf.includes('ARBITER_PUBLISH_TOKEN: ${{ secrets.ARBITER_PUBLISH_TOKEN }}'), 'the secret reaches publish');
     assert.ok(wf.includes("'.arbiter/**'"), 'triggers on decisions');
     assert.ok(wf.includes('concurrency:'), 'two pushes do not race');
 
     const again = await publish({ cwd, to: svc.url, onPush: true });
-    assert.equal(again.steps.find((s) => s.step === 'workflow')?.outcome, 'skipped', 'second run leaves it');
+    assert.equal(again.steps.find((x) => x.step === 'workflow')?.outcome, 'skipped', 'second run leaves it');
 
     fs.appendFileSync(path.join(cwd, WORKFLOW_FILE), '# my edit\n');
     const edited = await publish({ cwd, to: svc.url, onPush: true });
-    assert.ok(edited.steps.find((s) => s.step === 'workflow')?.note?.includes('leaving your edits'));
+    assert.ok(edited.steps.find((x) => x.step === 'workflow')?.note?.includes('leaving your edits'));
+  } finally {
+    svc.close();
+  }
+});
+
+test('--auto keeps the board current with no GitHub, no CI and no repository', async () => {
+  const svc = await fakeService();
+  try {
+    const cwd = tmp();
+    writeConfig(resolvePaths(cwd), { version: 1, destination: 'local', author: 'test' });
+    assert.equal(autoPublishOn(cwd), false, 'off until asked for');
+
+    const on = await publish({ cwd, to: svc.url, auto: true });
+    assert.equal(on.steps.find((x) => x.step === 'auto')?.outcome, 'done');
+    assert.equal(JSON.parse(fs.readFileSync(path.join(cwd, 'arbiter.json'), 'utf8')).hosted.auto, true, 'recorded where the team can see it');
+    assert.equal(autoPublishOn(cwd), true);
+
+    const published = svc.boards;
+    assert.match(String(await autoPublish(cwd)), /Board updated/);
+    assert.equal(svc.boards, published + 1, 'and it actually published');
+
+    const off = await publish({ cwd, to: svc.url, auto: false });
+    assert.equal(off.steps.find((x) => x.step === 'auto')?.outcome, 'done');
+    assert.equal(autoPublishOn(cwd), false);
+    assert.equal(await autoPublish(cwd), null, 'silent once off');
   } finally {
     svc.close();
   }

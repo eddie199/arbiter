@@ -40,8 +40,12 @@ export interface Config {
    * Default { dir: "docs/arbiter" }. Set to false to skip.
    */
   pages?: { dir?: string; includeRules?: boolean } | false;
-  /** A hosted board to publish to by default: `arbiter publish` with no --to. */
-  hosted?: { url?: string };
+  /**
+   * A hosted board to publish to by default: `arbiter publish` with no --to.
+   * `auto` republishes whenever the record changes — for projects with no GitHub, no CI, or no
+   * repository at all. Set by `arbiter publish --auto`.
+   */
+  hosted?: { url?: string; auto?: boolean };
 }
 
 export function resolvePaths(root: string = process.cwd()): Paths {

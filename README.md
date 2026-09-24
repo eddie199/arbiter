@@ -59,6 +59,7 @@ arbiter export                      static folder of the board for people withou
 arbiter publish                     board online at arbiter.design, with comments; prints the share link. Nothing to set up.
 arbiter publish --to <url|pages>    your own hosted Arbiter, or GitHub Pages (git destination + export + commit + push)
 arbiter publish --on-push           also write a GitHub Actions workflow that republishes on every push, and set its secret
+arbiter publish --auto              republish whenever the record changes — no GitHub, no CI, no repository needed
 arbiter pull                        bring comments and "looks good" reactions down into .arbiter/comments.json
 arbiter drift                       deviations per screen: accepts, unverified claims, rules broken
 arbiter rules                       active rules   [--dimension <name>] [--json]
@@ -123,7 +124,11 @@ The scan set is the rule's `paths` (directories or files) if it names any, else 
 
 The hosted board at [arbiter.design](https://arbiter.design) serves a board at a share link and lets people comment or say "looks good" after a magic-link sign-in. Git stays the record: the service holds one board version per project and the comments, nothing else. `npx arbiter publish` uploads; `npx arbiter pull` brings comments back, where `arbiter review` shows them beside each screen. Only `publish` and `pull` ever touch the network. The service itself is a separate, private codebase.
 
-`npx arbiter publish --on-push` keeps the board current without anyone remembering: it writes `.github/workflows/arbiter.yml`, which runs `publish` when decisions land on the default branch, and sets the `ARBITER_PUBLISH_TOKEN` repository secret through `gh` if it's signed in (otherwise it prints the one-line instruction). Commit the workflow together with `.arbiter/hosted.json`. Under CI, `publish` only ever updates the board that file names — it refuses to create one, so a repo where the file wasn't committed can't mint orphan boards on every push.
+Two ways to keep the board current without anyone remembering.
+
+`npx arbiter publish --auto` is the one that works anywhere. It sets `hosted.auto` in `arbiter.json`, and from then on the board republishes whenever the record changes — after judging, after a screen changes state, after a picture is attached or removed. No GitHub, no CI, no git repository. Queueing decisions doesn't trigger it, since the queue is never published. If a republish fails — offline, service down — the command still succeeds and says the board is behind; the record is already written, and git is what holds it. `--no-auto` turns it off.
+
+`npx arbiter publish --on-push` is the GitHub route, and it writes `.github/workflows/arbiter.yml`, which runs `publish` when decisions land on the default branch, and sets the `ARBITER_PUBLISH_TOKEN` repository secret through `gh` if it's signed in (otherwise it prints the one-line instruction). Commit the workflow together with `.arbiter/hosted.json`. Under CI, `publish` only ever updates the board that file names — it refuses to create one, so a repo where the file wasn't committed can't mint orphan boards on every push.
 
 ## Candidates
 
