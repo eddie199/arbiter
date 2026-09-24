@@ -40,7 +40,7 @@ A count on every reply gets ignored; a sentence about what changed, only after s
 The output may also carry `update` — this skill file was written by an older Arbiter than the one installed (`update.skill` vs `update.cli`), so the protocol you're following is behind. Once per session, add one line, whatever `checkin` says:
 
 ```
-Arbiter's skill file is from 0.1.2 (the CLI is 0.1.3) — say "update arbiter" and I'll refresh it.
+Arbiter's skill file is from 0.1.3 (the CLI is 0.1.4) — say "update arbiter" and I'll refresh it.
 ```
 
 Never run it unasked. When they say yes — or say *"update arbiter"* unprompted — run the command `update.command` names and relay what it prints. It leaves `DECISIONS.md`, the archive and the settings alone.
