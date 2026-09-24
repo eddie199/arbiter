@@ -14,8 +14,11 @@ import { judge, judgeAll, JudgeAction } from './record';
 import { updateCandidate } from './candidate';
 import { candidatesDir, decisionsFor, readCandidates } from '../candidates';
 import { readComments, readLink } from '../hosted';
-import { findRoot, readActive, readConfig, readPending, resolvePaths, ACTIVE_CAP } from '../store';
+import { findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, ACTIVE_CAP } from '../store';
 import { autoPublish } from '../autopublish';
+import { describe, readRequests } from '../requests';
+import { workDir, workSnapshot } from '../work';
+import { judgeRequest, RequestAction } from './request';
 
 export interface ReviewOptions {
   port?: number;
@@ -39,9 +42,21 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
       comments: comments.filter((x) => x.candidate_id === c.id),
     }));
     const byId = new Map(candidates.map((c) => [c.id, c]));
+    const version = readLink(paths)?.boardVersion ?? null;
+    const archive = readArchive(paths);
+    // The card a request was made on: its picture, a candidate's or a piece of work's.
+    const shotOf = (screen: string) => {
+      if (screen.startsWith('C-')) return byId.get(screen)?.snapshotUrl ?? null;
+      const f = workSnapshot(paths, screen);
+      return f ? `/snapshots/${path.basename(f)}` : null;
+    };
     return {
       project: path.basename(root),
       pending: readPending(paths).map((d) => ({ ...d, candidateName: d.candidate ? byId.get(d.candidate)?.name ?? null : null, snapshotUrl: d.candidate ? byId.get(d.candidate)?.snapshotUrl ?? null : null })),
+      // Open ones to answer; approved ones waiting on the agent — shown so it's clear nothing is lost.
+      requests: readRequests(paths)
+        .filter((r) => r.status === 'open' || r.status === 'approved')
+        .map((r) => ({ ...describe(paths, r, version, archive), snapshotUrl: shotOf(r.screen) })),
       candidates,
       hosted: readLink(paths)?.shareUrl ?? null,
       boardVersion: readLink(paths)?.boardVersion ?? null,
@@ -61,6 +76,13 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
       if (req.method === 'GET' && url.pathname === '/') {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
         res.end(fs.readFileSync(PAGE, 'utf8'));
+        return;
+      }
+      // Every write is JSON from this page. A form or a plain-text POST from another site in the same
+      // browser can't set that header without asking first — and nothing here answers when it asks.
+      if (req.method === 'POST' && !String(req.headers['content-type'] ?? '').startsWith('application/json')) {
+        res.writeHead(415);
+        res.end();
         return;
       }
       if (req.method === 'GET' && url.pathname === '/api/state') {
@@ -87,10 +109,17 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
         json(res, 200, { exitCode: result.exitCode, ...result.output });
         return;
       }
+      if (req.method === 'POST' && url.pathname === '/api/request') {
+        const body = JSON.parse(await readBody(req)) as { id: string; as: RequestAction; to?: string; why?: string };
+        const result = judgeRequest(body.id, { as: body.as, to: body.to, why: body.why, cwd });
+        if (result.exitCode === 0) changed = true;
+        json(res, 200, { exitCode: result.exitCode, ...result.output });
+        return;
+      }
       if (req.method === 'GET' && url.pathname.startsWith('/snapshots/')) {
         const file = path.basename(url.pathname);
-        const abs = path.join(candidatesDir(paths), file);
-        if (!/^C-\d{4,}\.(png|jpe?g|webp|gif|svg)$/.test(file) || !fs.existsSync(abs)) {
+        const abs = path.join(file.startsWith('W-') ? workDir(paths) : candidatesDir(paths), file);
+        if (!/^(C-\d{4,}|W-[a-z0-9-]{1,48})\.(png|jpe?g|webp|gif|svg)$/.test(file) || !fs.existsSync(abs)) {
           res.writeHead(404);
           res.end();
           return;
@@ -120,7 +149,8 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
       const addr = server.address() as { port: number };
       const url = `http://127.0.0.1:${addr.port}/`;
       const s = state();
-      process.stdout.write(`Arbiter review — ${s.pending.length} pending · ${s.candidates.length} candidate${s.candidates.length === 1 ? '' : 's'} · ${s.active} of ${s.cap} rules\n${url}\nPress Done in the page, or Ctrl-C here, to stop.\n`);
+      const asks = s.requests.filter((r) => r.status === 'open').length;
+      process.stdout.write(`Arbiter review — ${s.pending.length} pending${asks ? ` · ${asks} request${asks === 1 ? '' : 's'}` : ''} · ${s.candidates.length} candidate${s.candidates.length === 1 ? '' : 's'} · ${s.active} of ${s.cap} rules\n${url}\nPress Done in the page, or Ctrl-C here, to stop.\n`);
       if (opts.open !== false) openBrowser(url);
     });
 

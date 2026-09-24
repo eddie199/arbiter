@@ -4,14 +4,16 @@
  *   arbiter rules                  active rules, grouped by dimension
  *   arbiter rules --dimension x    one dimension
  *   arbiter rules --archive        everything ever: accepts, fixes, superseded, in order
- *   arbiter rules --pending        queued, not yet judged
- *   arbiter rules D-0003           one decision in full, wherever it lives
+ *   arbiter rules --pending        queued, not yet judged — and requests from the board waiting on an answer
+ *   arbiter rules D-0003           one decision in full, wherever it lives (R-0001: one request)
  *   arbiter rules --json           any of the above as JSON
  */
 
 import { Decision, DIMENSIONS, Dimension, ID_PATTERN } from '../schema';
 import { DIMENSION_LABELS, formatEntry } from '../format';
 import { findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, ACTIVE_CAP, type Paths } from '../store';
+import { readLink } from '../hosted';
+import { ChangeRequest, describe, oneLine, readRequests, REQUEST_ID, screenName } from '../requests';
 import { updateNotice } from './update';
 
 export interface RulesOptions {
@@ -29,6 +31,7 @@ export function rules(id: string | undefined, opts: RulesOptions = {}): string {
   opts = { ...opts, config: readConfig(paths) };
   const cap = readConfig(paths)?.activeCap ?? ACTIVE_CAP;
 
+  if (id && REQUEST_ID.test(id)) return oneRequest(id, paths, opts.json);
   if (id) return one(id, paths, opts.json);
   if (opts.archive) return archive(readArchive(paths), readActive(paths), opts);
   if (opts.pending) return pendingList(readPending(paths), opts, paths);
@@ -65,12 +68,20 @@ export function rules(id: string | undefined, opts: RulesOptions = {}): string {
  */
 function pendingList(pending: Decision[], opts: RulesOptions, paths: Paths): string {
   const groups = groupByTrigger(pending);
+  // Requests from the board: open ones wait on the owner's answer; approved ones on the agent.
+  const archiveAll = readArchive(paths);
+  const version = readLink(paths)?.boardVersion ?? null;
+  const requests = readRequests(paths);
+  const show = (status: ChangeRequest['status']) => requests.filter((r) => r.status === status).map((r) => describe(paths, r, version, archiveAll));
+  const open = show('open');
+  const approved = show('approved');
   if (opts.json) {
     return JSON.stringify(
       {
         firstRun: !opts.config?.onboarded,
         checkin: opts.config?.checkin ?? 'feature',
         ...updateNotice(paths),
+        requests: { open, approved },
         count: pending.length,
         polish: pending.filter((d) => d.level === 'polish').length,
         groups: groups.map((g) => ({ trigger: g.trigger, items: g.items, polish: g.polish })),
@@ -80,11 +91,22 @@ function pendingList(pending: Decision[], opts: RulesOptions, paths: Paths): str
       2,
     );
   }
-  if (!pending.length) return 'Nothing pending. All caught up.';
+  if (!pending.length && !open.length && !approved.length) return 'Nothing pending. All caught up.';
+  const lines: string[] = [];
+  if (open.length || approved.length) {
+    lines.push(`Requests from the board — ${[open.length ? `${open.length} to answer` : '', approved.length ? `${approved.length} approved, not yet made` : ''].filter(Boolean).join(', ')}`);
+    for (const r of [...open, ...approved]) {
+      lines.push(`  ${r.id}  ${r.author}${r.screenName ? `, on ${r.screenName}` : ''}${r.decision ? ` (${r.decision})` : ''}: ${oneLine(r.body)}${r.earlierVersion ? '  (earlier version)' : ''}`);
+      if (r.status === 'approved') lines.push(`          approved${r.instead ? ` — do instead: ${r.instead}` : ''}`);
+    }
+    if (open.length) lines.push(`  answer: npx arbiter record ${open[0].id} --as apply · --as apply --to "<instead>" · --as decline --why "<reason>"`);
+    if (!pending.length) return lines.join('\n');
+    lines.push('');
+  }
   const polish = pending.filter((d) => d.level === 'polish').length;
-  const lines = [
+  lines.push(
     `${pending.length} pending${polish ? ` (${polish} polish)` : ''} — review with \`npx arbiter review\` or /arbiter in chat`,
-  ];
+  );
   for (const g of groups) {
     lines.push('', g.trigger);
     for (const d of g.items) lines.push(...reviewLines(d));
@@ -124,6 +146,18 @@ function reviewLines(d: Decision): string[] {
   for (const r of d.rejected) lines.push(`${pad}Rejected ${r}`);
   lines.push(`${pad}${d.level} · ${d.dimension} · ${d.scope}`);
   return lines;
+}
+
+function oneRequest(id: string, paths: Paths, json?: boolean): string {
+  const r = readRequests(paths).find((x) => x.id === id);
+  if (!r) throw new Error(`${id} not found`);
+  if (json) return JSON.stringify(r, null, 2);
+  const answer =
+    r.status === 'open' ? 'open — waiting on the owner'
+    : r.status === 'declined' ? `declined by ${r.judgedBy}: ${r.reason}`
+    : r.status === 'approved' ? `approved by ${r.judgedBy}${r.instead ? ` — do instead: ${r.instead}` : ''}`
+    : `applied${r.instead ? ` differently (${r.instead})` : ''} — ${r.decisions.join(', ')}`;
+  return [`${r.id}  ${r.author} on ${screenName(paths, r.screen) ?? r.screen}${r.decision ? ` (${r.decision})` : ''}, ${r.date.slice(0, 10)}`, `        ${r.body}`, `        ${answer}`].join('\n');
 }
 
 function one(id: string, paths: ReturnType<typeof resolvePaths>, json?: boolean): string {

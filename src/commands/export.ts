@@ -34,7 +34,8 @@ export interface ExportResult {
 }
 
 const STATE_ORDER: CandidateState[] = ['approved', 'in_review', 'generated', 'rejected', 'superseded'];
-const STATE_LABEL: Record<CandidateState, string> = { approved: 'Approved', in_review: 'In review', generated: 'Generated', rejected: 'Rejected', superseded: 'Superseded' };
+/** In a designer's words, as the hosted board says them. The record keeps its own (`generated`, `superseded`). */
+const STATE_LABEL: Record<CandidateState, string> = { approved: 'Approved', in_review: 'In review', generated: 'Draft', rejected: 'Rejected', superseded: 'Replaced' };
 
 export function exportBoard(opts: ExportOptions = {}): ExportResult {
   const root = findRoot(opts.cwd);
@@ -112,6 +113,7 @@ function page(d: PageData): string {
   h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 44px 0 14px; }
   .cand { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 24px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; margin-bottom: 14px; }
   .cand.lesser { grid-template-columns: 220px minmax(0,1fr); padding: 16px 20px; opacity: .85; }
+  .cand.noshot { grid-template-columns: minmax(0,1fr); }
   @media (max-width: 680px) { .cand, .cand.lesser { grid-template-columns: 1fr; } }
   .shot { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--tag); min-height: 60px; display:flex; align-items:center; justify-content:center; color: var(--muted); font-size: 13px; }
   .shot img { display:block; width:100%; height:auto; }
@@ -154,14 +156,15 @@ function section(feature: string, cands: Candidate[], d: PageData): string {
 function card(c: Candidate, d: PageData): string {
   const lesser = c.state === 'rejected' || c.state === 'superseded';
   const by = c.supersededBy ? d.byId.get(c.supersededBy) : null;
-  const state = c.state === 'superseded' && by ? `Superseded by ${esc(by.name)}` : STATE_LABEL[c.state];
-  const shot = c.snapshot ? `<img src="snapshots/${esc(c.snapshot)}" alt="${esc(c.name)}">` : 'No screenshot';
+  const state = c.state === 'superseded' && by ? `Replaced by ${esc(by.name)}` : STATE_LABEL[c.state];
+  // No picture, no frame — the card is its words alone, as on the hosted board.
+  const shot = c.snapshot ? `<div class="shot"><img src="snapshots/${esc(c.snapshot)}" alt="${esc(c.name)}"></div>` : '';
   const decs = d.decisions(c.id);
   const decisions = decs.length
     ? `<div class="decs"><h4>Decided here</h4><ul>${decs.map((x) => `<li>${esc(x.change ?? x.decision)}${x.rejected.length ? `<small>over ${esc(x.rejected.map((r) => r.split(' — ')[0]).join(', '))}</small>` : ''}</li>`).join('')}</ul></div>`
     : '';
-  return `<article class="cand${lesser ? ' lesser' : ''}">
-  <div class="shot">${shot}</div>
+  return `<article class="cand${lesser ? ' lesser' : ''}${shot ? '' : ' noshot'}">
+  ${shot}
   <div>
     <h3>${esc(c.name)}<span class="state ${c.state}">${state}</span></h3>
     <p class="who">${esc(c.author)} · ${c.date.slice(0, 10)}</p>
@@ -175,7 +178,7 @@ function card(c: Candidate, d: PageData): string {
 function rulesSection(rules: Decision[]): string {
   if (!rules.length) return '';
   const groups = DIMENSIONS.map((dim) => [dim, rules.filter((r) => r.dimension === dim)] as const).filter(([, rs]) => rs.length);
-  return `<section class="rules"><h2>Standing rules — ${rules.length}</h2>${groups
+  return `<section class="rules"><h2>Guidelines — ${rules.length}</h2>${groups
     .map(([dim, rs]) => `<h4>${DIMENSION_LABELS[dim as Dimension]}</h4><ul>${rs.map((r) => `<li>${esc(r.decision)}<small>${esc(r.rationale)}</small></li>`).join('')}</ul>`)
     .join('')}</section>`;
 }

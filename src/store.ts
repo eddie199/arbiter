@@ -4,6 +4,7 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { Decision } from './schema';
@@ -161,6 +162,14 @@ export function gitUserName(root: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Whoever is at the keyboard. arbiter.json's author is committed, so in a shared repo it names
+ * whoever ran init — it's the fallback for a machine with no git identity, not the default.
+ */
+export function currentAuthor(root: string): string {
+  return gitUserName(root) ?? readConfig(resolvePaths(root))?.author ?? os.userInfo().username;
 }
 
 /** Timestamp without milliseconds: 2026-09-15T14:32:10Z */

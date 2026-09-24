@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { record, queue, queueFindings, judge, judgeAll, retire, interactiveInput, JudgeAction } from './commands/record';
+import { judgeRequest, RequestAction } from './commands/request';
 import { verifyCommand } from './commands/verify';
 import { sweepCommand } from './commands/sweep';
 import { addCandidate, updateCandidate } from './commands/candidate';
@@ -27,19 +28,20 @@ program
 
 program
   .command('record [json-or-pending-id]')
-  .description('Append a decision (JSON), queue it (--pending), or judge a queued one (P-0003 --as rule). No input at a terminal: asks step by step.')
+  .description('Append a decision (JSON), queue it (--pending), judge a queued one (P-0003 --as rule), or answer a request from the board (R-0001 --as apply). No input at a terminal: asks step by step.')
   .option('--pending', 'queue in .arbiter/pending.md for later review instead of recording now')
   .option('--findings <file>', "queue one pending decision per finding in a scanner's JSON output")
   .option('--tool <name>', 'with --findings: the scanner name for the record')
   .option('--candidate <id>', 'the candidate (C-0001) this decision was made for')
   .option('--retire <rule-id>', 'drop an active rule with no replacement (needs --why)')
-  .option('--why <reason>', 'with --retire: why the rule is dead')
+  .option('--why <reason>', 'with --retire: why the rule is dead; with a request and --as decline: why not')
   .option('--unverified', 'record even if the named files contradict the claim')
-  .option('--as <action>', 'judge a pending id: accept | rule | skip | fix')
+  .option('--as <action>', 'judge a pending id: accept | rule | skip | fix; answer a request id: apply | decline')
+  .option('--request <id>', 'the approved request (R-0001) this change was made for — recording it applies the request')
   .option('--all', 'with --as: judge every pending item the same way')
   .option('--level <level>', 'with --all: only this level (feature | pattern | polish)')
   .option('--trigger <text>', 'with --all: only items queued for this piece of work')
-  .option('--to <decision>', 'with --as fix: what it should be instead')
+  .option('--to <decision>', 'with --as fix: what it should be instead; with a request and --as apply: what to do instead of what was asked')
   .option('--supersedes <id>', 'the active rule this one replaces')
   .option('--ref <url|key>', 'the ticket this was for: a URL or an issue key like ENG-123')
   .option('--keep-both', 'record alongside overlapping rules instead of replacing one')
@@ -64,6 +66,13 @@ program
         result = { exitCode: 1 as const, output: { status: 'invalid', errors: ['judging a pending id needs --as accept | rule | skip | fix'] } };
       } else {
         result = judge(arg, { ...opts, as });
+      }
+    } else if (arg && /^R-\d{4,}$/.test(arg)) {
+      const as = opts.as as RequestAction | undefined;
+      if (!as || !['apply', 'decline'].includes(as)) {
+        result = { exitCode: 1 as const, output: { status: 'invalid', errors: ['answering a request needs --as apply (Apply, but…: add --to "<instead>") | decline --why "<reason>"'] } };
+      } else {
+        result = judgeRequest(arg, { ...opts, as });
       }
     } else {
       let input = arg ?? (await readStdin());
@@ -217,7 +226,7 @@ program
 
 program
   .command('pull')
-  .description('Fetch comments and "looks good" reactions from the hosted board into .arbiter/comments.json.')
+  .description('Fetch comments and "looks good" reactions from the hosted board into .arbiter/comments.json. "Request change" becomes a request (R-0001) to answer.')
   .action(async () => {
     process.stdout.write((await pull()) + '\n');
   });
@@ -277,10 +286,10 @@ program
 
 program
   .command('rules [id]')
-  .description('Read decisions. No args: active rules. An id (D-0003): that one in full.')
+  .description('Read decisions. No args: active rules. An id (D-0003, or a request R-0001): that one in full.')
   .option('--dimension <name>', 'only one dimension (structure, interaction, states, content, visual, motion, access)')
   .option('--archive', 'everything ever recorded — accepts, fixes, superseded — oldest first')
-  .option('--pending', 'queued decisions not yet judged')
+  .option('--pending', 'queued decisions not yet judged, and requests from the board not yet answered or made')
   .option('--json', 'machine-readable output')
   .action((id: string | undefined, opts) => {
     process.stdout.write(rules(id, opts) + '\n');

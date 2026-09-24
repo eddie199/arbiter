@@ -123,6 +123,12 @@
   .comments { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; font-size: 14px; }
   .comments .ok { color: var(--ok); }
   .comments p { margin: 4px 0; } .comments b { font-weight: 500; }
+  /* requests */
+  .card .asker { margin: 0 0 4px; color: var(--muted); font-size: 13px; }
+  .card h3.ask { font-weight: 500; white-space: pre-line; }
+  .card.approved { border-style: dashed; }
+  .card.approved h3.ask { color: var(--muted); }
+  code { font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--tag); padding: 1px 5px; border-radius: 4px; }
   #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; cursor: zoom-out; z-index: 10; padding: 24px; }
   #lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; }
   footer {
@@ -146,13 +152,17 @@
 <script>
 const DIMS = ['structure','interaction','states','content','visual','motion','access'];
 const LABEL = { structure:'Structure', interaction:'Interaction', states:'States', content:'Content', visual:'Visual', motion:'Motion', access:'Accessibility' };
-const STATE_LABEL = { generated:'Generated', in_review:'In review', approved:'Approved', rejected:'Rejected', superseded:'Superseded' };
+const STATE_LABEL = { generated:'Draft', in_review:'In review', approved:'Approved', rejected:'Rejected', superseded:'Replaced' };
 const results = {};   // pending id -> {item, kind, text}
 let state = null;
 let tab = 'decisions';
 
+let first = true;
 async function load() {
   state = await (await fetch('/api/state')).json();
+  // Someone is waiting on an answer: open there.
+  if (first && state.requests.some(r => r.status === 'open')) tab = 'requests';
+  first = false;
   render();
 }
 
@@ -161,11 +171,13 @@ function render() {
   document.getElementById('count').textContent = `${state.active} of ${state.cap} rules`;
   const nav = document.getElementById('nav');
   nav.innerHTML = '';
+  const asks = state.requests.filter(r => r.status === 'open').length;
+  if (state.requests.length || Object.keys(answered).length) nav.appendChild(tabBtn('requests', `Requests · ${asks}`));
   nav.appendChild(tabBtn('decisions', `Decisions · ${state.pending.length}`));
   nav.appendChild(tabBtn('candidates', `Candidates · ${state.candidates.length}`));
   const main = document.getElementById('main');
   main.innerHTML = '';
-  (tab === 'decisions' ? renderDecisions : renderCandidates)(main);
+  ({ requests: renderRequests, decisions: renderDecisions, candidates: renderCandidates })[tab](main);
 }
 
 function tabBtn(id, label) {
@@ -391,6 +403,100 @@ function doneCard(d) {
   return c;
 }
 
+/* ── requests tab ────────────────────────────────────────────────────── */
+const answered = {};   // request id -> {item, text} once declined here
+
+function renderRequests(main) {
+  const open = state.requests.filter(r => r.status === 'open');
+  const approved = state.requests.filter(r => r.status === 'approved');
+  const declined = Object.values(answered);
+  if (!open.length && !approved.length && !declined.length) {
+    main.innerHTML = '<div class="empty"><h2>No requests.</h2><p>When someone presses Request change on the board, it lands here after <code>npx arbiter pull</code>.</p></div>';
+    return;
+  }
+  if (open.length || declined.length) {
+    main.appendChild(el('h2', null, 'To answer'));
+    for (const r of open) main.appendChild(requestCard(r));
+    for (const a of declined) {
+      const c = el('div', 'card done'); const row = el('div', 'result');
+      row.appendChild(el('span', 'skip', '—')); row.appendChild(el('span', null, a.item.body)); row.appendChild(el('span', 'meta', a.text));
+      c.appendChild(row); main.appendChild(c);
+    }
+  }
+  if (approved.length) {
+    main.appendChild(el('h2', null, 'Approved — the agent makes these at your next /arbiter'));
+    for (const r of approved) main.appendChild(requestCard(r));
+  }
+}
+
+function requestCard(r) {
+  const c = el('div', 'card' + (r.status === 'approved' ? ' approved' : '')); c.dataset.id = r.id;
+  const split = el('div', 'split');
+  const body = el('div', 'body');
+  body.appendChild(el('p', 'asker', `${r.author} asks`));
+  body.appendChild(el('h3', 'ask', r.body));
+  const meta = el('div', 'meta');
+  meta.appendChild(el('span', null, r.screenName ? `on ${r.screenName}` : `on ${r.screen}`));
+  if (r.decision) meta.appendChild(el('span', null, `· about ${r.decision}`));
+  meta.appendChild(el('span', null, '· ' + r.date.slice(0, 10)));
+  if (r.earlierVersion) { const s = el('span', null, '· earlier version'); s.title = 'Asked about a version of the board that has since been republished'; meta.appendChild(s); }
+  meta.appendChild(el('span', null, '· ' + r.id));
+  body.appendChild(meta);
+  if (r.status === 'approved') {
+    const dl = el('dl', 'lines');
+    dl.appendChild(el('dt', null, 'Doing')); dl.appendChild(el('dd', null, r.instead ? r.instead : 'As asked'));
+    body.appendChild(dl);
+  } else {
+    const a = el('div', 'actions');
+    a.appendChild(btn('Apply', 'primary', () => sendRequest(r, c, { as: 'apply' })));
+    a.appendChild(btn('Apply, but…', null, () => insteadPanel(r, c)));
+    a.appendChild(btn('Decline', 'quiet', () => declinePanel(r, c)));
+    body.appendChild(a);
+  }
+  split.appendChild(body);
+  if (r.snapshotUrl) {
+    const t = el('div', 'thumb'); t.onclick = () => zoom(r.snapshotUrl);
+    const img = el('img'); img.src = r.snapshotUrl; img.alt = r.screenName || r.screen; t.appendChild(img);
+    t.appendChild(el('div', 'cap', r.screenName || r.screen));
+    split.appendChild(t);
+  }
+  c.appendChild(split);
+  return c;
+}
+
+function insteadPanel(r, c) {
+  clearPanel(c);
+  const p = el('div', 'panel');
+  p.appendChild(el('p', null, `What should happen instead? ${r.author} sees what was actually done.`));
+  const ta = el('textarea'); ta.placeholder = 'e.g. keep it where it is, make the button red'; p.appendChild(ta);
+  const row = el('div', 'actions');
+  row.appendChild(btn('Apply this instead', 'primary', () => { if (ta.value.trim()) sendRequest(r, c, { as: 'apply', to: ta.value.trim() }); }));
+  row.appendChild(btn('Cancel', 'quiet', () => clearPanel(c)));
+  p.appendChild(row);
+  c.appendChild(p); ta.focus();
+}
+
+function declinePanel(r, c) {
+  clearPanel(c);
+  const p = el('div', 'panel');
+  p.appendChild(el('p', null, `Why not? ${r.author} reads this on the board.`));
+  const ta = el('textarea'); ta.placeholder = 'One line'; p.appendChild(ta);
+  const row = el('div', 'actions');
+  row.appendChild(btn('Decline', 'primary', () => { if (ta.value.trim()) sendRequest(r, c, { as: 'decline', why: ta.value.trim() }); else ta.focus(); }));
+  row.appendChild(btn('Cancel', 'quiet', () => clearPanel(c)));
+  p.appendChild(row);
+  c.appendChild(p); ta.focus();
+}
+
+async function sendRequest(r, c, body) {
+  c.querySelectorAll('button').forEach(b => b.disabled = true);
+  const res = await (await fetch('/api/request', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: r.id, ...body }) })).json();
+  c.querySelectorAll('button').forEach(b => b.disabled = false);
+  if (res.exitCode !== 0) return messagePanel(c, (res.errors || ['Something went wrong']).join(' · '), 'bad');
+  if (res.status === 'declined') answered[r.id] = { item: r, text: `Declined — ${res.reason}` };
+  await load();
+}
+
 /* ── candidates tab ──────────────────────────────────────────────────── */
 function renderCandidates(main) {
   const all = state.candidates;
@@ -469,7 +575,7 @@ async function sendCand(card, c, body) {
 }
 
 document.getElementById('done').onclick = async () => {
-  await fetch('/api/done', { method: 'POST' });
+  await fetch('/api/done', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   document.body.innerHTML = '<div class="empty"><h2>Review closed.</h2><p>You can close this tab.</p></div>';
 };
 

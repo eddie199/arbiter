@@ -9,7 +9,7 @@ Build priority, top to bottom. Sized against 0.1.2. Shipped rows say which relea
 | 3 | Tier decisions on the card | Board card leads with the work summary, shows feature-level, folds pattern behind "+N". Send `level` on the wire. | S | High | CLI, service | Archived — a separate experience, later. Built on branch `archive/tiered-cards` |
 | 4 | Update notice + `arbiter update` | Agent says a newer version is out; one command bumps the package and refreshes the skill. Never auto-mutates. | S | High | CLI, skill | 0.1.3 |
 | 5 | Auto-publish on push | `init` offers a GitHub Actions workflow that runs `publish` on push. | S | High | CLI | 0.1.3 |
-| 6 | Comments → queue → Apply | "Request change" on the board becomes a pending item; owner judges; **Apply** = agent makes the change and records it; `publish` sends resolution back. | M | High | CLI, skill, one board button | 0.3 |
+| 6 | Comments → queue → Apply | "Request change" on the board becomes a pending item; owner judges; **Apply** = agent makes the change and records it; `publish` sends resolution back. | M | High | CLI, skill, one board button | 0.3 — built on `feat/requests` (CLI + site), not released |
 | 7 | Pin comments on the snapshot | Click a spot on the screen; comment attaches there. Stale pins fall back to the list after republish. | M | Medium | Service, review page | 0.3 |
 | 8 | Reword proposals from the board | Reader proposes new wording; owner accepts on pull; `edit` applies. Board never writes git directly. | M | Medium | Service, `pull` | 0.4 |
 | 9 | Sign-in to view + allowlist | Private boards. Allowlist by email or domain is the real feature; sign-in alone protects nothing. | M | Medium | Service, tiny CLI | 0.4 |

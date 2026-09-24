@@ -46,6 +46,8 @@ arbiter record P-0003 --as rule     judge a queued one: accept | rule | skip | f
 arbiter record --all --as accept    judge every queued item  [--level polish] [--trigger "Settings build"]
 arbiter record --findings f.json    queue a scanner's findings for verdicts
 arbiter record --retire D-0003 --why "…"   drop a rule with no replacement
+arbiter record R-0001 --as apply    answer a request from the board: apply [--to "<instead>"] | decline --why "…"
+arbiter record '<json>' --request R-0001   record the change made for an approved request; it's applied
 arbiter remove D-0004               take out a record that was never real: a decision, a screen (C-0001),
                                     or a picture (--snapshot "<work>")
 arbiter unlink D-0004               detach a decision from the screen it was recorded against
@@ -60,12 +62,13 @@ arbiter publish                     board online at arbiter.design, with comment
 arbiter publish --to <url|pages>    your own hosted Arbiter, or GitHub Pages (git destination + export + commit + push)
 arbiter publish --on-push           also write a GitHub Actions workflow that republishes on every push, and set its secret
 arbiter publish --auto              republish whenever the record changes — no GitHub, no CI, no repository needed
-arbiter pull                        bring comments and "looks good" reactions down into .arbiter/comments.json
+arbiter pull                        bring comments and "looks good" reactions down into .arbiter/comments.json;
+                                    "Request change" becomes a request (R-0001) in .arbiter/requests.json
 arbiter drift                       deviations per screen: accepts, unverified claims, rules broken
 arbiter rules                       active rules   [--dimension <name>] [--json]
-arbiter rules --pending             the queue
+arbiter rules --pending             the queue, and requests waiting on an answer
 arbiter rules --archive             everything ever
-arbiter rules D-0003                one decision in full
+arbiter rules D-0003                one decision in full (R-0001: one request)
 arbiter update                      newest Arbiter: install it, refresh the skill file, re-pin the workflow  [--check]
 ```
 
@@ -122,13 +125,27 @@ The scan set is the rule's `paths` (directories or files) if it names any, else 
 
 ## Hosted board
 
-The hosted board at [arbiter.design](https://arbiter.design) serves a board at a share link and lets people comment or say "looks good" after a magic-link sign-in. Git stays the record: the service holds one board version per project and the comments, nothing else. `npx arbiter publish` uploads; `npx arbiter pull` brings comments back, where `arbiter review` shows them beside each screen. Only `publish` and `pull` ever touch the network. The service itself is a separate, private codebase.
+The hosted board at [arbiter.design](https://arbiter.design) serves a board at a share link and lets people comment, request a change, or say "looks good" after a magic-link sign-in. Git stays the record: the service holds one board version per project and the comments, nothing else. `npx arbiter publish` uploads; `npx arbiter pull` brings comments back, where `arbiter review` shows them beside each screen. Only `publish` and `pull` ever touch the network. The service itself is a separate, private codebase.
 
 Two ways to keep the board current without anyone remembering.
 
 `npx arbiter publish --auto` is the one that works anywhere. It sets `hosted.auto` in `arbiter.json`, and from then on the board republishes whenever the record changes — after judging, after a screen changes state, after a picture is attached or removed. No GitHub, no CI, no git repository. Queueing decisions doesn't trigger it, since the queue is never published. If a republish fails — offline, service down — the command still succeeds and says the board is behind; the record is already written, and git is what holds it. `--no-auto` turns it off.
 
 `npx arbiter publish --on-push` is the GitHub route, and it writes `.github/workflows/arbiter.yml`, which runs `publish` when decisions land on the default branch, and sets the `ARBITER_PUBLISH_TOKEN` repository secret through `gh` if it's signed in (otherwise it prints the one-line instruction). Commit the workflow together with `.arbiter/hosted.json`. Under CI, `publish` only ever updates the board that file names — it refuses to create one, so a repo where the file wasn't committed can't mint orphan boards on every push.
+
+## Requests from the board
+
+A comment is input; it waits until the owner points at it. **Request change** on the board is different: someone wants something changed, so it gets an answer.
+
+1. `npx arbiter pull` turns each one into a request, `R-0001`, in `.arbiter/requests.json` (commit it — everyone sees the same answers). Pulling twice never asks twice.
+2. The owner answers — in chat with `/arbiter`, or on the **Requests** tab of `arbiter review`:
+   - **Apply** — `record R-0001 --as apply`
+   - **Apply, but…** — `record R-0001 --as apply --to "keep the tab, make the button red"`: do this instead of what was asked
+   - **Decline** — `record R-0001 --as decline --why "…"`: the reason is required, because the requester reads it
+3. Approving changes no code — only the agent can. In chat it makes the change right away; approved from the review page, it's made at the next `/arbiter`. The agent records what it did with `--request R-0001`, and that's what applies it. Only an approved request can be applied; a change the owner hasn't said yes to is refused.
+4. `publish` carries the answers back: the requester sees *Open*, *Approved*, *Applied* — with what actually changed — or *Declined* with the reason, under their request.
+
+Nothing is applied without the owner, and the board never writes to git: requests come in through `pull`, answers go out through `publish`. Removing the decision that applied a request opens the request again, for a fresh answer — the agent never remakes it unasked. A screen with a request still waiting on it can't be removed until the request is answered.
 
 ## Candidates
 
