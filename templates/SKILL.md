@@ -121,7 +121,9 @@ For each decision, note what it was chosen **over**. Rejected alternatives come 
 2. **Options you weighed and didn't build.** You considered tabs, went with a single page. Tabs are rejected, with your reason.
 3. **Corrections.** Whatever you did that the user then changed is rejected; what they asked for is the decision.
 
-Skip mechanical necessities (imports, prop plumbing, file placement) and anything the user told you to do.
+**Any visual change that stays in the UI counts too**: colour, spacing, type, radii, icons, what's shown or hidden. That holds even when no alternative was weighed, and even when the user asked for it. The version it replaced is the rejected alternative. A visual change that would repeat on other screens is a `pattern`. A one-off is `polish`.
+
+Skip mechanical necessities (imports, prop plumbing, file placement), and non-visual things the user told you to do.
 
 **Size every decision.** A 7px height fix and a new settings architecture are not the same kind of call, and the review must not treat them the same. Set `level`:
 
@@ -283,15 +285,15 @@ If violations are more than zero, add one line and offer a selection — never s
 
 Judgment rules never sweep. Don't offer it for them.
 
-## Screenshots — after feature-level work
+## Screenshots — after feature-level or visual work
 
-When a piece of feature-level work settles — the user moves on, says "good", or the session is wrapping up — and the app is running and you have a browser tool: open what you built, take a screenshot, save it to a file, and attach it to that piece of work, named the way its decisions named it (the `trigger`):
+When a piece of feature-level work settles, or a piece of work that changed something visible on a specific screen settles — the user moves on, says "good", or the session is wrapping up — and the app is running and you have a browser tool: open what you built, take a screenshot, save it to a file, and attach it to that piece of work, named the way its decisions named it (the `trigger`):
 
 ```
 npx arbiter snapshot "Settings build" --file /path/to/shot.png
 ```
 
-Once per piece of work, after it settles — not on every iteration. Do it without asking. It's a picture for the board; the decisions stand without it. If you can't (no browser tool, app not running), say so in the one-line summary and offer: `npx arbiter snapshot "Settings build" --capture` — the user drags a rectangle over whatever is on their screen and it's saved.
+Once per piece of work, after it settles — not on every iteration. For a visual change, frame the screen where it shows, not the whole app. Do it without asking. It's a picture for the board; the decisions stand without it. If you can't (no browser tool, app not running), say so in the one-line summary and offer: `npx arbiter snapshot "Settings build" --capture` — the user drags a rectangle over whatever is on their screen and it's saved.
 
 Directions (below) are different: each candidate gets its own snapshot.
 
