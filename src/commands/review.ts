@@ -15,6 +15,7 @@ import { updateCandidate } from './candidate';
 import { candidatesDir, decisionsFor, readCandidates } from '../candidates';
 import { readComments, readLink } from '../hosted';
 import { findRoot, readActive, readConfig, readPending, resolvePaths, ACTIVE_CAP } from '../store';
+import { autoPublish } from '../autopublish';
 
 export interface ReviewOptions {
   port?: number;
@@ -49,6 +50,10 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
     };
   };
 
+  // Judging twenty items shouldn't mean twenty publishes, so the board is updated once, at the
+  // end. The page writes the same files the CLI does, but doesn't go through its handlers.
+  let changed = false;
+
   return new Promise((resolve) => {
     const server = http.createServer(async (req, res) => {
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
@@ -71,12 +76,14 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
           keepBoth?: boolean;
         };
         const result = judge(body.id, { as: body.as, to: body.to, supersedes: body.supersedes, keepBoth: body.keepBoth, cwd });
+        if (result.exitCode === 0) changed = true;
         json(res, 200, { exitCode: result.exitCode, ...result.output });
         return;
       }
       if (req.method === 'POST' && url.pathname === '/api/judge-all') {
         const body = JSON.parse(await readBody(req)) as { as: JudgeAction; level?: string; trigger?: string };
         const result = judgeAll({ as: body.as, level: body.level, trigger: body.trigger, cwd });
+        if (result.exitCode === 0) changed = true;
         json(res, 200, { exitCode: result.exitCode, ...result.output });
         return;
       }
@@ -96,6 +103,7 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
       if (req.method === 'POST' && url.pathname === '/api/candidate') {
         const body = JSON.parse(await readBody(req)) as { id: string; state: string; why?: string; keepOthers?: boolean };
         const result = updateCandidate(body.id, { state: body.state, why: body.why, keepOthers: body.keepOthers, cwd });
+        if (result.exitCode === 0) changed = true;
         json(res, 200, { exitCode: result.exitCode, ...result.output });
         return;
       }
@@ -118,7 +126,13 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
 
     // Browsers keep connections alive; close() alone would wait on them forever.
     const stop = () => {
-      server.close(() => resolve());
+      server.close(async () => {
+        if (changed) {
+          const line = await autoPublish(cwd);
+          if (line) process.stdout.write(line + '\n');
+        }
+        resolve();
+      });
       server.closeAllConnections();
     };
     process.on('SIGINT', stop);
