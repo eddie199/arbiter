@@ -15,6 +15,7 @@ import { rules } from './commands/rules';
 import { init } from './commands/init';
 import { review } from './commands/review';
 import { update } from './commands/update';
+import { remove, removeSnapshot, unlink } from './commands/remove';
 
 const program = new Command();
 
@@ -221,6 +222,26 @@ program
   .option('--no-open', "print the URL, don't open a browser")
   .action(async (opts) => {
     await review(opts);
+  });
+
+program
+  .command('remove [id]')
+  .description('Take a record out that was never real: a decision (D-0004), a screen (C-0001), or a picture (--snapshot "<work>"). A rule that is simply over is `record --retire` instead.')
+  .option('--snapshot <work>', 'remove the picture attached to a piece of work or a screen, keeping the record')
+  .option('--force', 'with a screen: unlink the decisions on it rather than refusing')
+  .action((id: string | undefined, opts) => {
+    const result = opts.snapshot ? removeSnapshot(opts.snapshot, opts) : remove(id ?? '', opts);
+    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    process.exit(result.exitCode);
+  });
+
+program
+  .command('unlink <ids...>')
+  .description('Detach decisions from the screen they were recorded against. The decisions stay exactly as they are.')
+  .action((ids: string[], opts) => {
+    const result = unlink(ids, opts);
+    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    process.exit(result.exitCode);
   });
 
 program

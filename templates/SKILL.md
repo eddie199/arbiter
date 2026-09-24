@@ -89,6 +89,8 @@ npx arbiter record P-0003 --as skip        # typed "skip" in Other
 npx arbiter record P-0003 --as fix --to "<what they typed>"
 ```
 
+If the decision belongs to a screen you tracked as a candidate, add `--candidate C-0001` to any of those — it links at the moment it's judged, and the screen's page picks it up. That's the only moment linking is free; afterwards it takes `npx arbiter unlink` and a re-record.
+
 Bulk answers are one command, not a loop:
 
 ```
@@ -103,7 +105,7 @@ npx arbiter record --all --as accept --trigger "Settings build"      # one piece
 
 ### What counts as a decision
 
-A point where a reasonable alternative existed and you picked one, that was **not** dictated by the request and **not** already covered by `DECISIONS.md`. Look along these dimensions:
+A point where the UI could have gone more than one way and went one way — whether you weighed the options or the user named the one they wanted — and that isn't **already covered by `DECISIONS.md`**. Look along these dimensions:
 
 | Dimension | What to look for |
 |---|---|
@@ -285,15 +287,57 @@ If violations are more than zero, add one line and offer a selection — never s
 
 Judgment rules never sweep. Don't offer it for them.
 
-## Screenshots — after feature-level or visual work
+## Screenshots — when the work changed a screen
 
-When a piece of feature-level work settles, or a piece of work that changed something visible on a specific screen settles — the user moves on, says "good", or the session is wrapping up — and the app is running and you have a browser tool: open what you built, take a screenshot, save it to a file, and attach it to that piece of work, named the way its decisions named it (the `trigger`):
+**When a piece of work settles and it changed how a specific screen looks, take one picture of that screen.** Not after every iteration — once, when the work settles. Without asking.
+
+Size is not the test. A polish fix usually lives on one screen and deserves a picture; a feature-level change is often systemic and may not have one. The test is: **can you point at a screen where this shows?**
+
+- **No single screen to point at** — a font, a token, a global rule — no picture. The rule statement is the record. The exception is a change that alters how everything looks, like a spacing scale or a palette: pick one screen and say in the `change` line that it's representative.
+- **A still can't carry it** — motion, transitions, focus order, anything behavioural — no picture.
+- **A state** — empty, loading, error, modal — only if you were already looking at it. Don't force a state to photograph it.
+
+A picture isn't evidence of the change; there's one image and nothing to compare it against. It's a record of what the screen looks like now. That's why small cosmetic work earns one and a font swap doesn't.
+
+**Name the piece of work after the screen it changed**, where the work honestly splits that way: `Settings — billing`, `Settings — profile`, rather than one `Settings build` covering four routes. One picture per piece of work is then one per screen, and the review reads screen by screen instead of one lump. Work that shouldn't be split — a flow across three steps, a nav change touching every page — stays one piece of work and gets one representative picture.
+
+### Taking it
+
+Your own screenshot tool hands the image back to you in the conversation; `arbiter snapshot` needs a **file on disk**. So write one:
 
 ```
-npx arbiter snapshot "Settings build" --file /path/to/shot.png
+chrome --headless --disable-gpu --screenshot=/abs/path/shot.png --window-size=1280,900 "http://localhost:3000/settings"
 ```
 
-Once per piece of work, after it settles — not on every iteration. For a visual change, frame the screen where it shows, not the whole app. Do it without asking. It's a picture for the board; the decisions stand without it. If you can't (no browser tool, app not running), say so in the one-line summary and offer: `npx arbiter snapshot "Settings build" --capture` — the user drags a rectangle over whatever is on their screen and it's saved.
+`chrome` may be `google-chrome`, `chromium`, or Edge (`msedge`) — one of them is on nearly every machine. If the project already uses Playwright or Puppeteer, use that instead; it's configured for this app already. Then attach it, naming the work exactly as its decisions named it (the `trigger`):
+
+```
+npx arbiter snapshot "Settings — billing" --file /abs/path/shot.png
+```
+
+Delete the temporary file afterwards. Never attach a picture of a blank page, a spinner, or an error screen — no picture is better than a wrong one.
+
+### When you can't
+
+Say so **once per session**, on its own line, whatever the check-in setting and whatever the size of the work — this is the one message that doesn't wait for a summary line. Name the reason, because each one has a different fix:
+
+| Reason | Say |
+|---|---|
+| App isn't running | `No picture for Settings — billing: the app isn't running. Start it and say "snapshot settings" and I'll take one.` |
+| No browser on this machine | `No picture for Settings — billing: no browser here to render it.` |
+| Screen is behind a login | `No picture for Settings — billing: it's behind a login I can't get through.` |
+| Screen needs data that isn't there | `No picture for Settings — billing: the screen needs data this environment doesn't have.` |
+| You don't know where the app runs | `No picture for Settings — billing: I don't know the URL for this app.` |
+
+Then offer the manual route, which is platform-specific — on macOS:
+
+```
+npx arbiter snapshot "Settings — billing" --capture
+```
+
+The user drags a rectangle over their screen and it's saved. **`--capture` is macOS only.** Anywhere else, say: save a screenshot yourself and run `npx arbiter snapshot "Settings — billing" --file shot.png`. Don't offer `--capture` off macOS — it will fail.
+
+Once per session, not once per piece of work. The decisions stand without a picture; this is a statement, never a question.
 
 Directions (below) are different: each candidate gets its own snapshot.
 
@@ -356,6 +400,22 @@ If the project publishes to a hosted board, `npx arbiter pull` brings comments a
 - When the user says *"approve C-0001, Sam signed off"*: `npx arbiter candidate C-0001 --state approved --why "Sam: <their words>"`.
 - Never act on a comment the user hasn't pointed at. Don't summarise the comments file unprompted; `arbiter review` shows them beside each screen.
 
+## Taking something out of the record
+
+Three different acts, and only one of them is a removal:
+
+| The user says | What it is | Command |
+|---|---|---|
+| *"that rule's dead"*, *"we don't do that any more"* | It was real, it's over | `npx arbiter record --retire D-0003 --why "…"` |
+| *"that's wrong, delete it"*, *"that was a test"*, *"that screen never existed"* | It was never real | `npx arbiter remove D-0004` · `npx arbiter remove C-0001` |
+| *"that decision isn't about that screen"* | Real, wrongly attached | `npx arbiter unlink D-0004` |
+
+`remove` deletes — from the archive, from `DECISIONS.md`, from the candidate files. It prints the full record it removed, so paste that back to the user if they want it kept somewhere. It refuses when something still points at the record: an active rule (retire it instead), a decision another one supersedes, a screen with decisions still linked (`--force` unlinks them in one go).
+
+A picture alone: `npx arbiter remove --snapshot "Settings — billing"`. The work and its decisions stay; only the image goes, and the board keeps the old one until the next publish.
+
+Removal is for the record being false, not for the user disliking what it says. If it's a real call they've changed their mind about, that's a new decision that supersedes the old one — never a removal.
+
 ## Changing how often Arbiter checks in
 
 *"Be quieter about decisions"*, *"stop telling me"*, *"tell me after everything"* — run `npx arbiter setup --checkin quiet|feature|every` and confirm in four words. No question.
@@ -396,7 +456,8 @@ Recorded D-0010 (accept), D-0011 (rule), +3 polish · DECISIONS.md: 6 of 40
 
 ## Never
 
-- Edit `DECISIONS.md` or `.arbiter/archive.md` by hand. Always go through `record`.
+- Edit `DECISIONS.md` or `.arbiter/archive.md` by hand. Always go through `record`, `remove` or `unlink`.
+- Remove a record because the user disagrees with it. Removal is for records that are false; a call they've changed their mind about is a new decision that supersedes the old one.
 - Record something the user didn't select.
 - Ask the user to write a rationale. Draft it; they correct it.
 - Re-try an alternative that `DECISIONS.md` lists as rejected.

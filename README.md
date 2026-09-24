@@ -42,10 +42,13 @@ arbiter snapshot "<work>" --file x.png   a picture for a piece of work (or --cap
 arbiter record                      walk through a decision at the terminal
 arbiter record '<json>'             record now (what the agent calls)
 arbiter record --pending '<json>'   queue for later
-arbiter record P-0003 --as rule     judge a queued one: accept | rule | skip | fix --to "…"
+arbiter record P-0003 --as rule     judge a queued one: accept | rule | skip | fix --to "…"  [--candidate C-0001]
 arbiter record --all --as accept    judge every queued item  [--level polish] [--trigger "Settings build"]
 arbiter record --findings f.json    queue a scanner's findings for verdicts
 arbiter record --retire D-0003 --why "…"   drop a rule with no replacement
+arbiter remove D-0004               take out a record that was never real: a decision, a screen (C-0001),
+                                    or a picture (--snapshot "<work>")
+arbiter unlink D-0004               detach a decision from the screen it was recorded against
 arbiter review                      judge the queue in a browser page
 arbiter verify [id]                 re-check a decision's claim against its files
 arbiter sweep D-0004 [--queue]      find existing violations of a mechanical rule
@@ -66,6 +69,30 @@ arbiter update                      newest Arbiter: install it, refresh the skil
 ```
 
 `record` exit codes: `0` recorded · `1` invalid · `2` overlap — re-run with `--supersedes <id>` or `--keep-both` · `3` cap reached · `4` contradicted — the named files don't match the claim.
+
+## Screenshots
+
+The agent takes one picture per piece of work, when the work settles and it changed how a specific screen looks. Size isn't the test — a polish fix usually lives on one screen and earns a picture; a font or token change has no single screen to point at and doesn't. Motion and anything behavioural can't be carried by a still, so they don't either.
+
+The agent's own screenshot tool hands it an image, not a file, so it renders to disk with a headless browser (`chrome --headless --screenshot=…`) and attaches that. When it can't — no browser, app not running, screen behind a login — it says so once, naming the reason, whatever the check-in setting. `--capture` is the manual fallback and is macOS only; elsewhere, save a screenshot and pass `--file`.
+
+Name a piece of work after the screen it changed where the work splits that way — `Settings — billing` rather than one `Settings build` across four routes — and one picture per piece of work is one per screen.
+
+## Taking something out
+
+Three acts, and only one is a removal.
+
+| | What it means | Command |
+|---|---|---|
+| **Retire** | It was real, it's over | `arbiter record --retire D-0003 --why "…"` |
+| **Remove** | It was never real | `arbiter remove D-0004` |
+| **Unlink** | Real, attached to the wrong screen | `arbiter unlink D-0004` |
+
+The archive is append-only for judgments: a call you changed your mind about is superseded, and that history is the point. It isn't append-only for mistakes. A test entry, an agent misfire, or a screen invented to work around a bug is a record that says something false, and keeping it forever makes the archive less trustworthy, not more.
+
+So `remove` deletes — from the archive, from `DECISIONS.md`, from the candidate files — and prints the full record it removed, because git holds the history only for people who have a repo. It refuses while anything still points at the record: an active rule (retire it), a decision another one supersedes, or a screen with decisions still linked (`--force` unlinks them in one go).
+
+`arbiter remove --snapshot "<work>"` takes only the picture; the work and its decisions stay, and the board keeps the old image until the next publish.
 
 ## Verification
 

@@ -98,6 +98,16 @@ export function appendArchive(paths: Paths, d: Decision): void {
   fs.appendFileSync(paths.archive, prefix + formatEntry(d));
 }
 
+/**
+ * Rewrites the archive in full. Only `remove` and `unlink` use this: the archive is append-only
+ * for judgments — a decision you changed your mind about is superseded, never rewritten — but a
+ * record of something that never happened is noise, not history, and has to be able to leave.
+ */
+export function writeArchive(paths: Paths, decisions: Decision[]): void {
+  fs.mkdirSync(paths.archiveDir, { recursive: true });
+  fs.writeFileSync(paths.archive, archiveHeader() + '\n' + decisions.map(formatEntry).join('\n'));
+}
+
 export function readPending(paths: Paths): Decision[] {
   if (!fs.existsSync(paths.pending)) return [];
   return parseEntries(fs.readFileSync(paths.pending, 'utf8'));
