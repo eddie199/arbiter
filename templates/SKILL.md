@@ -293,7 +293,7 @@ Judgment rules never sweep. Don't offer it for them.
 
 Size is not the test. A polish fix usually lives on one screen and deserves a picture; a feature-level change is often systemic and may not have one. The test is: **can you point at a screen where this shows?**
 
-- **No single screen to point at** — a font, a token, a global rule — no picture. The rule statement is the record. The exception is a change that alters how everything looks, like a spacing scale or a palette: pick one screen and say in the `change` line that it's representative.
+- **No single screen to point at** — a font, a token, a global rule — no picture. The rule statement is the record, and `scope` already says how far it reaches. The exception is a change that alters how everything looks, like a spacing scale, a palette, or a nav that appears on every page: take one screen, set `scope` to `global` or `pattern:<name>` so the record says where it applies, and open the `change` line with "Across every screen," so nobody reads the picture as the whole story.
 - **A still can't carry it** — motion, transitions, focus order, anything behavioural — no picture.
 - **A state** — empty, loading, error, modal — only if you were already looking at it. Don't force a state to photograph it.
 

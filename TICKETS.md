@@ -21,7 +21,7 @@ Board-side removal is out of scope here. Everything below is CLI, skill, or the 
 | 11 | Mark a record private | CLI | M | Not this release |
 | 12 | Tell Arbiter where the app runs | CLI + skill | S | Not this release |
 | 13 | Document `--candidate` at judge time | docs | S | Built |
-| 14 | Pictures attach to screens | CLI + site | M | Needs a call |
+| 14 | Two pictures of one screen | CLI + site | M | Gated — see below |
 
 ---
 
@@ -171,13 +171,18 @@ Nothing records where the app lives. "Open what you built" silently assumes loca
 
 `arbiter.json` gains an app URL, optionally a path per screen. Then #4 has an address to open, whether that's `localhost:3000` or staging.
 
-### 14. Pictures attach to screens · CLI + site · M
+### 14. Two pictures of one screen · CLI + site · M · gated
 
-The naming rule in #2 gets one picture per screen for free, but only as far as the agent follows it, and only when work can honestly be split. A checkout flow across three steps is one piece of work and wants three pictures.
+Most of what this was for turned out to be covered by #2's naming rule.
 
-The real version: a picture belongs to a named screen inside a piece of work. `.arbiter/work/W-settings-build/billing.png` rather than one file per work. The snapshot command takes a screen name, the manifest's single image becomes a list, and the card and detail page show several — a strip, or the first with a count.
+- **Work spanning several screens** — split it: "Checkout — cart", "Checkout — payment". One picture per piece of work is then one per screen. The only residue is a decision about a flow as a whole, which can sit on the first piece of work.
+- **A change on every page** — one representative picture, and `scope` (`global`, `pattern:nav`) already says how far it reaches. The record carries the breadth; the picture doesn't have to.
 
-Lands in the CLI and the service together, so it can't ship piecemeal. Worth doing only if the representative-shot compromise proves thin in real use — #2 ships first and tells us.
+What's left is **one screen that needs two pictures**: desktop and mobile of the same view. That isn't multi-screen, it's multi-viewport, and naming can't reach it — you'd have to invent two pieces of work for one screen, which is a lie about the work. It's also the shape of the bug that started all this, which was a mobile layout.
+
+Build it when a screen has genuinely needed two pictures more than once. Until then #2 holds.
+
+The cost when it comes: the snapshot command takes a second name, storage goes from one file per piece of work to a folder, the manifest's single image becomes a list, and the card and detail page show several. CLI and service together — it can't ship in halves.
 
 ### 13. Document `--candidate` at judge time · docs · S
 
@@ -207,7 +212,7 @@ Lands in the CLI and the service together, so it can't ship piecemeal. Worth doi
 
 ## Settled
 
-- **Pictures are per screen.** Work is named after the screen it changed (#2). Whether that's enough, or #14 is needed too, is the one call still open.
+- **Pictures are per screen**, through naming (#2) rather than structure. Work spanning screens gets split by name; a change on every page gets one picture and a `scope` that says how far it reaches. #14 shrank to the viewport case and is gated.
 - **`remove` deletes outright.** Git holds the history; the terminal prints what went, for anyone without a repo.
 - **This release is the bug fix plus cleanup** — 1–5, 8, 9, 10, 13, all built on `release/0.1.4`. Private records (#11), publish counting (#7), Windows capture (#6) and the app URL (#12) wait.
 - **#6 is paused.** The agent now renders its own screenshot with a headless browser (#4), so manual capture is a rare fallback. The *message* is platform-correct — `--capture` is only offered on macOS — but no Windows capture was built.
@@ -220,9 +225,8 @@ Lands in the CLI and the service together, so it can't ship piecemeal. Worth doi
 
 ## Open questions
 
-1. **Is #14 in or out?** #2's naming rule covers most of it for nothing. #14 is for work that honestly can't be split.
-2. **Should the agent ever ask before capturing?** Proceeding on: never on success, always on failure.
-3. **What to call #11** — `private`, `internal`, or `unlisted`. Not needed until that ticket comes round.
+1. **Should the agent ever ask before capturing?** Proceeding on: never on success, always on failure.
+2. **What to call #11** — `private`, `internal`, or `unlisted`. Not needed until that ticket comes round.
 
 ## Actions, not tickets
 
