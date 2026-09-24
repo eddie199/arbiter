@@ -32,6 +32,8 @@ export interface PublishOptions {
   admin?: string;
   /** Also write a GitHub Actions workflow that republishes on every push, and set its secret. */
   onPush?: boolean;
+  /** Turn on (or off, with false) republishing whenever the record changes. Needs no git. */
+  auto?: boolean;
   cwd?: string;
 }
 
@@ -59,6 +61,13 @@ export async function publish(opts: PublishOptions = {}): Promise<PublishResult>
       done('board', `${r.candidates} screen${r.candidates === 1 ? '' : 's'} published${r.snapshots ? `, ${r.snapshots} image${r.snapshots === 1 ? '' : 's'}` : ''}`);
       for (const s of r.skipped) skip('snapshot', s);
       if (opts.onPush) for (const s of onPush(root, paths)) steps.push(s);
+      if (opts.auto !== undefined) {
+        const config = readConfig(paths) ?? { version: 1 as const, destination: 'local' as const };
+        writeConfig(paths, { ...config, hosted: { ...config.hosted, auto: opts.auto } });
+        done('auto', opts.auto
+          ? 'on — the board republishes whenever the record changes (arbiter.json, commit it)'
+          : 'off — publish by hand from now on');
+      }
       return { ok: steps.every((s) => s.outcome !== 'failed'), steps, url: r.link.shareUrl };
     } catch (e) {
       fail('hosted', (e as Error).message);
@@ -129,6 +138,22 @@ export async function publish(opts: PublishOptions = {}): Promise<PublishResult>
  */
 function onPush(root: string, paths: ReturnType<typeof resolvePaths>): PublishResult['steps'] {
   const steps: PublishResult['steps'] = [];
+
+  // A GitHub Actions file is worthless anywhere but GitHub, and writing one anyway used to report
+  // success for automation that could never run. Say what will actually work here instead.
+  const inRepo = !!git(root, ['rev-parse', '--is-inside-work-tree']);
+  const remote = inRepo ? git(root, ['remote', 'get-url', 'origin']) : null;
+  const gh = remote && /github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/.exec(remote);
+  if (!gh) {
+    const why = !inRepo ? 'this project is not a git repository' : !remote ? 'there is no remote named origin' : `${remote.replace(/^.*@/, '')} is not GitHub`;
+    steps.push({
+      step: 'on-push',
+      outcome: 'skipped',
+      note: `${why}, and --on-push writes a GitHub Actions workflow. For a board that keeps itself current without GitHub: npx arbiter publish --auto`,
+    });
+    return steps;
+  }
+
   const branch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD']) || 'main';
   const file = path.join(root, WORKFLOW_FILE);
   const content = workflow(branch, selfVersion());
@@ -143,11 +168,8 @@ function onPush(root: string, paths: ReturnType<typeof resolvePaths>): PublishRe
   }
 
   const token = readToken(paths);
-  const remote = git(root, ['remote', 'get-url', 'origin']);
-  const gh = remote && /github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/.exec(remote);
   const manual = `once, on github.com: Settings → Secrets and variables → Actions → New repository secret → ${TOKEN_ENV} = the contents of .arbiter/hosted.token`;
   if (!token) steps.push({ step: 'secret', outcome: 'skipped', note: `no publish token here — ${manual}` });
-  else if (!gh) steps.push({ step: 'secret', outcome: 'skipped', note: `no GitHub remote named origin — ${manual}` });
   else if (!has('gh') || !ghOk(root)) steps.push({ step: 'secret', outcome: 'skipped', note: `gh not ${has('gh') ? 'signed in' : 'installed'} — ${manual}` });
   else {
     try {

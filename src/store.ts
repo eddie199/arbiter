@@ -40,8 +40,12 @@ export interface Config {
    * Default { dir: "docs/arbiter" }. Set to false to skip.
    */
   pages?: { dir?: string; includeRules?: boolean } | false;
-  /** A hosted board to publish to by default: `arbiter publish` with no --to. */
-  hosted?: { url?: string };
+  /**
+   * A hosted board to publish to by default: `arbiter publish` with no --to.
+   * `auto` republishes whenever the record changes — for projects with no GitHub, no CI, or no
+   * repository at all. Set by `arbiter publish --auto`.
+   */
+  hosted?: { url?: string; auto?: boolean };
 }
 
 export function resolvePaths(root: string = process.cwd()): Paths {
@@ -96,6 +100,16 @@ export function appendArchive(paths: Paths, d: Decision): void {
   const exists = fs.existsSync(paths.archive);
   const prefix = exists ? '\n' : archiveHeader() + '\n';
   fs.appendFileSync(paths.archive, prefix + formatEntry(d));
+}
+
+/**
+ * Rewrites the archive in full. Only `remove` and `unlink` use this: the archive is append-only
+ * for judgments — a decision you changed your mind about is superseded, never rewritten — but a
+ * record of something that never happened is noise, not history, and has to be able to leave.
+ */
+export function writeArchive(paths: Paths, decisions: Decision[]): void {
+  fs.mkdirSync(paths.archiveDir, { recursive: true });
+  fs.writeFileSync(paths.archive, archiveHeader() + '\n' + decisions.map(formatEntry).join('\n'));
 }
 
 export function readPending(paths: Paths): Decision[] {

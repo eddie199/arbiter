@@ -193,9 +193,10 @@ export function archiveHeader(): string {
   return [
     '# Decision archive',
     '',
-    'Every decision ever recorded, in order. Append-only — nothing here is edited or removed.',
-    'Active rules live in `DECISIONS.md`; this file is for traceability and is never loaded',
-    'into agent context.',
+    'Every decision ever recorded, in order. A decision you changed your mind about is superseded,',
+    'never rewritten; only `npx arbiter remove` takes an entry out, for a record of something that',
+    'never happened. Active rules live in `DECISIONS.md`; this file is for traceability and is never',
+    'loaded into agent context.',
     '',
   ].join('\n');
 }

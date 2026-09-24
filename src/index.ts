@@ -15,6 +15,8 @@ import { rules } from './commands/rules';
 import { init } from './commands/init';
 import { review } from './commands/review';
 import { update } from './commands/update';
+import { remove, removeSnapshot, unlink } from './commands/remove';
+import { autoPublish } from './autopublish';
 
 const program = new Command();
 
@@ -73,6 +75,8 @@ program
       result = opts.pending ? queue(input, opts) : record(input, opts);
     }
     process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    // Queueing never reaches the board — work cards are built from judged decisions.
+    if (result.exitCode === 0 && !opts.pending) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
   });
 
@@ -138,9 +142,10 @@ program
   .description('Attach a picture to a piece of work, named as its decisions named it: snapshot "Settings build" --file shot.png')
   .option('--file <image>', 'screenshot to keep beside the work')
   .option('--capture', 'macOS: drag-select a region of the screen')
-  .action((work: string, opts) => {
+  .action(async (work: string, opts) => {
     const result = snapshotWork(work, opts);
     process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    if (result.exitCode === 0) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
   });
 
@@ -156,9 +161,10 @@ program
   .option('--by <id>', 'with --state superseded: the candidate that replaced it')
   .option('--keep-others', "approving doesn't supersede sibling directions")
   .option('--author <name>', 'override the author')
-  .action((idOrAdd: string, name: string | undefined, opts) => {
+  .action(async (idOrAdd: string, name: string | undefined, opts) => {
     const result = idOrAdd === 'add' ? addCandidate(name ?? '', opts) : updateCandidate(idOrAdd, opts);
     process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    if (result.exitCode === 0) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
   });
 
@@ -199,8 +205,10 @@ program
   .option('--admin-token <token>', 'only for a self-hosted Arbiter that gates board creation')
   .option('--no-push', 'GitHub Pages mode: do everything except push')
   .option('--on-push', 'also write a GitHub Actions workflow that republishes on every push, and set its secret')
+  .option('--auto', 'republish whenever the record changes — no GitHub, no CI, no repository needed')
+  .option('--no-auto', 'stop republishing automatically')
   .action(async (opts) => {
-    const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken, onPush: opts.onPush });
+    const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken, onPush: opts.onPush, auto: opts.auto === undefined ? undefined : !!opts.auto });
     const w = Math.max(...r.steps.map((s) => s.step.length));
     for (const s of r.steps) process.stdout.write(`  ${s.step.padEnd(w)}  ${s.outcome}${s.note ? `  — ${s.note}` : ''}\n`);
     if (r.url) process.stdout.write(`\n${r.ok ? 'Live in about a minute' : 'Once the failed step is fixed'}: ${r.url}\n`);
@@ -221,6 +229,28 @@ program
   .option('--no-open', "print the URL, don't open a browser")
   .action(async (opts) => {
     await review(opts);
+  });
+
+program
+  .command('remove [id]')
+  .description('Take a record out that was never real: a decision (D-0004), a screen (C-0001), or a picture (--snapshot "<work>"). A rule that is simply over is `record --retire` instead.')
+  .option('--snapshot <work>', 'remove the picture attached to a piece of work or a screen, keeping the record')
+  .option('--force', 'with a screen: unlink the decisions on it rather than refusing')
+  .action(async (id: string | undefined, opts) => {
+    const result = opts.snapshot ? removeSnapshot(opts.snapshot, opts) : remove(id ?? '', opts);
+    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    if (result.exitCode === 0) await boardUpdated(opts.cwd);
+    process.exit(result.exitCode);
+  });
+
+program
+  .command('unlink <ids...>')
+  .description('Detach decisions from the screen they were recorded against. The decisions stay exactly as they are.')
+  .action(async (ids: string[], opts) => {
+    const result = unlink(ids, opts);
+    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    if (result.exitCode === 0) await boardUpdated(opts.cwd);
+    process.exit(result.exitCode);
   });
 
 program
@@ -260,6 +290,12 @@ program.parseAsync(process.argv).catch((e: Error) => {
   process.stderr.write(`arbiter: ${e.message}\n`);
   process.exit(1);
 });
+
+/** With `hosted.auto`, the board follows the record. Prints a line when it does, or why it didn't. */
+async function boardUpdated(cwd?: string): Promise<void> {
+  const line = await autoPublish(cwd);
+  if (line) process.stdout.write(line + '\n');
+}
 
 function readStdin(): Promise<string> {
   if (process.stdin.isTTY) return Promise.resolve('');
