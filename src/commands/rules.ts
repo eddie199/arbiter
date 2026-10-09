@@ -13,6 +13,7 @@ import { Decision, DIMENSIONS, Dimension, ID_PATTERN } from '../schema';
 import { DIMENSION_LABELS, formatEntry } from '../format';
 import { findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, ACTIVE_CAP, type Paths } from '../store';
 import { updateNotice } from './update';
+import { findOverlaps, type Overlap } from '../overlap';
 
 export interface RulesOptions {
   /** Filled in by rules(); the queue's JSON reports firstRun and checkin from it. */
@@ -66,6 +67,8 @@ export function rules(id: string | undefined, opts: RulesOptions = {}): string {
 function pendingList(pending: Decision[], opts: RulesOptions, paths: Paths): string {
   const groups = groupByTrigger(pending);
   if (opts.json) {
+    const active = readActive(paths);
+    const ignore = opts.config?.overlap?.ignore;
     return JSON.stringify(
       {
         firstRun: !opts.config?.onboarded,
@@ -73,7 +76,9 @@ function pendingList(pending: Decision[], opts: RulesOptions, paths: Paths): str
         ...updateNotice(paths),
         count: pending.length,
         polish: pending.filter((d) => d.level === 'polish').length,
-        groups: groups.map((g) => ({ trigger: g.trigger, items: g.items, polish: g.polish })),
+        groups: groups.map((g) => ({ trigger: g.trigger, items: g.items.map((d) => withOverlaps(d, active, ignore)), polish: g.polish })),
+        // The active rules, short, so the review can check every item for a clash without another read.
+        rules: active.map((d) => ({ id: d.id, decision: d.decision, scope: d.scope, dimension: d.dimension })),
         pending,
       },
       null,
@@ -94,6 +99,16 @@ function pendingList(pending: Decision[], opts: RulesOptions, paths: Paths): str
     }
   }
   return lines.join('\n');
+}
+
+/**
+ * A feature/pattern item with `overlaps` — active rules it may repeat or contradict — so the
+ * review can spot a clash. Word and scope matches only: the agent reads both sides and decides.
+ * The key is there only when there's a hit.
+ */
+function withOverlaps(d: Decision, active: Decision[], ignore?: string[]): Decision & { overlaps?: Overlap[] } {
+  const overlaps = findOverlaps(d, active, { ignore });
+  return overlaps.length ? { ...d, overlaps } : d;
 }
 
 export interface TriggerGroup {

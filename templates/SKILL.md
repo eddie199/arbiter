@@ -11,6 +11,14 @@ description: Record design decisions made during UI work so they never have to b
 
 If `DECISIONS.md` exists, read it before building or changing any component, screen, or style. Treat every entry as settled. Do not re-decide, do not ask about, and do not deviate from an active rule unless the user explicitly asks you to. Do not try the alternatives it lists as rejected.
 
+**Name the rules you follow.** When an active rule shapes what you build, say so in that reply — one line, each rule by id and a few words:
+
+```
+Following D-0003 (card headings name the thing shown), D-0008 (icon-only actions on half-width cards)
+```
+
+Only rules that changed what you built, not every rule you read. Once per rule per piece of work; don't repeat it on each iteration. If none applied, say nothing. This holds whatever the check-in setting — it's about what you built, not the queue. It's how the user sees the record working, and it tells them which rule to check the screen against.
+
 ## After UI work — queue, don't interrupt
 
 Design work is iterative. A screen redesigned six times is one piece of work, not six. Never surface decisions mid-iteration.
@@ -80,7 +88,7 @@ npx arbiter setup --checkin every       # A line after everything
 
 That also marks the project as onboarded. Then continue with the queue as below; if it's empty, one line: `Nothing queued yet — build something.`
 
-**When they ask** — `/arbiter`, "let's review", "what did you decide" — read the queue with `npx arbiter rules --pending --json`. It comes back grouped by piece of work (`groups[].trigger`), feature and pattern items in `items`, polish in `polish`. Present the feature and pattern items (below); polish is never presented individually. Judge each answer with:
+**When they ask** — `/arbiter`, "let's review", "what did you decide" — read the queue with `npx arbiter rules --pending --json`. It comes back grouped by piece of work (`groups[].trigger`), feature and pattern items in `items`, polish in `polish`, and the active rules in `rules`. Present the feature and pattern items (below), checking each against `rules` for a clash; polish is never presented individually. Judge each answer with:
 
 ```
 npx arbiter record P-0003 --as accept      # Confirm
@@ -137,6 +145,12 @@ Skip mechanical necessities (imports, prop plumbing, file placement), and non-vi
 
 Polish still gets queued — it's part of the record — but the user never gets a question about it; they see "+6 polish logged" in the summary. Rules only ever come from `feature` or `pattern`. When unsure between `pattern` and `polish`, ask: would this apply on a screen that doesn't exist yet? If yes, `pattern`. There's no cap on polish; keep feature + pattern to seven per piece of work.
 
+### Clashes with a rule
+
+An item that goes against an active rule is a clash: someone has to say which one wins, so it gets its own options (below). It stays in queue order.
+
+An item's `overlaps` names active rules it may repeat or contradict. They're word and scope matches, not judgments — read both sides and decide, and check every item against `rules` even where there's no hint.
+
 ### Present with the selection widget
 
 Only when asked (see above). If you have a question tool that presents options (in Claude Code, `AskUserQuestion`), use it. Up to four questions per call, in queue order; the heading inside each question names its piece of work, so a call may span more than one. Before the call, one line: `Queued across 2 pieces of work — Rescan button (1), Settings (2) · +5 polish logged`.
@@ -157,11 +171,17 @@ Each question:
 
   - The heading is **the thing the user was working on, at the grain they worked at** — `Rescan button`, `Delete flow`, `Settings`, `Billing page`. Say it the way they'd say it. It's the `trigger`. Then `n of N` within that piece of work.
   - `Change` is what happened, as a PM would say it. `Pattern` is the rule-shaped sentence (`decision`). `Rejected` is each alternative with why it lost, `·`-separated if more than one; omit the line if nothing was rejected. `Applies to` is the scope in words: a file name, `<Pattern name>, anywhere`, or `Everywhere`.
-- **options**, always these two, in this order:
+- **options**, these two, in this order:
   - `Confirm` — *Saved to the decision log.*
   - `Make it a rule` — *Kept in DECISIONS.md, referenced in future sessions.*
 - The built-in **Other** box is the correction path. If the user types there, treat it as a fix: what they typed is the decision, what you did is rejected. If they type `skip`, drop the item.
 - The widget's own **Skip** button means "not now" — everything stays in the queue. Don't add a Skip option.
+
+**A clash** adds a line under `Applies to` — `Clashes — D-0009 · Destructive actions undo instead of confirming` — and has its own three options:
+
+- `Follow D-0009` — *Change it back to match the rule.*
+- `Replace D-0009` — *This becomes the rule; D-0009 moves to the archive.*
+- `Keep as exception` — *Logged as a one-off here; D-0009 stands.*
 
 ### Fallback: present as text
 
@@ -181,16 +201,18 @@ Audit page — 3 decisions, +2 polish
 
 Settings build — 2 decisions, +4 polish
 
-4. Change:   Settings is now a tab-row shell with four routes under it   [feature]
+4. Change:   Deleting a project now asks for confirmation in a dialog   [pattern]
+   Pattern:  Destructive actions confirm in a dialog
+   Clashes:  D-0009 · Destructive actions undo instead of confirming
+   → follow D-0009 · replace D-0009 · keep as exception
+5. Change:   Settings is now a tab-row shell with four routes under it   [feature]
    …
-
-Applied from DECISIONS.md: D-0003, D-0008
 
 Reply per number — confirm · rule · skip · or type what it should be
 or in bulk — "confirm all" · "confirm all polish" · "rule the patterns, confirm the rest"
 ```
 
-Omit the `Rejected` line when there's nothing rejected. Omit the `Applied from` line if no active rules were used. Never ask an open question — present what was decided and ask for a selection. Map bulk replies to `record --all` (above). Items they don't address are skipped. Polish isn't listed; it's logged with the group unless they say "skip polish".
+Omit the `Rejected` line when there's nothing rejected. Never ask an open question — present what was decided and ask for a selection. Map bulk replies to `record --all` (above). Items they don't address are skipped. Polish isn't listed; it's logged with the group unless they say "skip polish".
 
 ## Reading the answer
 
@@ -200,6 +222,9 @@ Omit the `Rejected` line when there's nothing rejected. Omit the `Applied from` 
 | Make it a rule | `rule` | Judge it. It enters `DECISIONS.md`. |
 | Other: `skip` (or "not a decision") | `skip` | Dropped from the queue, recorded nowhere. |
 | Other: a correction | `fix --to "…"` | Change the code to match, then judge it. What you did becomes a rejected alternative automatically. |
+| Follow D-0009 | `fix --to "<D-0009's decision>"` | Change the code back to match the rule, then judge it. |
+| Replace D-0009 | `rule --supersedes D-0009` | Judge it. The old rule moves to the archive. |
+| Keep as exception | `accept` | Judge it. The rule stands; this screen is the logged exception. |
 | Widget Skip button | — | Nothing. The queue waits. |
 
 Never judge anything before the user answers.

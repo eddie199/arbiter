@@ -24,7 +24,7 @@ Running `init` twice changes nothing.
 
 ## How it works
 
-1. You ask the agent to build a screen. It reads `DECISIONS.md` first.
+1. You ask the agent to build a screen. It reads `DECISIONS.md` first, and names the rules that shaped what it built — *Following D-0003* — so you can see the record working.
 2. You iterate. It says nothing about decisions while you're iterating — each version you move past becomes a rejected alternative on the one that replaced it.
 3. When you move on, it queues the design calls it made — sized as `feature`, `pattern`, or `polish` — and, after feature-level work, says one line about what changed.
 4. You judge them when you want — in chat with `/arbiter`, or in the browser with `npx arbiter review`. Grouped by piece of work; each item reads **Change** (what happened) / **Pattern** (the rule) / **Rejected** (what lost). Per item: **Confirm**, **Make it a rule**, **Skip**, or type a correction. Polish is one line per group — **Confirm all**.
