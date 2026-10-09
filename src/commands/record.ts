@@ -30,6 +30,7 @@ import {
   nextId,
   nextPendingId,
   now,
+  Paths,
   readActive,
   readArchive,
   readConfig,
@@ -46,6 +47,7 @@ import { Prompter } from './prompt';
 import fs from 'node:fs';
 import { refreshCandidates } from './candidate';
 import { updateNotice } from './update';
+import { missingPictures, pictureHint } from '../pictures';
 
 export interface RecordOptions {
   supersedes?: string;
@@ -105,6 +107,7 @@ export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
       pending: pending.length + 1,
       checkin: readConfig(paths)?.checkin ?? 'feature',
       review: 'npx arbiter review',
+      ...picture(paths, entry),
       // Present only when the project's skill file is from an older Arbiter than this one.
       ...updateNotice(paths),
     },
@@ -350,8 +353,15 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
       active: `${nextActive.length} of ${cap}`,
       wrote: opts.dryRun ? [] : entry.verdict === 'rule' || entry.verdict === 'retire' ? ['.arbiter/archive.md', 'DECISIONS.md'] : ['.arbiter/archive.md'],
       ...(sweepSummary && { sweep: sweepSummary }),
+      ...picture(paths, entry),
     },
   };
+}
+
+/** The agent is still there with the app running: the moment to say a screen has no picture. */
+function picture(paths: Paths, entry: Decision): { picture?: string } {
+  const [m] = missingPictures(paths, [entry]);
+  return m ? { picture: pictureHint(m) } : {};
 }
 
 /**

@@ -79,6 +79,8 @@ The agent's own screenshot tool hands it an image, not a file, so it renders to 
 
 Name a piece of work after the screen it changed where the work splits that way — `Settings — billing` rather than one `Settings build` across four routes — and one picture per piece of work is one per screen.
 
+The board shows an icon of the kind of change where a card has no picture, so a missing one never looks broken there. That's also why nobody notices, so Arbiter says it where it can still be fixed. A change asks for a picture when it's about one screen (not `global`) and is layout, words or looks (`structure`, `content`, `visual`); interaction, states, motion and access are right as an icon. When such a card has none, `record` adds a `picture` line with the command to the agent's reply, the review page marks the group "No picture", and `publish` lists the card. Nothing on the board changes.
+
 ## Taking something out
 
 Three acts, and only one is a removal.

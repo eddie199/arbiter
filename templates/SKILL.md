@@ -445,6 +445,7 @@ If the user says something like *"record that"*, *"make that a rule"*, *"reject 
 2. Default `verdict` to `rule`. Use `accept` only if they signal a one-off (*"just this once"*, *"an exception"*, *"for this screen only"*).
 3. Run `record`. Do not ask for confirmation — they already told you.
 4. Confirm in two lines: the id, then the decision as recorded so they can catch a bad phrasing.
+5. If `record`'s reply has a `picture` line, the screen this changed has no picture yet. Take it now, the way **Screenshots** above says, while the app is still running. If you can't, say why in one line, as that section shows.
 
 If it overlaps, follow the overlap flow above.
 
