@@ -305,7 +305,7 @@ Judgment rules never sweep. Don't offer it for them.
 
 **When a piece of work settles and it changed how a specific screen looks, take one picture of that screen.** Not after every iteration — once, when the work settles. Without asking.
 
-Size is not the test. A polish fix usually lives on one screen and deserves a picture; a feature-level change is often systemic and may not have one. The test is: **can you point at a screen where this shows?**
+Size is not the test. A small pattern change on one screen deserves a picture; a feature-level change is often systemic and may not have one. The test is: **can you point at a screen where this shows?** One thing does rule a picture out: polish never reaches the board, so work that is only polish has no card for the picture to go on. Take one only when the piece of work has at least one `feature` or `pattern` decision.
 
 - **No single screen to point at** — a font, a token, a global rule — no picture. The rule statement is the record, and `scope` already says how far it reaches. The exception is a change that alters how everything looks, like a spacing scale, a palette, or a nav that appears on every page: take one screen, set `scope` to `global` or `pattern:<name>` so the record says where it applies, and open the `change` line with "Across every screen," so nobody reads the picture as the whole story.
 - **A still can't carry it** — motion, transitions, focus order, anything behavioural — no picture.
@@ -321,6 +321,12 @@ Your own screenshot tool hands the image back to you in the conversation; `arbit
 
 ```
 chrome --headless --disable-gpu --screenshot=/abs/path/shot.png --window-size=1280,900 "http://localhost:3000/settings"
+```
+
+The address is `app.url` in `arbiter.json` when it's there (the `picture` line in `record`'s reply names it too), with the screen's route on the end. When it isn't, and you find out where the app runs (you started its dev server, or the user says), save it once so no session has to guess again:
+
+```
+npx arbiter setup --app http://localhost:3000
 ```
 
 `chrome` may be `google-chrome`, `chromium`, or Edge (`msedge`) — one of them is on nearly every machine. If the project already uses Playwright or Puppeteer, use that instead; it's configured for this app already. Then attach it, naming the work exactly as its decisions named it (the `trigger`):
@@ -341,7 +347,7 @@ Say so **once per session**, on its own line, whatever the check-in setting and 
 | No browser on this machine | `No picture for Settings — billing: no browser here to render it.` |
 | Screen is behind a login | `No picture for Settings — billing: it's behind a login I can't get through.` |
 | Screen needs data that isn't there | `No picture for Settings — billing: the screen needs data this environment doesn't have.` |
-| You don't know where the app runs | `No picture for Settings — billing: I don't know the URL for this app.` |
+| You don't know where the app runs | `No picture for Settings — billing: I don't know the URL for this app. Tell me where it runs and I'll remember it.` Then save their answer with `setup --app`. |
 
 Then offer the manual route, which is platform-specific — on macOS:
 

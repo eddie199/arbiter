@@ -30,6 +30,8 @@ export interface Config {
   checkin?: 'feature' | 'quiet' | 'every';
   /** Set the first time /arbiter runs — the intro has been shown. */
   onboarded?: string;
+  /** Where the app runs, so the agent has an address to open for screenshots. Set by `arbiter setup --app`. */
+  app?: { url: string };
   /** Project words too common to signal overlap: ["audit", "journey"]. */
   overlap?: { ignore?: string[] };
   /** Globs never swept: ["app/globals.css", "design-reference/**", "docs/**"]. */

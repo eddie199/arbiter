@@ -446,7 +446,7 @@ function candCard(c) {
   grid.appendChild(body);
   const shot = el('div', 'shot');
   if (c.snapshotUrl) { const img = el('img'); img.src = c.snapshotUrl; img.alt = c.name; shot.appendChild(img); shot.onclick = () => zoom(c.snapshotUrl); }
-  else { shot.textContent = 'No snapshot'; shot.style.cursor = 'default'; shot.title = `npx arbiter candidate ${c.id} --capture`; }
+  else { shot.textContent = 'No picture'; shot.style.cursor = 'default'; shot.title = `npx arbiter candidate ${c.id} --snapshot shot.png`; }
   grid.appendChild(shot);
   card.appendChild(grid);
   return card;

@@ -380,7 +380,7 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
 /** The agent is still there with the app running: the moment to say a screen has no picture. */
 function picture(paths: Paths, entry: Decision): { picture?: string } {
   const [m] = missingPictures(paths, [entry]);
-  return m ? { picture: pictureHint(m) } : {};
+  return m ? { picture: pictureHint(m, readConfig(paths)?.app?.url) } : {};
 }
 
 /**

@@ -14,12 +14,12 @@ Board-side removal is out of scope here. Everything below is CLI, skill, or the 
 | 4 | Give the agent a screenshot path that writes a file | skill | S | Built |
 | 5 | Failure always names its reason | skill + CLI | S | Built |
 | 6 | `--capture` works off macOS | CLI | M | Paused — messages only, no Windows capture |
-| 7 | `publish` reports what's missing | CLI | S | Not this release |
+| 7 | `publish` reports what's missing | CLI | S | Built in 0.1.5: names each card, no counts |
 | 8 | Snapshot warning counts the right list | CLI | S | Built |
 | 9 | `arbiter remove` | CLI | M | Built |
 | 10 | `arbiter unlink` | CLI | S | Built |
 | 11 | Mark a record private | CLI | M | Not this release |
-| 12 | Tell Arbiter where the app runs | CLI + skill | S | Not this release |
+| 12 | Tell Arbiter where the app runs | CLI + skill | S | Built in 0.1.5: `setup --app`, no per-screen paths |
 | 13 | Document `--candidate` at judge time | docs | S | Built |
 | 14 | Two pictures of one screen | CLI + site | M | Gated — see below |
 | 15 | Auto-publish without GitHub | CLI | S | Built |
@@ -68,6 +68,8 @@ Worked examples, kept because they're what the rule was built from:
 | Rescan becomes icon-only on half-width cards | Route renamed |
 
 The arguable ones — spacing scale, palette swap, chevron removed, inline→modal confirm, loading skeleton — are covered by the "representative screen" clause and the states clause.
+
+**Changed in 0.1.5.** Copy changes on one screen ("Save" → "Save changes", error copy) now do ask for a picture: `content` counts alongside `structure` and `visual`, and only interaction, states, motion and access are right as an icon. Work that is only polish asks for none, since polish never reaches the board. The rule lives in `src/pictures.ts`.
 
 ### 3. Fix the contradicting decision definition · skill · S
 

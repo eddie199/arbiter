@@ -51,6 +51,6 @@ export function missingPictures(paths: Paths, decisions: Decision[], candidates:
   return [...out.values()];
 }
 
-/** The line an agent reads in `record`'s reply. */
-export const pictureHint = (m: MissingPicture): string =>
-  `No picture of "${m.name}" yet. If you can open that screen, take one now (see Screenshots in the skill): ${m.command}`;
+/** The line an agent reads in `record`'s reply, with the app's address when arbiter.json has one. */
+export const pictureHint = (m: MissingPicture, app?: string): string =>
+  `No picture of "${m.name}" yet. ${app ? `The app runs at ${app}; if` : 'If'} you can open that screen, take one now (see Screenshots in the skill): ${m.command}`;

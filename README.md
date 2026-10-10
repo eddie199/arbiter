@@ -16,7 +16,7 @@ That's the whole install. It writes:
 | `.arbiter/candidates/` | One page per generated screen or direction, with its state, snapshot, decisions, and why it lost. |
 | `CANDIDATES.md` | Index of candidates — written only when `destination` is `git`. |
 | `.claude/skills/arbiter/SKILL.md` or `.cursor/rules/arbiter.mdc` | Tells the agent to surface its decisions after UI work and record what you confirm. |
-| `arbiter.json` | Config. `destination: "local"`. |
+| `arbiter.json` | Config. `destination: "local"`. `app.url` (from `npx arbiter setup --app http://localhost:3000`) is where the agent opens screens for pictures. |
 | `AGENTS.md` | One line appended, pointing at `DECISIONS.md`. Merged, never overwritten. |
 | `CLAUDE.md` (Claude Code) / `.cursor/commands/arbiter.md` (Cursor) | Same pointer line in Claude Code's own context file; a `/arbiter` command for Cursor. |
 
@@ -73,7 +73,7 @@ arbiter update                      newest Arbiter: install it, refresh the skil
 
 ## Screenshots
 
-The agent takes one picture per piece of work, when the work settles and it changed how a specific screen looks. Size isn't the test — a polish fix usually lives on one screen and earns a picture; a font or token change has no single screen to point at and doesn't. Motion and anything behavioural can't be carried by a still, so they don't either.
+The agent takes one picture per piece of work, when the work settles and it changed how a specific screen looks. Size isn't the test — a small pattern change on one screen earns a picture; a font or token change has no single screen to point at and doesn't. Motion and anything behavioural can't be carried by a still, so they don't either. Work that's only polish gets none: polish never reaches the board, so there'd be no card to show it on.
 
 The agent's own screenshot tool hands it an image, not a file, so it renders to disk with a headless browser (`chrome --headless --screenshot=…`) and attaches that. When it can't — no browser, app not running, screen behind a login — it says so once, naming the reason, whatever the check-in setting. `--capture` is the manual fallback and is macOS only; elsewhere, save a screenshot and pass `--file`.
 

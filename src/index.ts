@@ -129,8 +129,9 @@ program
 
 program
   .command('setup')
-  .description('Save how Arbiter checks in while you work: --checkin feature (one line after big work) | quiet (nothing, no questions) | every. Except under quiet, the agent asks whether to review at 5, 10, 15 waiting. Marks the project as onboarded.')
+  .description('Save how Arbiter checks in while you work: --checkin feature (one line after big work) | quiet (nothing, no questions) | every. Except under quiet, the agent asks whether to review at 5, 10, 15 waiting. Marks the project as onboarded. --app saves where the app runs.')
   .option('--checkin <mode>', 'feature | quiet | every')
+  .option('--app <url>', 'where the app runs, for screenshots: http://localhost:3000 or a staging address (on its own, saves only this)')
   .action((opts) => {
     const result = setup(opts);
     process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
