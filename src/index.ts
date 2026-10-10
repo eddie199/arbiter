@@ -129,7 +129,7 @@ program
 
 program
   .command('setup')
-  .description('Save how Arbiter checks in while you work: --checkin feature (one line after big work) | quiet | every. Marks the project as onboarded.')
+  .description('Save how Arbiter checks in while you work: --checkin feature (one line after big work) | quiet (nothing, no questions) | every. Except under quiet, the agent asks whether to review at 5, 10, 15 waiting. Marks the project as onboarded.')
   .option('--checkin <mode>', 'feature | quiet | every')
   .action((opts) => {
     const result = setup(opts);

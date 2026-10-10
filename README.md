@@ -26,7 +26,7 @@ Running `init` twice changes nothing.
 
 1. You ask the agent to build a screen. It reads `DECISIONS.md` first.
 2. You iterate. It says nothing about decisions while you're iterating — each version you move past becomes a rejected alternative on the one that replaced it.
-3. When you move on, it queues the design calls it made — sized as `feature`, `pattern`, or `polish` — and, after feature-level work, says one line about what changed.
+3. When you move on, it queues the design calls it made — sized as `feature`, `pattern`, or `polish` — and, after feature-level work, says one line about what changed. When 5 changes are waiting (then 10, 15…), it asks in plain text whether you want to review them now; polish doesn't count, and `setup --checkin quiet` turns both off.
 4. You judge them when you want — in chat with `/arbiter`, or in the browser with `npx arbiter review`. Grouped by piece of work; each item reads **Change** (what happened) / **Pattern** (the rule) / **Rejected** (what lost). Per item: **Confirm**, **Make it a rule**, **Skip**, or type a correction. Polish is one line per group — **Confirm all**.
 5. Rules enter `DECISIONS.md`. Everything judged enters the archive. Skips vanish.
 

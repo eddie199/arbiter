@@ -23,19 +23,33 @@ Design work is iterative. A screen redesigned six times is one piece of work, no
 npx arbiter record --pending '<json>'
 ```
 
-(JSON shape below). The output carries `checkin`, the user's answer from their first `/arbiter`:
+(JSON shape below). The output carries `checkin`, the user's answer from their first `/arbiter`; `waiting`, how many changes are waiting for them (polish isn't counted, since they're never asked about it); and sometimes `ask`.
 
-- `feature` (default) — **only if the piece of work included a `feature`-level decision**, add one line to your reply carrying its Change line, not a count. At most once per session.
-- `quiet` — say nothing. Ever. They run `/arbiter` when they want it.
+- `feature` (default) — **only if the piece of work included a `feature`-level decision**, add one line to your reply carrying its Change line, not a count.
+- `quiet` — say nothing. Ever. They run `/arbiter` when they want it. `ask` never comes back.
 - `every` — one line each time a piece of work settles and you queue, whatever its level.
 
 The line, when there is one:
 
 ```
-Queued: Settings is now a tab-row shell with four routes under it (+2 pattern, +4 polish) — /arbiter when you're ready.
+Arbiter saved: Settings is now a tab row with four pages. Type /arbiter to review.
 ```
 
-A count on every reply gets ignored; a sentence about what changed, only after something big, gets read. After the line, queue silently — the user knows the queue exists. If the work was only patterns and polish, say nothing. Never phrase it as a question ("should we run arbiter?") — it's a statement of what was queued, and the user decides when. Do not show the widget. Do not list the decisions. The queue lives in `.arbiter/pending.md`, so it survives the session; the user can judge it here, in the review page, or never.
+**`ask` means the waiting count just reached 5, 10, 15…** If any `record --pending` call for this piece of work returned it, the line ends in a question instead, with the last `waiting` you got:
+
+```
+Arbiter saved: Settings is now a tab row with four pages. You have 5 waiting. Review them now? (yes / no)
+```
+
+With no line to merge into (small work under `feature`), use the `ask` text as it came:
+
+```
+You have 5 changes waiting in Arbiter. Review them now? (yes / no)
+```
+
+Plain text, never the widget. **yes**: start the review below, as if they'd typed `/arbiter`. **no**: say "Okay" and carry on; don't raise it again until another `ask` comes back. Anything else means they've moved on, so carry on.
+
+A count on every reply gets ignored; a sentence about what changed, only after something big, gets read; a question only when enough has piled up to be worth a sitting. Otherwise queue silently, since the user knows the queue exists. If the work was only patterns and polish and no `ask` came back, say nothing. Do not list the decisions. The queue lives in `.arbiter/pending.md`, so it survives the session; the user can judge it here, in the review page, or never.
 
 The output may also carry `update` — this skill file was written by an older Arbiter than the one installed (`update.skill` vs `update.cli`), so the protocol you're following is behind. Once per session, add one line, whatever `checkin` says:
 
@@ -52,7 +66,7 @@ The queue JSON carries `firstRun: true` until the project has been through this 
 > **Arbiter's on.** While I build UI, I record the design decisions I make — what changed, the rule behind it, what was rejected — so nothing gets re-decided and your team can see why things are the way they are.
 >
 > **How it works**
-> 1. You build as usual. I say nothing about decisions until a piece of work settles — then one line.
+> 1. You build as usual. I say nothing about decisions until a piece of work settles, then one line. When 5 changes are waiting, I'll ask if you want to review them.
 > 2. `/arbiter` shows what's queued. For each: **Confirm**, **Make it a rule**, or **Skip**. Rules go into `DECISIONS.md`, and I read them before touching UI.
 > 3. When you want the team to see it, say **publish** — I'll give you a link to a board they can read and comment on.
 >
@@ -66,9 +80,9 @@ Then one question, with the selection widget (text fallback: the same three line
 - **header** — `While you work`
 - **question** — `When should Arbiter check in about decisions?`
 - **options** —
-  - `A line after big work` (Recommended) — *When a feature-sized piece settles, one sentence saying what was queued. Never mid-iteration, at most once a session.*
-  - `Nothing until I ask` — *Queued silently. /arbiter whenever you want to see it.*
-  - `A line after everything` — *One sentence every time a piece of work settles, big or small.*
+  - `A line after big work` (Recommended) — *When a feature-sized piece settles, one sentence saying what changed. Every 5 changes waiting, a yes/no on reviewing. Never mid-iteration.*
+  - `Nothing until I ask` — *Saved silently, never a question. /arbiter whenever you want to see it.*
+  - `A line after everything` — *One sentence every time a piece of work settles, big or small. Every 5 changes waiting, a yes/no on reviewing.*
 
 Record the answer — Skip means the recommended one:
 
@@ -420,7 +434,7 @@ Removal is for the record being false, not for the user disliking what it says. 
 
 ## Changing how often Arbiter checks in
 
-*"Be quieter about decisions"*, *"stop telling me"*, *"tell me after everything"* — run `npx arbiter setup --checkin quiet|feature|every` and confirm in four words. No question.
+*"Be quieter about decisions"*, *"stop telling me"*, *"stop asking me to review"*, *"tell me after everything"* — run `npx arbiter setup --checkin quiet|feature|every` and confirm in four words. No question.
 
 ## Retiring a rule
 
@@ -466,4 +480,4 @@ Recorded D-0010 (accept), D-0011 (rule), +3 polish · DECISIONS.md: 6 of 40
 - Re-try an alternative that `DECISIONS.md` lists as rejected.
 - Ask about polish. It's logged with the group.
 - Cram Change, Pattern and Rejected into one sentence. Three labelled lines, always.
-- Mention Arbiter at the end of a reply more than once per session, or as a question. Once, after feature-level work, as a statement of what was queued. Then silence until asked.
+- Mention Arbiter at the end of a reply except as **After UI work** says: the line after the work the check-in setting names, and a question only when `ask` came back. One Arbiter line per reply, never mid-iteration.

@@ -97,6 +97,10 @@ export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
     writePending(paths, [...pending, entry]);
     if (entry.candidate) refreshCandidates(paths);
   }
+  // What the user would actually be asked about: polish is logged with its group, never presented.
+  const before = pending.filter((d) => d.level !== 'polish').length;
+  const waiting = before + (entry.level === 'polish' ? 0 : 1);
+  const checkin = readConfig(paths)?.checkin ?? 'feature';
   return {
     exitCode: 0,
     output: {
@@ -105,13 +109,28 @@ export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
       dimension: entry.dimension,
       verified: entry.verified,
       pending: pending.length + 1,
-      checkin: readConfig(paths)?.checkin ?? 'feature',
+      checkin,
+      waiting,
+      ...askToReview(before, waiting, checkin),
       review: 'npx arbiter review',
       ...picture(paths, entry),
       // Present only when the project's skill file is from an older Arbiter than this one.
       ...updateNotice(paths),
     },
   };
+}
+
+/** Ask once each time the waiting count reaches another multiple of this. */
+export const REVIEW_EVERY = 5;
+
+/**
+ * At 5, 10, 15 changes waiting, the agent asks whether to review now. A "no" just waits for the
+ * next multiple, and judging brings the count down, so the next ask comes when it climbs back.
+ * Quiet means quiet: someone who chose "Nothing until I ask" is never asked.
+ */
+function askToReview(before: number, after: number, checkin: string): { ask?: string } {
+  if (checkin === 'quiet' || Math.floor(after / REVIEW_EVERY) <= Math.floor(before / REVIEW_EVERY)) return {};
+  return { ask: `You have ${after} changes waiting in Arbiter. Review them now? (yes / no)` };
 }
 
 /** Queue one pending decision per finding in a scanner's JSON output. */
