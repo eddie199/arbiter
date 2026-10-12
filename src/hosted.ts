@@ -14,24 +14,37 @@ import { readCandidates, decisionsFor, candidatesDir } from './candidates';
 import { Paths, readActive, readArchive, readConfig } from './store';
 import type { Decision } from './schema';
 import { workId, workSnapshot } from './work';
+import { cardOf, readRequests } from './requests';
 
 export interface HostedLink {
   url: string;        // service base url
   projectId: string;
   slug: string;
   shareUrl: string;
+  /** No longer written: pull fetches every comment. Older files may still carry it. */
   lastPull?: string;
   /** The board version the service holds, as of the last pull. */
   boardVersion?: string | null;
+}
+
+/** The link for places that only want to know about the board, where a broken hosted.json shouldn't stop the command. */
+export function readLinkOrNull(paths: Paths): HostedLink | null {
+  try {
+    return readLink(paths);
+  } catch {
+    return null;
+  }
 }
 
 export interface PulledComment {
   id: string;
   candidate_id: string;
   decision_id: string | null;
-  kind: 'comment' | 'approve';
+  /** `request` — "Request change" on the board: it becomes a request (R-0001) the owner answers. */
+  kind: 'comment' | 'approve' | 'request';
   author_name: string;
-  author_email: string;
+  /** The board sends it; it's never kept. comments.json is committed, and a public repo would publish it. */
+  author_email?: string;
   body: string;
   created_at: string;
   /** The board's published_at when this was written. Differs from the current one after a republish. */
@@ -86,8 +99,10 @@ export function readComments(paths: Paths): PulledComment[] {
   return fs.existsSync(f) ? (JSON.parse(fs.readFileSync(f, 'utf8')) as PulledComment[]) : [];
 }
 
+/** Every comment on file, minus email addresses: nothing here needs them, and the file is committed. */
 export function writeComments(paths: Paths, comments: PulledComment[]): void {
-  fs.writeFileSync(path.join(paths.archiveDir, COMMENTS_FILE), JSON.stringify(comments, null, 2) + '\n');
+  const kept = comments.map(({ author_email: _email, ...c }) => c);
+  fs.writeFileSync(path.join(paths.archiveDir, COMMENTS_FILE), JSON.stringify(kept, null, 2) + '\n');
 }
 
 export const publishable = (d: Decision) => d.verdict !== 'pending' && d.verdict !== 'retire' && d.level !== 'polish';
@@ -128,7 +143,8 @@ export function buildManifest(paths: Paths, opts: { includeRules?: boolean } = {
   });
   // Screenless decisions: one card per piece of work.
   const ids = new Set(known.map((c) => c.id));
-  const loose = readArchive(paths).filter((d) => publishable(d) && (!d.candidate || !ids.has(d.candidate)));
+  const archive = readArchive(paths);
+  const loose = archive.filter((d) => publishable(d) && (!d.candidate || !ids.has(d.candidate)));
   const byWork = new Map<string, Decision[]>();
   for (const d of loose) byWork.set(d.trigger, [...(byWork.get(d.trigger) ?? []), d]);
   const areas = new Map(known.filter((c) => c.feature).map((c) => [c.feature!.toLowerCase(), c.feature!]));
@@ -149,8 +165,27 @@ export function buildManifest(paths: Paths, opts: { includeRules?: boolean } = {
       decisions: ds.map(wire),
     });
   }
-  const rules = opts.includeRules ? readActive(paths).map((r) => ({ id: r.id, dimension: r.dimension, decision: r.decision, rationale: r.rationale, candidate: r.candidate ?? null })) : null;
-  return { manifest: { project: path.basename(paths.root), exported: new Date().toISOString().slice(0, 10), candidates, rules }, skipped };
+  // The day each became a rule, for the board's Design rules page.
+  const rules = opts.includeRules ? readActive(paths).map((r) => ({ id: r.id, dimension: r.dimension, decision: r.decision, rationale: r.rationale, candidate: r.candidate ?? null, date: r.date.slice(0, 10) })) : null;
+  // The owner's answers to requests made on the board, matched there by comment. An open request
+  // needs nothing sent — the board already has it. What happened is the recorded change itself,
+  // polish included, so the requester reads it even when no card shows that decision.
+  const requests = readRequests(paths)
+    .filter((r) => r.status !== 'open')
+    .map((r) => ({
+      comment: r.comment,
+      id: r.id,
+      status: r.status,
+      instead: r.instead,
+      reason: r.reason,
+      by: r.judgedBy,
+      at: r.appliedAt ?? r.judgedAt,
+      decisions: r.decisions.flatMap((id) => {
+        const d = archive.find((x) => x.id === id);
+        return d ? [{ id: d.id, change: d.change ?? d.decision, card: cardOf(paths, d, ids) }] : [];
+      }),
+    }));
+  return { manifest: { project: path.basename(paths.root), exported: new Date().toISOString().slice(0, 10), candidates, rules, requests }, skipped };
 }
 
 async function api(url: string, init: RequestInit & { token?: string; admin?: string } = {}): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
@@ -207,20 +242,32 @@ export async function publishHosted(paths: Paths, serviceUrl: string, opts: { ad
   return { link, candidates: Number(r.body.candidates ?? 0), snapshots, skipped, created };
 }
 
-/** Fetch comments since the last pull; merge into .arbiter/comments.json. */
-export async function pullHosted(paths: Paths): Promise<{ link: HostedLink; fresh: PulledComment[]; total: number }> {
+/**
+ * Fetch every comment on the board; merge the new ones into .arbiter/comments.json. All of them,
+ * not only those since last time: it's how a request deleted on the board is noticed, and a
+ * cursor could skip a comment that landed mid-pull. `current` is what the board holds now.
+ */
+export async function pullHosted(paths: Paths): Promise<{ link: HostedLink; fresh: PulledComment[]; current: PulledComment[]; total: number }> {
   const link = readLink(paths);
   if (!link) throw new Error('no hosted board — run `npx arbiter publish --to <url>` first');
   const token = readToken(paths);
   if (!token) throw new Error(`no publish token for ${link.shareUrl}. Get it from whoever first published, then: ${TOKEN_ENV}=<token> npx arbiter pull`);
-  const q = link.lastPull ? `?since=${encodeURIComponent(link.lastPull)}` : '';
-  const r = await api(`${link.url}/api/projects/${link.projectId}/comments${q}`, { token });
+  const r = await api(`${link.url}/api/projects/${link.projectId}/comments`, { token });
   if (!r.ok) throw new Error(`pull failed: ${r.body.error ?? r.status}`);
-  const fresh = (r.body.comments as PulledComment[]) ?? [];
+  // An empty list would read as every request withdrawn, so a reply without one is a failure.
+  if (!Array.isArray(r.body.comments)) throw new Error('pull failed: the board sent no comment list');
+  const current = r.body.comments as PulledComment[];
   const existing = readComments(paths);
   const seen = new Set(existing.map((c) => c.id));
-  const merged = [...existing, ...fresh.filter((c) => !seen.has(c.id))].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const fresh = current.filter((c) => !seen.has(c.id));
+  const merged = [...existing, ...fresh].sort((a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')));
   writeComments(paths, merged);
-  writeLink(paths, { ...link, lastPull: String(r.body.fetched_at ?? new Date().toISOString()), boardVersion: (r.body.board_version as string | null) ?? link.boardVersion ?? null });
-  return { link, fresh, total: merged.length };
+  // hosted.json is committed: rewrite it only when the board has moved on, or every pull on every
+  // machine would leave it changed, and two of them would conflict.
+  const boardVersion = (r.body.board_version as string | null) ?? link.boardVersion ?? null;
+  if (boardVersion !== (link.boardVersion ?? null)) {
+    const { lastPull: _old, ...rest } = link;
+    writeLink(paths, { ...rest, boardVersion });
+  }
+  return { link, fresh, current, total: merged.length };
 }

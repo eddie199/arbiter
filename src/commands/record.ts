@@ -6,6 +6,8 @@
  *   record P-0003 --as rule         judge a queued decision (accept | rule | skip | fix --to "<what instead>")
  *   record --all --as accept        judge every queued decision the same way  [--level polish] [--trigger "…"]
  *   record --retire D-0003 --why "…"  drop a rule from DECISIONS.md with no replacement; the archive keeps both
+ *   record R-0001 --as apply        answer a request from the board (apply [--to "<instead>"] | decline --why "…")
+ *   record '<json>' --request R-0001  record the change made for an approved request; it's applied
  *   record                          (a person at a terminal) walk through it step by step
  *
  * Output is JSON on stdout, always — an agent is usually on the other end.
@@ -18,15 +20,14 @@
  *   4  contradicted — the files named don't match the claim; nothing written (override with --unverified)
  */
 
-import os from 'node:os';
 import path from 'node:path';
 import { Decision, DecisionInput, DIMENSIONS, PENDING_ID, validateInput, ValidateOptions } from '../schema';
 import {
   ACTIVE_CAP,
   appendArchive,
+  currentAuthor,
   currentCommit,
   findRoot,
-  gitUserName,
   nextId,
   nextPendingId,
   now,
@@ -48,6 +49,8 @@ import fs from 'node:fs';
 import { refreshCandidates } from './candidate';
 import { updateNotice } from './update';
 import { missingPictures, pictureHint } from '../pictures';
+import { markApplied, requestGate, withRequest } from './request';
+import type { ChangeRequest } from '../requests';
 
 export interface RecordOptions {
   supersedes?: string;
@@ -59,6 +62,8 @@ export interface RecordOptions {
   /** Record even if the files contradict the claim. */
   unverified?: boolean;
   candidate?: string;
+  /** The board request (R-0001) this change was made for. Only an approved one; recording it applies it. */
+  request?: string;
   cwd?: string;
 }
 
@@ -84,6 +89,7 @@ export function record(rawJson: string, opts: RecordOptions = {}): RecordResult 
 }
 
 export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
+  if (opts.request) return fail([`--request records a change made for an approved request, directly: drop --pending. Nothing is queued for a request.`]);
   const parsed = parse(rawJson, { pending: true });
   if (!parsed.ok) return parsed.result;
   const paths = resolvePaths(findRoot(opts.cwd));
@@ -260,6 +266,8 @@ export function judge(pendingId: string, opts: JudgeOptions): RecordResult {
 /** Judge every pending item at once — the bulk verb. Filter by --level and/or --trigger. */
 export function judgeAll(opts: JudgeOptions & { level?: string; trigger?: string }): RecordResult {
   if (opts.as === 'fix') return fail(['fix is one at a time — it needs its own --to']);
+  // A request is applied by the change made for it, not by everything that happens to be queued.
+  if (opts.request) return fail([`--request links one change to ${opts.request}; it can't go on --all`]);
   const paths = resolvePaths(findRoot(opts.cwd));
   const targets = readPending(paths).filter(
     (d) => (!opts.level || d.level === opts.level) && (!opts.trigger || d.trigger === opts.trigger),
@@ -296,15 +304,30 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
   const config = readConfig(paths);
   const cap = config?.activeCap ?? ACTIVE_CAP;
 
+  // A change made for a request from the board — only once the owner has said yes.
+  let request: ChangeRequest | null = null;
+  if (opts.request) {
+    const gate = requestGate(paths, opts.request);
+    if (!gate.ok) return fail(gate.errors);
+    request = gate.request;
+    input = withRequest(paths, input, request);
+  }
+
   const active = readActive(paths);
   const archive = readArchive(paths);
   const supersedes = opts.supersedes ?? input.supersedes ?? null;
   const entry: Decision = { ...fill(input, opts, root), id: nextId(archive), supersedes };
 
+  // Nothing written means the request isn't applied yet. Whatever the re-run is, it has to carry
+  // --request too, or the change lands and the request stays approved, to be made again.
+  const again = request ? ` --request ${request.id}` : '';
+  const keepRequest = (r: RecordResult): RecordResult =>
+    request ? { ...r, output: { ...r.output, request: request.id, note: `Nothing was written, so ${request.id} isn't applied yet. Re-run with${again}.` } } : r;
+
   // An `accept` is a deviation by definition — nothing to verify. Rules and fixes make claims.
   if (entry.verdict !== 'accept') {
     const checked = check(entry, root, opts);
-    if (checked) return checked;
+    if (checked) return keepRequest(checked);
   }
 
   let nextActive = active;
@@ -329,7 +352,7 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
     } else if (!opts.keepBoth) {
       const overlaps = findOverlaps(input, active, { ignore: config?.overlap?.ignore });
       if (overlaps.length) {
-        return {
+        return keepRequest({
           exitCode: 2,
           output: {
             status: 'overlap',
@@ -338,18 +361,18 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
             overlaps,
             options: [
               ...overlaps.map((o) => ({
-                flag: `--supersedes ${o.id}`,
+                flag: `--supersedes ${o.id}${again}`,
                 effect: `${o.id} leaves DECISIONS.md and stays in the archive; the new rule records supersedes: ${o.id}`,
               })),
-              { flag: '--keep-both', effect: 'both rules stay active' },
+              { flag: `--keep-both${again}`, effect: 'both rules stay active' },
             ],
           },
-        };
+        });
       }
     }
 
     if (nextActive.length >= cap) {
-      return {
+      return keepRequest({
         exitCode: 3,
         output: {
           status: 'cap',
@@ -357,7 +380,7 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
           candidate: input,
           active: nextActive.map((d) => ({ id: d.id, decision: d.decision, scope: d.scope })),
         },
-      };
+      });
     }
     nextActive = [...nextActive, entry];
   }
@@ -366,6 +389,7 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
     appendArchive(paths, entry);
     if (entry.verdict === 'rule' || entry.verdict === 'retire') writeActive(paths, nextActive, cap);
     if (entry.candidate) refreshCandidates(paths);
+    if (request) markApplied(paths, request, entry.id);
   }
 
   // A new mechanical rule reaches backwards: say how much existing code it touches.
@@ -390,6 +414,7 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
       candidate: entry.candidate,
       active: `${nextActive.length} of ${cap}`,
       wrote: opts.dryRun ? [] : entry.verdict === 'rule' || entry.verdict === 'retire' ? ['.arbiter/archive.md', 'DECISIONS.md'] : ['.arbiter/archive.md'],
+      ...(request && { request: { id: request.id, status: opts.dryRun ? request.status : 'applied', author: request.author } }),
       ...(sweepSummary && { sweep: sweepSummary }),
       ...picture(paths, entry),
     },
@@ -425,12 +450,9 @@ function check(entry: Decision, root: string, opts: RecordOptions): RecordResult
 
 /** Fill the fields the caller doesn't supply. Id is set by the caller. */
 function fill(input: DecisionInput, opts: RecordOptions, root: string): Omit<Decision, 'id'> {
-  const config = readConfig(resolvePaths(root));
   return {
     date: input.date ?? now(),
-    // Whoever is at the keyboard. arbiter.json's author is committed, so in a shared repo it names
-    // whoever ran init — it's the fallback for a machine with no git identity, not the default.
-    author: opts.author ?? input.author ?? gitUserName(root) ?? config?.author ?? os.userInfo().username,
+    author: opts.author ?? input.author ?? currentAuthor(root),
     class: input.class,
     dimension: input.dimension,
     decision: input.decision,

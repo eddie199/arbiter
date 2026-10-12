@@ -24,6 +24,7 @@ import { ACTIVE_CAP, findRoot, readActive, readArchive, readConfig, readPending,
 import { candidateFile, candidatesDir, readCandidates, writeCandidate } from '../candidates';
 import { deliver } from '../destination';
 import { workId, workSnapshot } from '../work';
+import { detachDecision, readRequests } from '../requests';
 
 export interface RemoveOptions {
   cwd?: string;
@@ -66,6 +67,11 @@ function removeDecision(id: string, opts: RemoveOptions): RemoveResult {
   if (later) {
     return fail([`${later.id} supersedes ${id} — removing it would leave ${later.id} pointing at nothing. Remove ${later.id} first if neither is real.`]);
   }
+  // Read before anything is written: a broken requests.json must stop the removal, not interrupt it.
+  // A request still waiting that was asked about this decision would outlive it, and then read as
+  // if it were about whatever takes the id next.
+  const about = readRequests(paths).filter((r) => r.decision === id && (r.status === 'open' || r.status === 'approved'));
+  if (about.length) return fail([`${about.map((r) => `${r.id} (${r.author})`).join(', ')} ${about.length === 1 ? 'was' : 'were'} asked about ${id} and ${about.length === 1 ? 'is' : 'are'} still waiting. The owner answers first; if ${id} is going, that's a reason they can decline with.`]);
 
   writeArchive(paths, archive.filter((d) => d.id !== id));
   if (isActive) {
@@ -73,6 +79,10 @@ function removeDecision(id: string, opts: RemoveOptions): RemoveResult {
     writeActive(paths, active.filter((d) => d.id !== id), config?.activeCap ?? ACTIVE_CAP);
   }
   const touched = refreshLinked(paths, entry.candidate);
+  // A request this decision applied isn't applied by nothing: with no record left doing it, it's
+  // open again, for the owner to answer afresh.
+  const detached = detachDecision(paths, id);
+  const reopened = detached.filter((r) => r.status === 'open').map((r) => r.id);
   // Removing a rule doesn't bring back the one it replaced: that one may have been real, and
   // guessing would put a rule back the user never re-confirmed. Say so rather than lose it quietly.
   const replaced = entry.supersedes && archive.find((d) => d.id === entry.supersedes);
@@ -86,8 +96,9 @@ function removeDecision(id: string, opts: RemoveOptions): RemoveResult {
       id,
       decision: entry.decision,
       ...(replaced ? { note: `${replaced.id} — which ${id} replaced — is still inactive. Record it again if it should apply.` } : {}),
+      ...(reopened.length ? { requests: `${reopened.join(', ')} ${reopened.length === 1 ? 'is' : 'are'} open again — nothing on record makes ${reopened.length === 1 ? 'that change' : 'those changes'} now, so ${reopened.length === 1 ? 'it needs' : 'they need'} a fresh answer` } : {}),
       ...(reused ? { idReuse: `${id} was the newest, so the next decision recorded will take that id again. If this board is published, comments on the old ${id} will read as if they were about the new one — republish after recording.` } : {}),
-      wrote: ['.arbiter/archive.md', ...(isActive ? ['DECISIONS.md'] : []), ...touched],
+      wrote: ['.arbiter/archive.md', ...(isActive ? ['DECISIONS.md'] : []), ...touched, ...(detached.length ? ['.arbiter/requests.json'] : [])],
       // Printed in full so it can be put back by hand — not everyone has git.
       removed: formatEntry(entry).trimEnd(),
     },
@@ -103,6 +114,9 @@ function removeCandidate(id: string, opts: RemoveOptions): RemoveResult {
 
   const by = all.find((x) => x.supersededBy === id);
   if (by) return fail([`${by.id} says it was superseded by ${id} — clear that first: npx arbiter candidate ${by.id} --state generated`]);
+  // A request still waiting on this screen would outlive it — and point at whatever takes its id next.
+  const asked = readRequests(paths).filter((r) => r.screen === id && (r.status === 'open' || r.status === 'approved'));
+  if (asked.length) return fail([`${asked.map((r) => `${r.id} (${r.author})`).join(', ')} ${asked.length === 1 ? 'was' : 'were'} asked on ${id} and ${asked.length === 1 ? 'is' : 'are'} still waiting. The owner answers first; if the screen is going, that's a reason they can decline with.`]);
 
   const archive = readArchive(paths);
   const pending = readPending(paths);
