@@ -16,7 +16,7 @@ That's the whole install. It writes:
 | `.arbiter/candidates/` | One page per generated screen or direction, with its state, snapshot, decisions, and why it lost. |
 | `CANDIDATES.md` | Index of candidates — written only when `destination` is `git`. |
 | `.claude/skills/arbiter/SKILL.md` or `.cursor/rules/arbiter.mdc` | Tells the agent to surface its decisions after UI work and record what you confirm. |
-| `arbiter.json` | Config. `destination: "local"`. |
+| `arbiter.json` | Config. `destination: "local"`. `app.url` (from `npx arbiter setup --app http://localhost:3000`) is where the agent opens screens for pictures. |
 | `AGENTS.md` | One line appended, pointing at `DECISIONS.md`. Merged, never overwritten. |
 | `CLAUDE.md` (Claude Code) / `.cursor/commands/arbiter.md` (Cursor) | Same pointer line in Claude Code's own context file; a `/arbiter` command for Cursor. |
 
@@ -24,10 +24,10 @@ Running `init` twice changes nothing.
 
 ## How it works
 
-1. You ask the agent to build a screen. It reads `DECISIONS.md` first.
+1. You ask the agent to build a screen. It reads `DECISIONS.md` first. After a sizeable piece of work it names up to three rules that shaped it, *Following D-0001 (removing asks first, no undo bar)*, so you can see the record working. How often follows the check-in setting: never under `quiet`, every time a rule changed something under `every`.
 2. You iterate. It says nothing about decisions while you're iterating — each version you move past becomes a rejected alternative on the one that replaced it.
-3. When you move on, it queues the design calls it made — sized as `feature`, `pattern`, or `polish` — and, after feature-level work, says one line about what changed.
-4. You judge them when you want — in chat with `/arbiter`, or in the browser with `npx arbiter review`. Grouped by piece of work; each item reads **Change** (what happened) / **Pattern** (the rule) / **Rejected** (what lost). Per item: **Confirm**, **Make it a rule**, **Skip**, or type a correction. Polish is one line per group — **Confirm all**.
+3. When you move on, it queues the design calls it made — sized as `feature`, `pattern`, or `polish` — and, after feature-level work, says one line about what changed. When 5 changes are waiting (then 10, 15…), it asks in plain text whether you want to review them now; polish doesn't count, and `setup --checkin quiet` turns both off.
+4. You judge them when you want — in chat with `/arbiter`, or in the browser with `npx arbiter review`. Grouped by piece of work; each item reads **Change** (what happened) / **Pattern** (the rule) / **Rejected** (what lost). Per item: **Confirm**, **Make it a rule**, **Skip**, or type a correction. Polish is one line per group — **Confirm all**. In chat, an item that goes against an active rule says so (*Clashes — D-0009*) and asks which wins: **Follow D-0009**, **Replace D-0009**, or **Keep as exception**.
 5. Rules enter `DECISIONS.md`. Everything judged enters the archive. Skips vanish.
 
 You can also just say it: *"make that a rule"*, *"reject the tabs, going with a single page"*. It records without asking.
@@ -38,6 +38,8 @@ Nothing enforces anything. Rules inform generation; they don't gate it.
 
 ```
 arbiter init                        install into this project  [--destination git]
+arbiter setup --checkin <mode>      how often the agent checks in: feature | quiet | every
+arbiter setup --app <url>           where the app runs, so the agent can open screens for pictures
 arbiter snapshot "<work>" --file x.png   a picture for a piece of work (or --capture on macOS); publish carries it
 arbiter record                      walk through a decision at the terminal
 arbiter record '<json>'             record now (what the agent calls)
@@ -73,11 +75,13 @@ arbiter update                      newest Arbiter: install it, refresh the skil
 
 ## Screenshots
 
-The agent takes one picture per piece of work, when the work settles and it changed how a specific screen looks. Size isn't the test — a polish fix usually lives on one screen and earns a picture; a font or token change has no single screen to point at and doesn't. Motion and anything behavioural can't be carried by a still, so they don't either.
+The agent takes one picture per piece of work, when the work settles and it changed how a specific screen looks. Size isn't the test — a small pattern change on one screen earns a picture; a font or token change has no single screen to point at and doesn't. Motion and anything behavioural can't be carried by a still, so they don't either. Work that's only polish gets none: polish never reaches the board, so there'd be no card to show it on.
 
 The agent's own screenshot tool hands it an image, not a file, so it renders to disk with a headless browser (`chrome --headless --screenshot=…`) and attaches that. When it can't — no browser, app not running, screen behind a login — it says so once, naming the reason, whatever the check-in setting. `--capture` is the manual fallback and is macOS only; elsewhere, save a screenshot and pass `--file`.
 
 Name a piece of work after the screen it changed where the work splits that way — `Settings — billing` rather than one `Settings build` across four routes — and one picture per piece of work is one per screen.
+
+The board shows an icon of the kind of change where a card has no picture, so a missing one never looks broken there. That's also why nobody notices, so Arbiter says it where it can still be fixed. A change asks for a picture when it's about one screen (not `global`) and is layout, words or looks (`structure`, `content`, `visual`); interaction, states, motion and access are right as an icon. When such a card has none, `record` adds a `picture` line with the command to the agent's reply, the review page marks the group "No picture", and `publish` to arbiter.design lists the card (the agent passes the list on). Scanner findings never ask: they're a line in a file, not a screen. Nothing on the board changes.
 
 ## Taking something out
 

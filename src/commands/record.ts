@@ -30,6 +30,7 @@ import {
   nextId,
   nextPendingId,
   now,
+  Paths,
   readActive,
   readArchive,
   readConfig,
@@ -46,6 +47,7 @@ import { Prompter } from './prompt';
 import fs from 'node:fs';
 import { refreshCandidates } from './candidate';
 import { updateNotice } from './update';
+import { missingPictures, pictureHint } from '../pictures';
 
 export interface RecordOptions {
   supersedes?: string;
@@ -95,6 +97,10 @@ export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
     writePending(paths, [...pending, entry]);
     if (entry.candidate) refreshCandidates(paths);
   }
+  // What the user would actually be asked about: polish is logged with its group, never presented.
+  const before = pending.filter((d) => d.level !== 'polish').length;
+  const waiting = before + (entry.level === 'polish' ? 0 : 1);
+  const checkin = readConfig(paths)?.checkin ?? 'feature';
   return {
     exitCode: 0,
     output: {
@@ -103,12 +109,29 @@ export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
       dimension: entry.dimension,
       verified: entry.verified,
       pending: pending.length + 1,
-      checkin: readConfig(paths)?.checkin ?? 'feature',
+      checkin,
+      waiting,
+      // A dry run wrote nothing, so the count it reached isn't real yet.
+      ...(opts.dryRun ? {} : askToReview(before, waiting, checkin)),
       review: 'npx arbiter review',
+      ...picture(paths, entry),
       // Present only when the project's skill file is from an older Arbiter than this one.
       ...updateNotice(paths),
     },
   };
+}
+
+/** Ask once each time the waiting count reaches another multiple of this. */
+export const REVIEW_EVERY = 5;
+
+/**
+ * At 5, 10, 15 changes waiting, the agent asks whether to review now. A "no" just waits for the
+ * next multiple, and judging brings the count down, so the next ask comes when it climbs back.
+ * Quiet means quiet: someone who chose "Nothing until I ask" is never asked.
+ */
+function askToReview(before: number, after: number, checkin: string): { ask?: string } {
+  if (checkin === 'quiet' || Math.floor(after / REVIEW_EVERY) <= Math.floor(before / REVIEW_EVERY)) return {};
+  return { ask: `You have ${after} changes waiting in Arbiter. Review them now? (yes / no)` };
 }
 
 /** Queue one pending decision per finding in a scanner's JSON output. */
@@ -125,6 +148,7 @@ export function queueFindings(file: string, opts: RecordOptions & { tool?: strin
 
   const tool = opts.tool ?? path.basename(file, path.extname(file));
   const pending = readPending(paths);
+  const before = pending.filter((d) => d.level !== 'polish').length;
   const seen = new Set(pending.map((d) => d.trigger));
   const added: string[] = [];
   let skipped = 0;
@@ -140,7 +164,24 @@ export function queueFindings(file: string, opts: RecordOptions & { tool?: strin
     added.push(entry.id);
   }
   if (!opts.dryRun) writePending(paths, pending);
-  return { exitCode: 0, output: { status: 'queued', tool, queued: added.length, skippedDuplicates: skipped, ids: added, pending: pending.length, review: 'npx arbiter review' } };
+  // Findings are asked about like any other queued change, so they count toward the review question.
+  const waiting = pending.filter((d) => d.level !== 'polish').length;
+  const checkin = readConfig(paths)?.checkin ?? 'feature';
+  return {
+    exitCode: 0,
+    output: {
+      status: 'queued',
+      tool,
+      queued: added.length,
+      skippedDuplicates: skipped,
+      ids: added,
+      pending: pending.length,
+      checkin,
+      waiting,
+      ...(opts.dryRun ? {} : askToReview(before, waiting, checkin)),
+      review: 'npx arbiter review',
+    },
+  };
 }
 
 function parse(rawJson: string, options: ValidateOptions = {}): { ok: true; input: DecisionInput } | { ok: false; result: RecordResult } {
@@ -350,8 +391,15 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
       active: `${nextActive.length} of ${cap}`,
       wrote: opts.dryRun ? [] : entry.verdict === 'rule' || entry.verdict === 'retire' ? ['.arbiter/archive.md', 'DECISIONS.md'] : ['.arbiter/archive.md'],
       ...(sweepSummary && { sweep: sweepSummary }),
+      ...picture(paths, entry),
     },
   };
+}
+
+/** The agent is still there with the app running: the moment to say a screen has no picture. */
+function picture(paths: Paths, entry: Decision): { picture?: string } {
+  const [m] = missingPictures(paths, [entry]);
+  return m ? { picture: pictureHint(m, readConfig(paths)?.app?.url) } : {};
 }
 
 /**

@@ -14,12 +14,12 @@ Board-side removal is out of scope here. Everything below is CLI, skill, or the 
 | 4 | Give the agent a screenshot path that writes a file | skill | S | Built |
 | 5 | Failure always names its reason | skill + CLI | S | Built |
 | 6 | `--capture` works off macOS | CLI | M | Paused — messages only, no Windows capture |
-| 7 | `publish` reports what's missing | CLI | S | Not this release |
+| 7 | `publish` reports what's missing | CLI | S | Built in 0.1.5: names each card, no counts |
 | 8 | Snapshot warning counts the right list | CLI | S | Built |
 | 9 | `arbiter remove` | CLI | M | Built |
 | 10 | `arbiter unlink` | CLI | S | Built |
 | 11 | Mark a record private | CLI | M | Not this release |
-| 12 | Tell Arbiter where the app runs | CLI + skill | S | Not this release |
+| 12 | Tell Arbiter where the app runs | CLI + skill | S | Built in 0.1.5: `setup --app`, no per-screen paths |
 | 13 | Document `--candidate` at judge time | docs | S | Built |
 | 14 | Two pictures of one screen | CLI + site | M | Gated — see below |
 | 15 | Auto-publish without GitHub | CLI | S | Built |
@@ -68,6 +68,8 @@ Worked examples, kept because they're what the rule was built from:
 | Rescan becomes icon-only on half-width cards | Route renamed |
 
 The arguable ones — spacing scale, palette swap, chevron removed, inline→modal confirm, loading skeleton — are covered by the "representative screen" clause and the states clause.
+
+**Changed in 0.1.5.** Copy changes on one screen ("Save" → "Save changes", error copy) now do ask for a picture: `content` counts alongside `structure` and `visual`, and only interaction, states, motion and access are right as an icon. Work that is only polish asks for none, since polish never reaches the board. The rule lives in `src/pictures.ts`.
 
 ### 3. Fix the contradicting decision definition · skill · S
 
@@ -228,7 +230,7 @@ Still only `publish` and `pull` touch the network, and `hosted.auto` is a commit
 
 - **Pictures are per screen**, through naming (#2) rather than structure. Work spanning screens gets split by name; a change on every page gets one picture and a `scope` that says how far it reaches. #14 shrank to the viewport case and is gated.
 - **`remove` deletes outright.** Git holds the history; the terminal prints what went, for anyone without a repo.
-- **This release is the bug fix plus cleanup** — 1–5, 8, 9, 10, 13, all built on `release/0.1.4`. Private records (#11), publish counting (#7), Windows capture (#6) and the app URL (#12) wait.
+- **0.1.4 was the bug fix plus cleanup** — 1–5, 8, 9, 10, 13, all built on `release/0.1.4`. Publish counting (#7) and the app URL (#12) followed in 0.1.5. Private records (#11) and Windows capture (#6) wait.
 - **#6 is paused.** The agent now renders its own screenshot with a headless browser (#4), so manual capture is a rare fallback. The *message* is platform-correct — `--capture` is only offered on macOS — but no Windows capture was built.
 
 ## Found while building

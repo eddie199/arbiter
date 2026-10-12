@@ -59,6 +59,7 @@
   .group { display: flex; align-items: baseline; gap: 10px; margin: 32px 0 10px; }
   .group h2 { margin: 0; text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--ink); }
   .group span { color: var(--muted); font-size: 13px; }
+  .group .nopic { color: var(--warn); cursor: help; }
   .polish { background: var(--card); border: 1px dashed var(--line); border-radius: 12px; padding: 12px 20px; margin-bottom: 12px; }
   .polish .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .polish .row .n { color: var(--muted); flex: 1; }
@@ -223,6 +224,9 @@ function renderDecisions(main) {
     head.appendChild(el('h2', null, g.trigger));
     const n = items.filter(d => !results[d.id]).length;
     head.appendChild(el('span', null, `${n} decision${n === 1 ? '' : 's'}${polish.length ? ` · +${polish.length} polish` : ''}`));
+    // The board shows an icon where a picture is missing, so this is the place to notice.
+    const pics = [...new Map(items.filter(d => !results[d.id] && d.picture).map(d => [d.picture.command, d.picture])).values()];
+    if (pics.length) { const p = el('span', 'nopic', '· No picture'); p.title = 'Take one while the screen is open:\n' + pics.map(m => m.command).join('\n'); head.appendChild(p); }
     main.appendChild(head);
     for (const d of items) main.appendChild(results[d.id] ? doneCard(d) : card(d));
     for (const d of g.polish.filter(d => promoted[d.id])) main.appendChild(results[d.id] ? doneCard(d) : card(d));
@@ -442,7 +446,7 @@ function candCard(c) {
   grid.appendChild(body);
   const shot = el('div', 'shot');
   if (c.snapshotUrl) { const img = el('img'); img.src = c.snapshotUrl; img.alt = c.name; shot.appendChild(img); shot.onclick = () => zoom(c.snapshotUrl); }
-  else { shot.textContent = 'No snapshot'; shot.style.cursor = 'default'; shot.title = `npx arbiter candidate ${c.id} --capture`; }
+  else { shot.textContent = 'No picture'; shot.style.cursor = 'default'; shot.title = `npx arbiter candidate ${c.id} --snapshot shot.png`; }
   grid.appendChild(shot);
   card.appendChild(grid);
   return card;

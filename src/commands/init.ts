@@ -231,7 +231,11 @@ function installSelf(root: string): Step {
   if (!fs.existsSync(hostPkgPath)) {
     return { file: 'package.json', outcome: 'skipped', note: `no package.json here — add ${self.name} as a dev dependency yourself` };
   }
-  const host = JSON.parse(fs.readFileSync(hostPkgPath, 'utf8')) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+  const host = JSON.parse(fs.readFileSync(hostPkgPath, 'utf8')) as { name?: string; dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+  // Arbiter's own repo, dogfooding: `npx arbiter` already resolves to the package itself.
+  if (host.name === self.name) {
+    return { file: 'package.json', outcome: 'unchanged', note: `this is ${self.name} itself — not adding it as its own dependency` };
+  }
   if (host.devDependencies?.[self.name] || host.dependencies?.[self.name]) {
     return { file: 'package.json', outcome: 'unchanged', note: `${self.name} already a dependency` };
   }

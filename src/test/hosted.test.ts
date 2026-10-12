@@ -119,6 +119,32 @@ test('publish --to creates the project once, uploads the board, pull merges comm
   }
 });
 
+test('publish names the cards that should have a picture, and counts no images', async () => {
+  const cwd = tmp();
+  const o = { cwd, author: 'test' };
+  const base = { rationale: 'r', class: 'judgment', verdict: 'accept', level: 'pattern' };
+  write(cwd, 'shot.png', PNG);
+  record(JSON.stringify({ ...base, decision: 'Plan cards above the invoices', trigger: 'Billing page', scope: 'file:billing.tsx', dimension: 'structure' }), o);
+  record(JSON.stringify({ ...base, decision: 'Rows are full width', trigger: 'Settings page', scope: 'file:settings.tsx', dimension: 'visual' }), o);
+  snapshotWork('Settings page', { cwd, file: 'shot.png' });
+  // Right as an icon: a global font swap, and motion.
+  record(JSON.stringify({ ...base, decision: 'Body text is Inter', trigger: 'Type', scope: 'global', dimension: 'visual' }), o);
+  record(JSON.stringify({ ...base, decision: 'The drawer slides in', trigger: 'Drawer', scope: 'file:drawer.tsx', dimension: 'motion' }), o);
+
+  const svc = await fakeService();
+  try {
+    const r = await publish({ cwd, to: svc.url });
+    assert.ok(r.ok, JSON.stringify(r.steps));
+    const board = r.steps.find((s) => s.step === 'board')!;
+    assert.equal(board.note, '4 screens published', 'no image count: an icon card is usually right');
+    const pictures = r.steps.filter((s) => s.step === 'picture');
+    assert.deepEqual(pictures.map((s) => s.outcome), ['missing']);
+    assert.equal(pictures[0].note, 'Billing page: npx arbiter snapshot "Billing page" --file shot.png');
+  } finally {
+    svc.close();
+  }
+});
+
 test('publish --to fails cleanly when the service is down', async () => {
   const cwd = tmp();
   const r = await publish({ cwd, to: 'http://127.0.0.1:1' });

@@ -16,6 +16,7 @@ import { candidatesDir, decisionsFor, readCandidates } from '../candidates';
 import { readComments, readLink } from '../hosted';
 import { findRoot, readActive, readConfig, readPending, resolvePaths, ACTIVE_CAP } from '../store';
 import { autoPublish } from '../autopublish';
+import { missingPictures } from '../pictures';
 
 export interface ReviewOptions {
   port?: number;
@@ -41,7 +42,12 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
     const byId = new Map(candidates.map((c) => [c.id, c]));
     return {
       project: path.basename(root),
-      pending: readPending(paths).map((d) => ({ ...d, candidateName: d.candidate ? byId.get(d.candidate)?.name ?? null : null, snapshotUrl: d.candidate ? byId.get(d.candidate)?.snapshotUrl ?? null : null })),
+      pending: readPending(paths).map((d) => ({
+        ...d,
+        candidateName: d.candidate ? byId.get(d.candidate)?.name ?? null : null,
+        snapshotUrl: d.candidate ? byId.get(d.candidate)?.snapshotUrl ?? null : null,
+        picture: missingPictures(paths, [d], candidates)[0] ?? null,
+      })),
       candidates,
       hosted: readLink(paths)?.shareUrl ?? null,
       boardVersion: readLink(paths)?.boardVersion ?? null,

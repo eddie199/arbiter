@@ -90,7 +90,7 @@ export function writeComments(paths: Paths, comments: PulledComment[]): void {
   fs.writeFileSync(path.join(paths.archiveDir, COMMENTS_FILE), JSON.stringify(comments, null, 2) + '\n');
 }
 
-const publishable = (d: Decision) => d.verdict !== 'pending' && d.verdict !== 'retire' && d.level !== 'polish';
+export const publishable = (d: Decision) => d.verdict !== 'pending' && d.verdict !== 'retire' && d.level !== 'polish';
 const wire = (d: Decision) => ({ id: d.id, change: d.change, decision: d.decision, rejected: d.rejected, verdict: d.verdict, dimension: d.dimension, scope: d.scope, ref: d.ref });
 
 /**

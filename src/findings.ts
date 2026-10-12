@@ -11,7 +11,7 @@
  */
 
 import path from 'node:path';
-import { DecisionInput } from './schema';
+import { Decision, DecisionInput } from './schema';
 
 export interface Finding {
   file: string;
@@ -52,6 +52,15 @@ export function parseFindings(raw: unknown): Finding[] {
   return out;
 }
 
+/** The piece of work a finding is queued under: the rule that fired, and where. */
+const findingTrigger = (rule: string | null, where: string) => `finding${rule ? ` ${rule}` : ''} at ${where}`;
+
+/**
+ * A scanner finding, known by the shape `toDecisionInput` gives it. It's one line in one file,
+ * not a screen, so nothing asks for its picture.
+ */
+export const isFinding = (d: Pick<Decision, 'trigger' | 'class'>): boolean => d.class === 'mechanical' && /^finding(?: \S+)? at \S/.test(d.trigger);
+
 /** Turn a finding into the decision the reviewer will judge. */
 export function toDecisionInput(f: Finding, root: string, tool: string): DecisionInput {
   const rel = path.isAbsolute(f.file) ? path.relative(root, f.file) : f.file;
@@ -60,7 +69,7 @@ export function toDecisionInput(f: Finding, root: string, tool: string): Decisio
     decision: f.suggestion ? f.suggestion : f.message,
     rationale: `${tool} flagged: ${f.message}`,
     rejected: [],
-    trigger: `finding${f.rule ? ` ${f.rule}` : ''} at ${where}`,
+    trigger: findingTrigger(f.rule, where),
     scope: `file:${rel}`,
     dimension: 'visual',
     class: 'mechanical',

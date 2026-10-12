@@ -16,8 +16,9 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { readCandidates, writeCandidate } from '../candidates';
 import { deliver, pagesUrl } from '../destination';
-import { findRoot, readConfig, resolvePaths, writeConfig } from '../store';
-import { publishHosted, readToken, TOKEN_ENV } from '../hosted';
+import { findRoot, readArchive, readConfig, resolvePaths, writeConfig } from '../store';
+import { publishable, publishHosted, readToken, TOKEN_ENV } from '../hosted';
+import { missingPictures } from '../pictures';
 import { selfVersion } from './init';
 
 /** Where `arbiter publish` goes when nothing says otherwise. */
@@ -39,7 +40,7 @@ export interface PublishOptions {
 
 export interface PublishResult {
   ok: boolean;
-  steps: { step: string; outcome: 'done' | 'skipped' | 'failed'; note?: string }[];
+  steps: { step: string; outcome: 'done' | 'skipped' | 'failed' | 'missing'; note?: string }[];
   url: string | null;
 }
 
@@ -58,8 +59,10 @@ export async function publish(opts: PublishOptions = {}): Promise<PublishResult>
     try {
       const r = await publishHosted(paths, to, { admin: opts.admin });
       if (r.created) done('project', `created on ${to} — link in .arbiter/hosted.json (commit it); token in .arbiter/hosted.token (git-ignored — teammates set ARBITER_PUBLISH_TOKEN)`);
-      done('board', `${r.candidates} screen${r.candidates === 1 ? '' : 's'} published${r.snapshots ? `, ${r.snapshots} image${r.snapshots === 1 ? '' : 's'}` : ''}`);
+      // No image count: a card without a picture shows an icon of its kind, and that's usually right.
+      done('board', `${r.candidates} screen${r.candidates === 1 ? '' : 's'} published`);
       for (const s of r.skipped) skip('snapshot', s);
+      steps.push(...pictureSteps(paths));
       if (opts.onPush) for (const s of onPush(root, paths)) steps.push(s);
       if (opts.auto !== undefined) {
         const config = readConfig(paths) ?? { version: 1 as const, destination: 'local' as const };
@@ -128,6 +131,15 @@ export async function publish(opts: PublishOptions = {}): Promise<PublishResult>
   const url = pagesUrl(root, config);
   const ok = steps.every((s) => s.outcome !== 'failed');
   return { ok, steps, url };
+}
+
+/**
+ * The last chance to notice before someone opens the board: a line per card that should have a
+ * picture and doesn't, with the command. Cards that are right as an icon say nothing. Hosted
+ * only: the Pages export has no work cards, so it would be asking for pictures nobody sees.
+ */
+function pictureSteps(paths: ReturnType<typeof resolvePaths>): PublishResult['steps'] {
+  return missingPictures(paths, readArchive(paths).filter(publishable)).map((m) => ({ step: 'picture', outcome: 'missing', note: `${m.name}: ${m.command}` }));
 }
 
 /**

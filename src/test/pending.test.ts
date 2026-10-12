@@ -235,3 +235,21 @@ test('first /arbiter: the queue reports firstRun until setup records the check-i
   assert.equal((queued.output as { checkin: string }).checkin, 'quiet', 'record --pending tells the agent the setting');
   assert.equal(setup({ cwd, checkin: 'loud' }).exitCode, 1, 'unknown modes are refused');
 });
+
+test('the queue carries the active rules, and flags items that may clash with one', () => {
+  const cwd = tmp();
+  const o = { cwd, author: 'test' };
+  // An active rule the queue will brush against.
+  record(input({ decision: 'Card headings name the thing shown', scope: 'pattern:card-heading', dimension: 'content' }), o);
+  const q = (over: Record<string, unknown>) => queue(input({ verdict: undefined, ...over }), o);
+  q({ decision: 'Card headings say Status, naming the thing shown', scope: 'pattern:card-heading', dimension: 'content' });
+  q({ decision: 'Half-width cards use icon-only action buttons', scope: 'pattern:compact-card-actions', dimension: 'interaction' });
+  q({ decision: 'Tabs are underlined', scope: 'pattern:tabs', dimension: 'visual', level: 'polish' });
+
+  const out = JSON.parse(rules(undefined, { cwd, pending: true, json: true }));
+  assert.deepEqual(out.rules, [{ id: 'D-0001', decision: 'Card headings name the thing shown', scope: 'pattern:card-heading', dimension: 'content' }]);
+  const [heading, actions] = out.groups[0].items;
+  assert.deepEqual(heading.overlaps.map((x: { id: string; confidence: string }) => [x.id, x.confidence]), [['D-0001', 'exact']]);
+  assert.equal(actions.overlaps, undefined, 'no key without a hit');
+  assert.equal(out.groups[0].polish[0].overlaps, undefined, 'polish is never checked');
+});
