@@ -13,7 +13,7 @@ import { spawn } from 'node:child_process';
 import { judge, judgeAll, JudgeAction } from './record';
 import { updateCandidate } from './candidate';
 import { candidatesDir, decisionsFor, readCandidates } from '../candidates';
-import { readComments, readLink } from '../hosted';
+import { readComments, readLinkOrNull } from '../hosted';
 import { findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, ACTIVE_CAP } from '../store';
 import { autoPublish } from '../autopublish';
 import { missingPictures } from '../pictures';
@@ -43,7 +43,7 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
       comments: comments.filter((x) => x.candidate_id === c.id),
     }));
     const byId = new Map(candidates.map((c) => [c.id, c]));
-    const version = readLink(paths)?.boardVersion ?? null;
+    const version = readLinkOrNull(paths)?.boardVersion ?? null;
     const archive = readArchive(paths);
     // The card a request was made on: its picture, a candidate's or a piece of work's.
     const shotOf = (screen: string) => {
@@ -64,8 +64,8 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
         .filter((r) => r.status === 'open' || r.status === 'approved')
         .map((r) => ({ ...describe(paths, r, version, archive), snapshotUrl: shotOf(r.screen) })),
       candidates,
-      hosted: readLink(paths)?.shareUrl ?? null,
-      boardVersion: readLink(paths)?.boardVersion ?? null,
+      hosted: readLinkOrNull(paths)?.shareUrl ?? null,
+      boardVersion: readLinkOrNull(paths)?.boardVersion ?? null,
       active: readActive(paths).length,
       cap: readConfig(paths)?.activeCap ?? ACTIVE_CAP,
     };
@@ -77,6 +77,24 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
 
   return new Promise((resolve) => {
     const server = http.createServer(async (req, res) => {
+      try {
+        await handle(req, res);
+      } catch (e) {
+        // A broken requests.json, say: the page shows the message instead of the server dying.
+        if (!res.headersSent) json(res, 500, { exitCode: 1, errors: [(e as Error).message] });
+        else res.end();
+      }
+    });
+
+    const handle = async (req: http.IncomingMessage, res: http.ServerResponse) => {
+      // This machine, by its own name, and nothing else. A site that points a domain of its own at
+      // 127.0.0.1 (DNS rebinding) is same-origin to the browser, so the JSON check below can't stop
+      // it, but its requests carry that domain as their Host.
+      if (!fromHere(req)) {
+        res.writeHead(403);
+        res.end();
+        return;
+      }
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
 
       if (req.method === 'GET' && url.pathname === '/') {
@@ -149,12 +167,20 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
       }
       res.writeHead(404);
       res.end();
-    });
+    };
 
     server.listen(opts.port ?? 0, '127.0.0.1', () => {
       const addr = server.address() as { port: number };
       const url = `http://127.0.0.1:${addr.port}/`;
-      const s = state();
+      let s: ReturnType<typeof state>;
+      try {
+        s = state();
+      } catch (e) {
+        process.stderr.write(`arbiter: ${(e as Error).message}\n`);
+        process.exitCode = 1;
+        stop();
+        return;
+      }
       const asks = s.requests.filter((r) => r.status === 'open').length;
       process.stdout.write(`Arbiter review — ${s.pending.length} pending${asks ? ` · ${asks} request${asks === 1 ? '' : 's'}` : ''} · ${s.candidates.length} candidate${s.candidates.length === 1 ? '' : 's'} · ${s.active} of ${s.cap} rules\n${url}\nPress Done in the page, or Ctrl-C here, to stop.\n`);
       if (opts.open !== false) openBrowser(url);
@@ -173,6 +199,20 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
     };
     process.on('SIGINT', stop);
   });
+}
+
+const LOCAL = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
+
+/** Addressed to this machine, and, when a page sent it, sent by a page on this machine. */
+export function fromHere(req: Pick<http.IncomingMessage, 'headers'>): boolean {
+  if (!LOCAL.test(String(req.headers.host ?? ''))) return false;
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try {
+    return LOCAL.test(new URL(origin).host);
+  } catch {
+    return false;
+  }
 }
 
 function json(res: http.ServerResponse, status: number, body: unknown): void {

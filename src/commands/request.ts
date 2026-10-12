@@ -13,7 +13,7 @@
 
 import { DecisionInput } from '../schema';
 import { currentAuthor, findRoot, now, resolvePaths, type Paths } from '../store';
-import { ChangeRequest, oneLine, readRequests, replaceRequest, REQUEST_ID, screenName } from '../requests';
+import { ChangeRequest, findRequest, oneLine, readRequests, replaceRequest, REQUEST_ID, screenName } from '../requests';
 import { readCandidates } from '../candidates';
 import type { RecordResult } from './record';
 
@@ -37,7 +37,9 @@ export function judgeRequest(id: string, opts: RequestOptions): RecordResult {
   const root = findRoot(opts.cwd);
   const paths = resolvePaths(root);
   const all = readRequests(paths);
-  const r = all.find((x) => x.id === id);
+  const found = findRequest(all, id);
+  if (found.error) return fail([found.error]);
+  const r = found.request;
   if (!r) return fail([`${id} is not a request here — npx arbiter rules --pending lists them`]);
   if (r.status === 'applied') return fail([`${id} was already applied (${r.decisions.join(', ')}). To undo that, it's a new change — and a new decision.`]);
 
@@ -86,10 +88,13 @@ export function judgeRequest(id: string, opts: RequestOptions): RecordResult {
  */
 export function requestGate(paths: Paths, id: string): { ok: true; request: ChangeRequest } | { ok: false; errors: string[] } {
   if (!REQUEST_ID.test(id)) return { ok: false, errors: [`--request takes a request id like R-0001, not ${id}`] };
-  const r = readRequests(paths).find((x) => x.id === id);
+  const found = findRequest(readRequests(paths), id);
+  if (found.error) return { ok: false, errors: [found.error] };
+  const r = found.request;
   if (!r) return { ok: false, errors: [`${id} is not a request here`] };
-  if (r.status === 'open') return { ok: false, errors: [`${id} hasn't been answered — the owner approves it first: npx arbiter record ${id} --as apply`] };
-  if (r.status === 'declined') return { ok: false, errors: [`${id} was declined (${r.reason}). If that's changed, approve it first: npx arbiter record ${id} --as apply`] };
+  // No command in these: the answer is the owner's, so the way forward is to ask them.
+  if (r.status === 'open') return { ok: false, errors: [`${id} hasn't been answered. Ask the owner whether to apply it; don't make it until they say yes.`] };
+  if (r.status === 'declined') return { ok: false, errors: [`${id} was declined (${r.reason}). Only the owner can change that; ask them.`] };
   return { ok: true, request: r };
 }
 
@@ -104,7 +109,8 @@ export function withRequest(paths: Paths, input: DecisionInput, r: ChangeRequest
   if (r.instead) {
     const asked = oneLine(r.body);
     const rejected = out.rejected ?? [];
-    if (!rejected.some((x) => x.includes(asked))) out.rejected = [`${asked} — ${r.author}'s request, applied differently`, ...rejected];
+    // Added after the input was checked, so it's made one line here: both parts came from the board.
+    if (!rejected.some((x) => x.includes(asked))) out.rejected = [`${asked} — ${oneLine(r.author)}'s request, applied differently`, ...rejected];
   }
   return out;
 }

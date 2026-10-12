@@ -26,19 +26,27 @@ const HEADING = /^#{2,3} ([DP]-\d{4,}) · (.*)$/;
 const REJECTED_ITEM = /^ {2}- (.*)$/;
 const FIELD = /\*\*([A-Za-z]+):\*\* (.*?)(?=\s·\s\*\*|$)/g;
 
+/**
+ * A value as an entry may hold it: one line, with no `**Field:**` marker of its own. Input is
+ * checked before it gets here, but some of it comes from outside the project (a board request's
+ * author and words, a scanner's message), and one line break would let it write a whole entry,
+ * a rule included.
+ */
+const text = (s: string): string => s.replace(/\s*[\r\n]+\s*/g, ' ').replace(/\*\*([A-Za-z]+):\*\*/g, '$1:');
+
 export function formatEntry(d: Decision): string {
   return [
-    `### ${d.id}${SEP}${d.decision}`,
+    `### ${d.id}${SEP}${text(d.decision)}`,
     '',
-    ...(d.change ? [`- **Change:** ${d.change}`] : []),
-    `- **Rationale:** ${d.rationale}`,
-    ...(d.rejected.length ? ['- **Rejected:**', ...d.rejected.map((r) => `  - ${r}`)] : []),
-    `- **Trigger:** ${d.trigger}`,
-    `- **Scope:** ${d.scope}${SEP}**Dimension:** ${d.dimension}${SEP}**Level:** ${d.level}${SEP}**Class:** ${d.class}${SEP}**Verdict:** ${d.verdict}`,
-    `- **Author:** ${d.author}${SEP}**Date:** ${d.date}${SEP}**Commit:** ${d.commit ?? NONE}${SEP}**Supersedes:** ${d.supersedes ?? NONE}${d.candidate ? `${SEP}**Candidate:** ${d.candidate}` : ''}`,
-    ...(d.ref ? [`- **Ref:** ${d.ref}`] : []),
-    ...(d.files.length ? [`- **Files:** ${d.files.join(SEP)}`] : []),
-    ...(d.paths.length ? [`- **Paths:** ${d.paths.join(SEP)}`] : []),
+    ...(d.change ? [`- **Change:** ${text(d.change)}`] : []),
+    `- **Rationale:** ${text(d.rationale)}`,
+    ...(d.rejected.length ? ['- **Rejected:**', ...d.rejected.map((r) => `  - ${text(r)}`)] : []),
+    `- **Trigger:** ${text(d.trigger)}`,
+    `- **Scope:** ${text(d.scope)}${SEP}**Dimension:** ${d.dimension}${SEP}**Level:** ${d.level}${SEP}**Class:** ${d.class}${SEP}**Verdict:** ${d.verdict}`,
+    `- **Author:** ${text(d.author)}${SEP}**Date:** ${text(d.date)}${SEP}**Commit:** ${d.commit ?? NONE}${SEP}**Supersedes:** ${d.supersedes ?? NONE}${d.candidate ? `${SEP}**Candidate:** ${d.candidate}` : ''}`,
+    ...(d.ref ? [`- **Ref:** ${text(d.ref)}`] : []),
+    ...(d.files.length ? [`- **Files:** ${d.files.map(text).join(SEP)}`] : []),
+    ...(d.paths.length ? [`- **Paths:** ${d.paths.map(text).join(SEP)}`] : []),
     ...(d.expect ? [`- **Expect:** ${JSON.stringify(d.expect)}${SEP}**Verified:** ${d.verified === null ? NONE : d.verified ? 'yes' : 'no'}`] : []),
     '',
   ].join('\n');

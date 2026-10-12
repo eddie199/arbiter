@@ -178,7 +178,7 @@ function card(c: Candidate, d: PageData): string {
 function rulesSection(rules: Decision[]): string {
   if (!rules.length) return '';
   const groups = DIMENSIONS.map((dim) => [dim, rules.filter((r) => r.dimension === dim)] as const).filter(([, rs]) => rs.length);
-  return `<section class="rules"><h2>Guidelines — ${rules.length}</h2>${groups
+  return `<section class="rules"><h2>Design rules · ${rules.length}</h2>${groups
     .map(([dim, rs]) => `<h4>${DIMENSION_LABELS[dim as Dimension]}</h4><ul>${rs.map((r) => `<li>${esc(r.decision)}<small>${esc(r.rationale)}</small></li>`).join('')}</ul>`)
     .join('')}</section>`;
 }

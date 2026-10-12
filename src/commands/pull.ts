@@ -4,17 +4,21 @@
  */
 
 import { readCandidates } from '../candidates';
-import { pullHosted, readComments } from '../hosted';
-import { openRequests } from '../requests';
+import { pullHosted } from '../hosted';
+import { dropWithdrawn, oneLine, openRequests, readRequests } from '../requests';
 import { findRoot, resolvePaths } from '../store';
 
 export async function pull(opts: { cwd?: string } = {}): Promise<string> {
   const paths = resolvePaths(findRoot(opts.cwd));
-  const { link, fresh, total } = await pullHosted(paths);
-  // Every request comment on file, not only the fresh ones: one pulled by an older Arbiter still counts.
-  const opened = new Map(openRequests(paths, readComments(paths)).map((r) => [r.comment, r.id]));
-  const toAnswer = `${opened.size} request${opened.size === 1 ? '' : 's'} to answer — /arbiter in chat, or npx arbiter review.`;
-  if (!fresh.length) return [`Nothing new on ${link.shareUrl} (${total} comment${total === 1 ? '' : 's'} so far).`, ...(opened.size ? [toAnswer] : [])].join('\n');
+  const { link, fresh, current, total } = await pullHosted(paths);
+  // Withdrawn first: a request deleted on the board leaves the queue before anything new arrives.
+  const withdrawn = dropWithdrawn(paths, new Set(current.filter((c) => c.kind === 'request').map((c) => c.id)));
+  // Every request on the board, not only the fresh ones: one pulled by an older Arbiter still counts.
+  const opened = new Map(openRequests(paths, current).map((r) => [r.comment, r.id]));
+  const waiting = readRequests(paths).filter((r) => r.status === 'open').length;
+  const toAnswer = `${waiting} request${waiting === 1 ? '' : 's'} to answer — /arbiter in chat, or npx arbiter review.`;
+  const gone = withdrawn.map((r) => `${r.author} withdrew ${r.id} on the board, so it's off your queue: ${oneLine(r.body)}`);
+  if (!fresh.length) return [`Nothing new on ${link.shareUrl} (${total} comment${total === 1 ? '' : 's'} so far).`, ...gone, ...(waiting ? [toAnswer] : [])].join('\n');
   const names = new Map(readCandidates(paths).map((c) => [c.id, c.name]));
   const lines = [`${fresh.length} new from ${link.shareUrl}:`, ''];
   const byCand = new Map<string, typeof fresh>();
@@ -30,6 +34,7 @@ export async function pull(opts: { cwd?: string } = {}): Promise<string> {
     }
   }
   lines.push('', 'Saved to .arbiter/comments.json — npx arbiter review shows them beside each screen. Say "record Sam\'s comment as a rule" in a session to act on one.');
-  if (opened.size) lines.push(toAnswer);
+  if (gone.length) lines.push(...gone);
+  if (waiting) lines.push(toAnswer);
   return lines.join('\n');
 }

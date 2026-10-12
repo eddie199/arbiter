@@ -12,8 +12,8 @@
 import { Decision, DIMENSIONS, Dimension, ID_PATTERN } from '../schema';
 import { DIMENSION_LABELS, formatEntry } from '../format';
 import { findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, ACTIVE_CAP, type Paths } from '../store';
-import { readLink } from '../hosted';
-import { ChangeRequest, describe, oneLine, readRequests, REQUEST_ID, screenName } from '../requests';
+import { readLinkOrNull } from '../hosted';
+import { ChangeRequest, describe, findRequest, oneLine, readRequests, REQUEST_ID, screenName } from '../requests';
 import { updateNotice } from './update';
 import { findOverlaps, type Overlap } from '../overlap';
 
@@ -71,7 +71,8 @@ function pendingList(pending: Decision[], opts: RulesOptions, paths: Paths): str
   const groups = groupByTrigger(pending);
   // Requests from the board: open ones wait on the owner's answer; approved ones on the agent.
   const archiveAll = readArchive(paths);
-  const version = readLink(paths)?.boardVersion ?? null;
+  // Only for "asked about an earlier version": a hosted.json in a merge conflict mustn't stop the queue.
+  const version = readLinkOrNull(paths)?.boardVersion ?? null;
   const requests = readRequests(paths);
   const show = (status: ChangeRequest['status']) => requests.filter((r) => r.status === status).map((r) => describe(paths, r, version, archiveAll));
   const open = show('open');
@@ -164,7 +165,9 @@ function reviewLines(d: Decision): string[] {
 }
 
 function oneRequest(id: string, paths: Paths, json?: boolean): string {
-  const r = readRequests(paths).find((x) => x.id === id);
+  const found = findRequest(readRequests(paths), id);
+  if (found.error) throw new Error(found.error);
+  const r = found.request;
   if (!r) throw new Error(`${id} not found`);
   if (json) return JSON.stringify(r, null, 2);
   const answer =
@@ -172,7 +175,7 @@ function oneRequest(id: string, paths: Paths, json?: boolean): string {
     : r.status === 'declined' ? `declined by ${r.judgedBy}: ${r.reason}`
     : r.status === 'approved' ? `approved by ${r.judgedBy}${r.instead ? ` — do instead: ${r.instead}` : ''}`
     : `applied${r.instead ? ` differently (${r.instead})` : ''} — ${r.decisions.join(', ')}`;
-  return [`${r.id}  ${r.author} on ${screenName(paths, r.screen) ?? r.screen}${r.decision ? ` (${r.decision})` : ''}, ${r.date.slice(0, 10)}`, `        ${r.body}`, `        ${answer}`].join('\n');
+  return [`${r.id}  ${r.author} on ${screenName(paths, r.screen) ?? r.screen}${r.decision ? ` (${r.decision})` : ''}, ${String(r.date ?? '').slice(0, 10)}`, `        ${r.body}`, `        ${answer}`].join('\n');
 }
 
 function one(id: string, paths: ReturnType<typeof resolvePaths>, json?: boolean): string {

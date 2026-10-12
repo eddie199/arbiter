@@ -89,7 +89,7 @@ export function record(rawJson: string, opts: RecordOptions = {}): RecordResult 
 }
 
 export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
-  if (opts.request) return fail([`the owner already approved ${opts.request} — record the change directly, without --pending`]);
+  if (opts.request) return fail([`--request records a change made for an approved request, directly: drop --pending. Nothing is queued for a request.`]);
   const parsed = parse(rawJson, { pending: true });
   if (!parsed.ok) return parsed.result;
   const paths = resolvePaths(findRoot(opts.cwd));
@@ -318,10 +318,16 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
   const supersedes = opts.supersedes ?? input.supersedes ?? null;
   const entry: Decision = { ...fill(input, opts, root), id: nextId(archive), supersedes };
 
+  // Nothing written means the request isn't applied yet. Whatever the re-run is, it has to carry
+  // --request too, or the change lands and the request stays approved, to be made again.
+  const again = request ? ` --request ${request.id}` : '';
+  const keepRequest = (r: RecordResult): RecordResult =>
+    request ? { ...r, output: { ...r.output, request: request.id, note: `Nothing was written, so ${request.id} isn't applied yet. Re-run with${again}.` } } : r;
+
   // An `accept` is a deviation by definition — nothing to verify. Rules and fixes make claims.
   if (entry.verdict !== 'accept') {
     const checked = check(entry, root, opts);
-    if (checked) return checked;
+    if (checked) return keepRequest(checked);
   }
 
   let nextActive = active;
@@ -346,7 +352,7 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
     } else if (!opts.keepBoth) {
       const overlaps = findOverlaps(input, active, { ignore: config?.overlap?.ignore });
       if (overlaps.length) {
-        return {
+        return keepRequest({
           exitCode: 2,
           output: {
             status: 'overlap',
@@ -355,18 +361,18 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
             overlaps,
             options: [
               ...overlaps.map((o) => ({
-                flag: `--supersedes ${o.id}`,
+                flag: `--supersedes ${o.id}${again}`,
                 effect: `${o.id} leaves DECISIONS.md and stays in the archive; the new rule records supersedes: ${o.id}`,
               })),
-              { flag: '--keep-both', effect: 'both rules stay active' },
+              { flag: `--keep-both${again}`, effect: 'both rules stay active' },
             ],
           },
-        };
+        });
       }
     }
 
     if (nextActive.length >= cap) {
-      return {
+      return keepRequest({
         exitCode: 3,
         output: {
           status: 'cap',
@@ -374,7 +380,7 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
           candidate: input,
           active: nextActive.map((d) => ({ id: d.id, decision: d.decision, scope: d.scope })),
         },
-      };
+      });
     }
     nextActive = [...nextActive, entry];
   }

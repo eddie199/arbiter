@@ -141,7 +141,7 @@ Two ways to keep the board current without anyone remembering.
 
 A comment is input; it waits until the owner points at it. **Request change** on the board is different: someone wants something changed, so it gets an answer.
 
-1. `npx arbiter pull` turns each one into a request, `R-0001`, in `.arbiter/requests.json` (commit it — everyone sees the same answers). Pulling twice never asks twice.
+1. `npx arbiter pull` turns each one into a request, `R-0001`, in `.arbiter/requests.json` (commit it — everyone sees the same answers). Pulling twice never asks twice. If the person who asked deletes it on the board before the change is made, the next pull takes it off the queue and says so.
 2. The owner answers — in chat with `/arbiter`, or on the **Requests** tab of `arbiter review`:
    - **Apply** — `record R-0001 --as apply`
    - **Apply, but…** — `record R-0001 --as apply --to "keep the tab, make the button red"`: do this instead of what was asked
@@ -149,7 +149,9 @@ A comment is input; it waits until the owner points at it. **Request change** on
 3. Approving changes no code — only the agent can. In chat it makes the change right away; approved from the review page, it's made at the next `/arbiter`. The agent records what it did with `--request R-0001`, and that's what applies it. Only an approved request can be applied; a change the owner hasn't said yes to is refused.
 4. `publish` carries the answers back: the requester sees *Open*, *Approved*, *Applied* — with what actually changed — or *Declined* with the reason, under their request.
 
-Nothing is applied without the owner, and the board never writes to git: requests come in through `pull`, answers go out through `publish`. Removing the decision that applied a request opens the request again, for a fresh answer — the agent never remakes it unasked. A screen with a request still waiting on it can't be removed until the request is answered.
+Nothing is applied without the owner, and the board never writes to git: requests come in through `pull`, answers go out through `publish`. Removing the last decision that applied a request opens the request again, for a fresh answer — the agent never remakes it unasked. A screen or decision with a request waiting on it (open, or approved and not yet made) can't be removed until the request is declined or applied.
+
+Whoever is signed in on the board chooses their own display name, and what they write is theirs, so neither is trusted: names arrive as one line, and the record can't be given a line, an entry or a field by anything it stores.
 
 ## Candidates
 

@@ -21,7 +21,7 @@ import path from 'node:path';
 import type { Decision } from './schema';
 import type { PulledComment } from './hosted';
 import { readCandidates } from './candidates';
-import { Paths, readArchive } from './store';
+import { now, Paths, readArchive } from './store';
 import { workId } from './work';
 
 export const REQUEST_ID = /^R-\d{4,}$/;
@@ -59,6 +59,9 @@ export interface ChangeRequest {
 }
 
 const FILE = 'requests.json';
+const NAME_MAX = 120;
+/** The board's own limit on what someone can write. */
+const BODY_MAX = 4000;
 
 export function readRequests(paths: Paths): ChangeRequest[] {
   const f = path.join(paths.archiveDir, FILE);
@@ -66,7 +69,8 @@ export function readRequests(paths: Paths): ChangeRequest[] {
   // Committed and rewritten on every pull, so a merge conflict is the likely way it breaks: say so
   // plainly, before any command has written anything else.
   try {
-    const all = JSON.parse(fs.readFileSync(f, 'utf8'));
+    // A byte-order mark is what a file saved from PowerShell 5 starts with; it's not a conflict.
+    const all = JSON.parse(fs.readFileSync(f, 'utf8').replace(/^﻿/, ''));
     if (!Array.isArray(all)) throw new Error('not a list');
     return all as ChangeRequest[];
   } catch (e) {
@@ -77,6 +81,16 @@ export function readRequests(paths: Paths): ChangeRequest[] {
 export function writeRequests(paths: Paths, requests: ChangeRequest[]): void {
   fs.mkdirSync(paths.archiveDir, { recursive: true });
   fs.writeFileSync(path.join(paths.archiveDir, FILE), JSON.stringify(requests, null, 2) + '\n');
+}
+
+/**
+ * One request by its id. Two sharing an id (a hand-merged file) is refused, not guessed: answering
+ * the wrong one would make, or decline, a change nobody asked about.
+ */
+export function findRequest(all: ChangeRequest[], id: string): { request?: ChangeRequest; error?: string } {
+  const hits = all.filter((r) => r.id === id);
+  if (hits.length > 1) return { error: `${id} is in .arbiter/requests.json ${hits.length} times, for different requests (a merge kept both?). Give each its own id in the file, then run this again.` };
+  return { request: hits[0] };
 }
 
 export function nextRequestId(requests: ChangeRequest[]): string {
@@ -96,14 +110,17 @@ export function openRequests(paths: Paths, comments: PulledComment[]): ChangeReq
     // A request with no words, or not attached to a card, is nothing to answer — and saving it would
     // break every later read of the queue.
     if (c.kind !== 'request' || seen.has(c.id) || typeof c.body !== 'string' || !c.body.trim() || typeof c.candidate_id !== 'string' || !c.candidate_id) continue;
+    // Anyone signed in on the board writes these, name included, and the name ends up in the
+    // record: one line, a sane length. The words keep their lines; they're cut at the board's cap.
+    const name = typeof c.author_name === 'string' ? oneLine(c.author_name).slice(0, NAME_MAX) : '';
     const r: ChangeRequest = {
       id: nextRequestId(all),
       comment: c.id,
       screen: c.candidate_id,
       decision: c.decision_id,
-      author: c.author_name,
-      body: c.body.trim(),
-      date: c.created_at,
+      author: name || 'Someone',
+      body: c.body.trim().slice(0, BODY_MAX),
+      date: typeof c.created_at === 'string' && c.created_at ? c.created_at : now(),
       boardVersion: c.board_version ?? null,
       status: 'open',
       instead: null,
@@ -119,6 +136,18 @@ export function openRequests(paths: Paths, comments: PulledComment[]): ChangeReq
   }
   if (added.length) writeRequests(paths, all);
   return added;
+}
+
+/**
+ * Requests the person who asked has deleted from the board. Only ones nobody has acted on go: an
+ * open one, or an approved one the agent hasn't made yet. Once the change is made it's in the
+ * record, and the board won't let an answered request be deleted anyway.
+ */
+export function dropWithdrawn(paths: Paths, onBoard: Set<string>): ChangeRequest[] {
+  const all = readRequests(paths);
+  const gone = all.filter((r) => (r.status === 'open' || r.status === 'approved') && !onBoard.has(r.comment));
+  if (gone.length) writeRequests(paths, all.filter((r) => !gone.includes(r)));
+  return gone;
 }
 
 /**

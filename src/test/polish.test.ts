@@ -128,7 +128,7 @@ test('export writes a self-contained folder: index.html, snapshots, stakeholder 
   assert.ok(html.includes('over Tabs'));
   assert.ok(!html.includes('h-9'), 'polish omitted');
   assert.ok(!html.includes('Pending thing'), 'pending omitted');
-  assert.ok(html.includes('Guidelines'));
+  assert.ok(html.includes('Design rules'));
   assert.ok(!html.includes('Make it a rule'), 'no verdict controls');
 
   const one = exportBoard({ cwd, feature: 'billing', out: 'out-billing' });

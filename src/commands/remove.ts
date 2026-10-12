@@ -68,7 +68,10 @@ function removeDecision(id: string, opts: RemoveOptions): RemoveResult {
     return fail([`${later.id} supersedes ${id} — removing it would leave ${later.id} pointing at nothing. Remove ${later.id} first if neither is real.`]);
   }
   // Read before anything is written: a broken requests.json must stop the removal, not interrupt it.
-  readRequests(paths);
+  // A request still waiting that was asked about this decision would outlive it, and then read as
+  // if it were about whatever takes the id next.
+  const about = readRequests(paths).filter((r) => r.decision === id && (r.status === 'open' || r.status === 'approved'));
+  if (about.length) return fail([`${about.map((r) => `${r.id} (${r.author})`).join(', ')} ${about.length === 1 ? 'was' : 'were'} asked about ${id} and ${about.length === 1 ? 'is' : 'are'} still waiting. The owner answers first; if ${id} is going, that's a reason they can decline with.`]);
 
   writeArchive(paths, archive.filter((d) => d.id !== id));
   if (isActive) {
@@ -113,7 +116,7 @@ function removeCandidate(id: string, opts: RemoveOptions): RemoveResult {
   if (by) return fail([`${by.id} says it was superseded by ${id} — clear that first: npx arbiter candidate ${by.id} --state generated`]);
   // A request still waiting on this screen would outlive it — and point at whatever takes its id next.
   const asked = readRequests(paths).filter((r) => r.screen === id && (r.status === 'open' || r.status === 'approved'));
-  if (asked.length) return fail([`${asked.map((r) => `${r.id} (${r.author})`).join(', ')} ${asked.length === 1 ? 'was' : 'were'} asked on ${id} and ${asked.length === 1 ? 'is' : 'are'} still waiting. Answer first — decline with the reason the screen is going: npx arbiter record ${asked[0].id} --as decline --why "…"`]);
+  if (asked.length) return fail([`${asked.map((r) => `${r.id} (${r.author})`).join(', ')} ${asked.length === 1 ? 'was' : 'were'} asked on ${id} and ${asked.length === 1 ? 'is' : 'are'} still waiting. The owner answers first; if the screen is going, that's a reason they can decline with.`]);
 
   const archive = readArchive(paths);
   const pending = readPending(paths);
