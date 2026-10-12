@@ -230,7 +230,7 @@ Still only `publish` and `pull` touch the network, and `hosted.auto` is a commit
 
 - **Pictures are per screen**, through naming (#2) rather than structure. Work spanning screens gets split by name; a change on every page gets one picture and a `scope` that says how far it reaches. #14 shrank to the viewport case and is gated.
 - **`remove` deletes outright.** Git holds the history; the terminal prints what went, for anyone without a repo.
-- **This release is the bug fix plus cleanup** — 1–5, 8, 9, 10, 13, all built on `release/0.1.4`. Private records (#11), publish counting (#7), Windows capture (#6) and the app URL (#12) wait.
+- **0.1.4 was the bug fix plus cleanup** — 1–5, 8, 9, 10, 13, all built on `release/0.1.4`. Publish counting (#7) and the app URL (#12) followed in 0.1.5. Private records (#11) and Windows capture (#6) wait.
 - **#6 is paused.** The agent now renders its own screenshot with a headless browser (#4), so manual capture is a rare fallback. The *message* is platform-correct — `--capture` is only offered on macOS — but no Windows capture was built.
 
 ## Found while building

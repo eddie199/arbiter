@@ -111,7 +111,8 @@ export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
       pending: pending.length + 1,
       checkin,
       waiting,
-      ...askToReview(before, waiting, checkin),
+      // A dry run wrote nothing, so the count it reached isn't real yet.
+      ...(opts.dryRun ? {} : askToReview(before, waiting, checkin)),
       review: 'npx arbiter review',
       ...picture(paths, entry),
       // Present only when the project's skill file is from an older Arbiter than this one.
@@ -147,6 +148,7 @@ export function queueFindings(file: string, opts: RecordOptions & { tool?: strin
 
   const tool = opts.tool ?? path.basename(file, path.extname(file));
   const pending = readPending(paths);
+  const before = pending.filter((d) => d.level !== 'polish').length;
   const seen = new Set(pending.map((d) => d.trigger));
   const added: string[] = [];
   let skipped = 0;
@@ -162,7 +164,24 @@ export function queueFindings(file: string, opts: RecordOptions & { tool?: strin
     added.push(entry.id);
   }
   if (!opts.dryRun) writePending(paths, pending);
-  return { exitCode: 0, output: { status: 'queued', tool, queued: added.length, skippedDuplicates: skipped, ids: added, pending: pending.length, review: 'npx arbiter review' } };
+  // Findings are asked about like any other queued change, so they count toward the review question.
+  const waiting = pending.filter((d) => d.level !== 'polish').length;
+  const checkin = readConfig(paths)?.checkin ?? 'feature';
+  return {
+    exitCode: 0,
+    output: {
+      status: 'queued',
+      tool,
+      queued: added.length,
+      skippedDuplicates: skipped,
+      ids: added,
+      pending: pending.length,
+      checkin,
+      waiting,
+      ...(opts.dryRun ? {} : askToReview(before, waiting, checkin)),
+      review: 'npx arbiter review',
+    },
+  };
 }
 
 function parse(rawJson: string, options: ValidateOptions = {}): { ok: true; input: DecisionInput } | { ok: false; result: RecordResult } {

@@ -11,13 +11,19 @@ description: Record design decisions made during UI work so they never have to b
 
 If `DECISIONS.md` exists, read it before building or changing any component, screen, or style. Treat every entry as settled. Do not re-decide, do not ask about, and do not deviate from an active rule unless the user explicitly asks you to. Do not try the alternatives it lists as rejected.
 
-**Name the rules you follow.** When an active rule shapes what you build, say so in that reply — one line, each rule by id and a few words:
+**Name the rules that shaped the work.** When an active rule made you build something the user might otherwise question (why no undo bar? why are the errors at the top?), say which, in the reply where you built it. One line, each rule by id with a few words on what it made you do:
 
 ```
-Following D-0003 (card headings name the thing shown), D-0008 (icon-only actions on half-width cards)
+Following D-0001 (removing asks first, no undo bar), D-0020 (an empty list is one grey line) and D-0019 (form errors go in one box at the top)
 ```
 
-Only rules that changed what you built, not every rule you read. Once per rule per piece of work; don't repeat it on each iteration. If none applied, say nothing. This holds whatever the check-in setting — it's about what you built, not the queue. It's how the user sees the record working, and it tells them which rule to check the screen against.
+How often follows the check-in setting (`checkin` in `arbiter.json`; `feature` when it isn't there):
+
+- `feature` (default): only after a sizeable piece of work, like a new screen, flow or feature. At most three rules. Never for a small tweak, like a button's colour or its corners.
+- `quiet`: never. Follow the rules; don't name them.
+- `every`: each time a rule changed what you built.
+
+Whatever the setting, leave out rules you'd have followed anyway, rules the work didn't touch, and small visual details. Name a rule once per piece of work, not on every iteration. Never write "and 2 others"; name the ones the user is most likely to wonder about. If none applies, say nothing. The line shows the record working, and tells the user which rule to check the screen against.
 
 ## After UI work — queue, don't interrupt
 
@@ -31,7 +37,7 @@ Design work is iterative. A screen redesigned six times is one piece of work, no
 npx arbiter record --pending '<json>'
 ```
 
-(JSON shape below). The output carries `checkin`, the user's answer from their first `/arbiter`; `waiting`, how many changes are waiting for them (polish isn't counted, since they're never asked about it); and sometimes `ask`.
+(JSON shape below). The output carries `checkin`, the user's answer from their first `/arbiter`; `waiting`, how many changes are waiting for them (polish isn't counted, since they're never asked about it); sometimes `ask`; and sometimes `picture`, a screen this changed that has no picture yet (see **Screenshots**).
 
 - `feature` (default) — **only if the piece of work included a `feature`-level decision**, add one line to your reply carrying its Change line, not a count.
 - `quiet` — say nothing. Ever. They run `/arbiter` when they want it. `ask` never comes back.
@@ -57,7 +63,7 @@ You have 5 changes waiting in Arbiter. Review them now? (yes / no)
 
 Plain text, never the widget. **yes**: start the review below, as if they'd typed `/arbiter`. **no**: say "Okay" and carry on; don't raise it again until another `ask` comes back. Anything else means they've moved on, so carry on.
 
-A count on every reply gets ignored; a sentence about what changed, only after something big, gets read; a question only when enough has piled up to be worth a sitting. Otherwise queue silently, since the user knows the queue exists. If the work was only patterns and polish and no `ask` came back, say nothing. Do not list the decisions. The queue lives in `.arbiter/pending.md`, so it survives the session; the user can judge it here, in the review page, or never.
+A count on every reply gets ignored; a sentence about what changed, only after something big, gets read; a question only when enough has piled up to be worth a sitting. Otherwise queue silently, since the user knows the queue exists. Under `feature`, if the work was only patterns and polish and no `ask` came back, say nothing. Do not list the decisions. The queue lives in `.arbiter/pending.md`, so it survives the session; the user can judge it here, in the review page, or never.
 
 The output may also carry `update` — this skill file was written by an older Arbiter than the one installed (`update.skill` vs `update.cli`), so the protocol you're following is behind. Once per session, add one line, whatever `checkin` says:
 
@@ -110,6 +116,8 @@ npx arbiter record P-0003 --as rule        # Make it a rule
 npx arbiter record P-0003 --as skip        # typed "skip" in Other
 npx arbiter record P-0003 --as fix --to "<what they typed>"
 ```
+
+A judge's reply can carry a `picture` line. Don't break off the review for it: finish the review, then take the pictures if the app is running, or say so once, as **When you can't** shows.
 
 If the decision belongs to a screen you tracked as a candidate, add `--candidate C-0001` to any of those — it links at the moment it's judged, and the screen's page picks it up. That's the only moment linking is free; afterwards it takes `npx arbiter unlink` and a re-record.
 
@@ -403,7 +411,7 @@ Queue that direction's decisions with `--candidate C-0001` so they stay attached
 npx arbiter candidate C-0001 --snapshot /path/to/shot.png
 ```
 
-Do this without asking. If you can't (no browser tool, app not running), say so in the one-line summary and offer: `npx arbiter candidate C-0001 --capture` — the user drags a rectangle over whatever is on their screen and it's saved.
+Do this without asking. If you can't (no browser tool, app not running), say so in the one-line summary and offer the manual route. On macOS: `npx arbiter candidate C-0001 --capture` — the user drags a rectangle over whatever is on their screen and it's saved. Anywhere else, `--capture` fails: ask them to save a screenshot and run `npx arbiter candidate C-0001 --snapshot shot.png`.
 
 When the user picks one — "go with the single page", "the first one" — approve it with their reason in their words. The other directions for that feature are superseded automatically, reason retained:
 
@@ -423,7 +431,7 @@ If the user points you at a design-lint or drift scanner's JSON output, don't ac
 npx arbiter record --findings <file.json> --tool <scanner name>
 ```
 
-Each finding becomes a pending item with a verdict to attach. Then one line: `12 findings queued — /arbiter to review, or npx arbiter review.`
+Each finding becomes a pending item with a verdict to attach. Then one line: `12 findings queued — /arbiter to review, or npx arbiter review.` If the output has `ask`, end on the question instead: `12 findings queued. You have 15 changes waiting in Arbiter. Review them now? (yes / no)`
 
 ## Publishing a board
 
@@ -432,6 +440,8 @@ When the user wants a board — *"publish this"*, *"share it"*, *"get me a link"
 ```
 npx arbiter publish
 ```
+
+Above the link, a `picture missing` line names each card that should have a picture and doesn't. Don't drop them: after the link, one line naming those cards — `No picture yet on Settings — billing and Audit page.` If the app is running, take them instead (see **Screenshots**) and publish again.
 
 It goes to arbiter.design. Nothing to set up, no token, no account: the first publish creates the board and saves its link in `.arbiter/hosted.json` (commit it) and a publish token in `.arbiter/hosted.token` (git-ignored — a teammate sets `ARBITER_PUBLISH_TOKEN` to republish). Later publishes replace the board. **Don't ask where to publish, and don't ask for a token.** Only a self-hosted Arbiter takes `--to <url>`; `--to pages` is GitHub Pages instead.
 
@@ -465,7 +475,7 @@ Removal is for the record being false, not for the user disliking what it says. 
 
 ## Changing how often Arbiter checks in
 
-*"Be quieter about decisions"*, *"stop telling me"*, *"stop asking me to review"*, *"tell me after everything"* — run `npx arbiter setup --checkin quiet|feature|every` and confirm in four words. No question.
+*"Be quieter about decisions"*, *"stop telling me"*, *"stop asking me to review"*, *"tell me after everything"* — run `npx arbiter setup --checkin quiet|feature|every` and confirm in a few words. No question. Only `quiet` stops the review question, and it stops the line after big work too; if they only asked about the question, the confirmation says so: `Quiet now: no lines, no questions.`
 
 ## Retiring a rule
 
@@ -511,4 +521,4 @@ Recorded D-0010 (accept), D-0011 (rule), +3 polish · DECISIONS.md: 6 of 40
 - Re-try an alternative that `DECISIONS.md` lists as rejected.
 - Ask about polish. It's logged with the group.
 - Cram Change, Pattern and Rejected into one sentence. Three labelled lines, always.
-- Mention Arbiter at the end of a reply except as **After UI work** says: the line after the work the check-in setting names, and a question only when `ask` came back. One Arbiter line per reply, never mid-iteration.
+- Mention Arbiter at the end of a reply except as **After UI work** says: the line after the work the check-in setting names, and a question only when `ask` came back. At most one of those per reply, never mid-iteration. The `Following` line, the stale-skill notice and a `No picture for…` line are separate; their own sections say when.

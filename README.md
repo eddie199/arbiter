@@ -24,10 +24,10 @@ Running `init` twice changes nothing.
 
 ## How it works
 
-1. You ask the agent to build a screen. It reads `DECISIONS.md` first, and names the rules that shaped what it built — *Following D-0003* — so you can see the record working.
+1. You ask the agent to build a screen. It reads `DECISIONS.md` first. After a sizeable piece of work it names up to three rules that shaped it, *Following D-0001 (removing asks first, no undo bar)*, so you can see the record working. How often follows the check-in setting: never under `quiet`, every time a rule changed something under `every`.
 2. You iterate. It says nothing about decisions while you're iterating — each version you move past becomes a rejected alternative on the one that replaced it.
 3. When you move on, it queues the design calls it made — sized as `feature`, `pattern`, or `polish` — and, after feature-level work, says one line about what changed. When 5 changes are waiting (then 10, 15…), it asks in plain text whether you want to review them now; polish doesn't count, and `setup --checkin quiet` turns both off.
-4. You judge them when you want — in chat with `/arbiter`, or in the browser with `npx arbiter review`. Grouped by piece of work; each item reads **Change** (what happened) / **Pattern** (the rule) / **Rejected** (what lost). Per item: **Confirm**, **Make it a rule**, **Skip**, or type a correction. Polish is one line per group — **Confirm all**.
+4. You judge them when you want — in chat with `/arbiter`, or in the browser with `npx arbiter review`. Grouped by piece of work; each item reads **Change** (what happened) / **Pattern** (the rule) / **Rejected** (what lost). Per item: **Confirm**, **Make it a rule**, **Skip**, or type a correction. Polish is one line per group — **Confirm all**. In chat, an item that goes against an active rule says so (*Clashes — D-0009*) and asks which wins: **Follow D-0009**, **Replace D-0009**, or **Keep as exception**.
 5. Rules enter `DECISIONS.md`. Everything judged enters the archive. Skips vanish.
 
 You can also just say it: *"make that a rule"*, *"reject the tabs, going with a single page"*. It records without asking.
@@ -38,6 +38,8 @@ Nothing enforces anything. Rules inform generation; they don't gate it.
 
 ```
 arbiter init                        install into this project  [--destination git]
+arbiter setup --checkin <mode>      how often the agent checks in: feature | quiet | every
+arbiter setup --app <url>           where the app runs, so the agent can open screens for pictures
 arbiter snapshot "<work>" --file x.png   a picture for a piece of work (or --capture on macOS); publish carries it
 arbiter record                      walk through a decision at the terminal
 arbiter record '<json>'             record now (what the agent calls)
@@ -79,7 +81,7 @@ The agent's own screenshot tool hands it an image, not a file, so it renders to 
 
 Name a piece of work after the screen it changed where the work splits that way — `Settings — billing` rather than one `Settings build` across four routes — and one picture per piece of work is one per screen.
 
-The board shows an icon of the kind of change where a card has no picture, so a missing one never looks broken there. That's also why nobody notices, so Arbiter says it where it can still be fixed. A change asks for a picture when it's about one screen (not `global`) and is layout, words or looks (`structure`, `content`, `visual`); interaction, states, motion and access are right as an icon. When such a card has none, `record` adds a `picture` line with the command to the agent's reply, the review page marks the group "No picture", and `publish` lists the card. Nothing on the board changes.
+The board shows an icon of the kind of change where a card has no picture, so a missing one never looks broken there. That's also why nobody notices, so Arbiter says it where it can still be fixed. A change asks for a picture when it's about one screen (not `global`) and is layout, words or looks (`structure`, `content`, `visual`); interaction, states, motion and access are right as an icon. When such a card has none, `record` adds a `picture` line with the command to the agent's reply, the review page marks the group "No picture", and `publish` to arbiter.design lists the card (the agent passes the list on). Scanner findings never ask: they're a line in a file, not a screen. Nothing on the board changes.
 
 ## Taking something out
 

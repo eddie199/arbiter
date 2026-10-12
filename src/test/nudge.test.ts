@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { judge, queue } from '../commands/record';
+import { judge, queue, queueFindings } from '../commands/record';
 import { setup } from '../commands/setup';
 import { resolvePaths, writeConfig } from '../store';
 
@@ -49,6 +49,19 @@ test('judging brings the count down, and it asks again when the count climbs bac
   assert.equal(three.output.ask, undefined);
   queue(change(), o(cwd));
   assert.equal(queue(change(), o(cwd)).output.ask, ASK5);
+});
+
+test('a dry run never asks; scanner findings count toward the question', () => {
+  const cwd = tmp();
+  for (let i = 1; i <= 4; i++) queue(change(), o(cwd));
+  const dry = queue(change(), { ...o(cwd), dryRun: true });
+  assert.equal(dry.output.waiting, 5);
+  assert.equal(dry.output.ask, undefined, 'nothing was written, so nothing new to review');
+
+  fs.writeFileSync(path.join(cwd, 'lint.json'), JSON.stringify([{ file: 'a.tsx', rule: 'no-hex', message: 'Raw hex colour' }, { file: 'b.tsx', rule: 'no-hex', message: 'Raw hex colour' }]));
+  const found = queueFindings('lint.json', o(cwd));
+  assert.equal(found.output.waiting, 6, 'from 4 to 6 passes 5');
+  assert.equal(found.output.ask, 'You have 6 changes waiting in Arbiter. Review them now? (yes / no)');
 });
 
 test('someone who chose "Nothing until I ask" is never asked', () => {

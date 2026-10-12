@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { init } from '../commands/init';
-import { record } from '../commands/record';
+import { judge, queueFindings, record } from '../commands/record';
 import { setup } from '../commands/setup';
 import { snapshotWork } from '../commands/snapshot';
 import { readConfig, resolvePaths, writeConfig } from '../store';
@@ -52,6 +52,34 @@ test('setup --app saves where the app runs; on its own it leaves the intro and c
   const both = setup({ checkin: 'every', app: 'https://staging.example.com', cwd });
   assert.equal(both.output.app, 'https://staging.example.com');
   assert.ok(readConfig(resolvePaths(cwd))!.onboarded);
+});
+
+test('setup --app drops a query or fragment, refuses a password, and works beside a hand-edited check-in', () => {
+  const cwd = initialised();
+  const paths = resolvePaths(cwd);
+  assert.equal(setup({ app: 'http://localhost:3000/app?tab=1#top', cwd }).output.app, 'http://localhost:3000/app', 'a route goes on the end');
+
+  const secret = setup({ app: 'https://user:secret@staging.example.com', cwd });
+  assert.equal(secret.exitCode, 1, 'arbiter.json is committed');
+  assert.equal(readConfig(paths)!.app?.url, 'http://localhost:3000/app', 'nothing written');
+
+  writeConfig(paths, { ...readConfig(paths)!, checkin: 'loud' as never });
+  assert.equal(setup({ app: 'http://localhost:5173', cwd }).exitCode, 0, '--app alone never reads the check-in');
+  assert.equal(readConfig(paths)!.app?.url, 'http://localhost:5173');
+  assert.equal(setup({ cwd }).exitCode, 1, 'a check-in outside the three is still refused where it would be written');
+});
+
+test('a scanner finding never asks for a picture: it is a line in a file, not a screen', () => {
+  const cwd = initialised();
+  fs.writeFileSync(path.join(cwd, 'lint.json'), JSON.stringify([{ file: 'src/a.tsx', line: 3, rule: 'no-hex', message: 'Raw hex colour', suggestion: 'Use brand-500' }]));
+  const queued = queueFindings('lint.json', o(cwd));
+  assert.equal(queued.exitCode, 0);
+  const [id] = queued.output.ids as string[];
+  const judged = judge(id, { ...o(cwd), as: 'accept' });
+  assert.equal(judged.exitCode, 0);
+  assert.equal(judged.output.picture, undefined);
+
+  assert.ok(record(decision(), o(cwd)).output.picture, 'a change someone made on a screen still asks');
 });
 
 test("record's picture line names the app's address when arbiter.json has it", () => {

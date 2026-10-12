@@ -7,10 +7,12 @@
  * A change earns a picture when you could point at it on one screen and a still would show it:
  * its layout, its words, its looks. Behaviour doesn't show in a still (interaction, motion,
  * access), a state is photographed only if you were already looking at it, and a global change
- * has no one screen. Polish never reaches the board, so it never asks either.
+ * has no one screen. Polish never reaches the board, so it never asks either, and nor does a
+ * scanner finding: it's a line in a file, not a screen.
  */
 
 import { readCandidates, type Candidate } from './candidates';
+import { isFinding } from './findings';
 import type { Decision, Dimension } from './schema';
 import type { Paths } from './store';
 import { workId, workSnapshot } from './work';
@@ -18,8 +20,8 @@ import { workId, workSnapshot } from './work';
 const PICTURED: readonly Dimension[] = ['structure', 'content', 'visual'];
 
 /** Would a picture of one screen show this change, on a card the board will have? */
-export const needsPicture = (d: Pick<Decision, 'scope' | 'dimension' | 'level' | 'verdict'>): boolean =>
-  d.scope !== 'global' && d.level !== 'polish' && d.verdict !== 'retire' && PICTURED.includes(d.dimension);
+export const needsPicture = (d: Pick<Decision, 'scope' | 'dimension' | 'level' | 'verdict' | 'trigger' | 'class'>): boolean =>
+  d.scope !== 'global' && d.level !== 'polish' && d.verdict !== 'retire' && PICTURED.includes(d.dimension) && !isFinding(d);
 
 export interface MissingPicture {
   /** The card's name, as the board shows it. */
