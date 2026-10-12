@@ -123,12 +123,12 @@ test('export writes a self-contained folder: index.html, snapshots, stakeholder 
   const html = fs.readFileSync(r.index, 'utf8');
   assert.ok(fs.existsSync(path.join(r.dir, 'snapshots', 'C-0001.svg')));
   assert.ok(html.includes('Settings — single &lt;page&gt;'), 'escaped');
-  assert.ok(html.includes('Superseded by Settings — single &lt;page&gt;'));
+  assert.ok(html.includes('Replaced by Settings — single &lt;page&gt;'));
   assert.ok(html.includes('Danger zone is at the bottom'), 'Change text, not rule text');
   assert.ok(html.includes('over Tabs'));
   assert.ok(!html.includes('h-9'), 'polish omitted');
   assert.ok(!html.includes('Pending thing'), 'pending omitted');
-  assert.ok(html.includes('Standing rules'));
+  assert.ok(html.includes('Guidelines'));
   assert.ok(!html.includes('Make it a rule'), 'no verdict controls');
 
   const one = exportBoard({ cwd, feature: 'billing', out: 'out-billing' });

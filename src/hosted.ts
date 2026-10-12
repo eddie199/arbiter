@@ -14,6 +14,7 @@ import { readCandidates, decisionsFor, candidatesDir } from './candidates';
 import { Paths, readActive, readArchive, readConfig } from './store';
 import type { Decision } from './schema';
 import { workId, workSnapshot } from './work';
+import { cardOf, readRequests } from './requests';
 
 export interface HostedLink {
   url: string;        // service base url
@@ -29,7 +30,8 @@ export interface PulledComment {
   id: string;
   candidate_id: string;
   decision_id: string | null;
-  kind: 'comment' | 'approve';
+  /** `request` — "Request change" on the board: it becomes a request (R-0001) the owner answers. */
+  kind: 'comment' | 'approve' | 'request';
   author_name: string;
   author_email: string;
   body: string;
@@ -128,7 +130,8 @@ export function buildManifest(paths: Paths, opts: { includeRules?: boolean } = {
   });
   // Screenless decisions: one card per piece of work.
   const ids = new Set(known.map((c) => c.id));
-  const loose = readArchive(paths).filter((d) => publishable(d) && (!d.candidate || !ids.has(d.candidate)));
+  const archive = readArchive(paths);
+  const loose = archive.filter((d) => publishable(d) && (!d.candidate || !ids.has(d.candidate)));
   const byWork = new Map<string, Decision[]>();
   for (const d of loose) byWork.set(d.trigger, [...(byWork.get(d.trigger) ?? []), d]);
   const areas = new Map(known.filter((c) => c.feature).map((c) => [c.feature!.toLowerCase(), c.feature!]));
@@ -150,7 +153,25 @@ export function buildManifest(paths: Paths, opts: { includeRules?: boolean } = {
     });
   }
   const rules = opts.includeRules ? readActive(paths).map((r) => ({ id: r.id, dimension: r.dimension, decision: r.decision, rationale: r.rationale, candidate: r.candidate ?? null })) : null;
-  return { manifest: { project: path.basename(paths.root), exported: new Date().toISOString().slice(0, 10), candidates, rules }, skipped };
+  // The owner's answers to requests made on the board, matched there by comment. An open request
+  // needs nothing sent — the board already has it. What happened is the recorded change itself,
+  // polish included, so the requester reads it even when no card shows that decision.
+  const requests = readRequests(paths)
+    .filter((r) => r.status !== 'open')
+    .map((r) => ({
+      comment: r.comment,
+      id: r.id,
+      status: r.status,
+      instead: r.instead,
+      reason: r.reason,
+      by: r.judgedBy,
+      at: r.appliedAt ?? r.judgedAt,
+      decisions: r.decisions.flatMap((id) => {
+        const d = archive.find((x) => x.id === id);
+        return d ? [{ id: d.id, change: d.change ?? d.decision, card: cardOf(paths, d, ids) }] : [];
+      }),
+    }));
+  return { manifest: { project: path.basename(paths.root), exported: new Date().toISOString().slice(0, 10), candidates, rules, requests }, skipped };
 }
 
 async function api(url: string, init: RequestInit & { token?: string; admin?: string } = {}): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
