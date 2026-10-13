@@ -1,3 +1,13 @@
 node_modules/
 dist/
 .claude/
+
+# Local agent setup and Arbiter's own record from running it on this repo
+.codex/
+.cursor/
+.arbiter/
+/AGENTS.md
+/CLAUDE.md
+/DECISIONS.md
+/arbiter.json
+/prep/
