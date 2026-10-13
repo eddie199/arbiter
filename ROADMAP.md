@@ -22,3 +22,10 @@ Build priority, top to bottom. Sized against 0.1.2. Shipped rows say which relea
 **Feasibility** — High: mechanism exists · Medium: a design call or the private service in the way · Low: outside dependency or strains a product constraint.
 
 Not on the list, on purpose: auto-applying comments to the build, board edits that write straight to git, any watcher. Git is the record; the user is the trigger.
+
+## Kill conditions
+
+Fixed before Stage 0 started. Do not move. (Moved here from the README.)
+
+- **Stage 0**: if only mechanical verdicts get recorded after three weeks of use, the judgment layer isn't real.
+- **Stage 4 (candidates / board)**: build only if **5 or more** generated screens are in flight at once. If that never happens, cut it.
