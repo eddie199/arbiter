@@ -115,11 +115,11 @@ flowchart TB
     %% The team lane is declared first so it renders below the repo lane.
     subgraph team ["With your team"]
         direction LR
-        H[Board on<br/>arbiter.design] --> I[Teammates comment or<br/>request a change]
+        H[Board on<br/>arbiter.design] --> I[Teammates<br/>comment or ask<br/>for a change]
     end
     subgraph repo ["In your repo"]
         direction LR
-        A([You ask for<br/>a screen]) --> B[Agent reads your<br/>rules and builds]
+        A([You ask for<br/>a screen]) --> B[Agent reads<br/>your rules<br/>and builds]
         B --> C[Design calls<br/>get queued]
         C --> D{You judge}
         D -- Make it a rule --> E[(DECISIONS.md<br/>read next session)]
