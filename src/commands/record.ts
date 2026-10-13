@@ -6,6 +6,7 @@
  *   record P-0003 --as rule         judge a queued decision (accept | rule | skip | fix --to "<what instead>")
  *   record --all --as accept        judge every queued decision the same way  [--level polish] [--trigger "…"]
  *   record --retire D-0003 --why "…"  drop a rule from DECISIONS.md with no replacement; the archive keeps both
+ *   record --reword D-0003 --to "…"   change a rule's wording, same id; the old wording stays on the entry
  *   record R-0001 --as apply        answer a request from the board (apply [--to "<instead>"] | decline --why "…")
  *   record '<json>' --request R-0001  record the change made for an approved request; it's applied
  *   record                          (a person at a terminal) walk through it step by step
@@ -21,7 +22,7 @@
  */
 
 import path from 'node:path';
-import { Decision, DecisionInput, DIMENSIONS, PENDING_ID, validateInput, ValidateOptions } from '../schema';
+import { Decision, DecisionInput, DECISION_ID, DIMENSIONS, PENDING_ID, validateInput, ValidateOptions } from '../schema';
 import {
   ACTIVE_CAP,
   appendArchive,
@@ -38,6 +39,7 @@ import {
   readPending,
   resolvePaths,
   writeActive,
+  writeArchive,
   writePending,
 } from '../store';
 import { findOverlaps } from '../overlap';
@@ -73,6 +75,8 @@ export interface JudgeOptions extends RecordOptions {
   as: JudgeAction;
   /** For `fix`: the corrected decision. */
   to?: string;
+  /** The rule this goes against, when the review found the clash: an `accept` is then the logged exception to it. */
+  against?: string;
 }
 
 export interface RecordResult {
@@ -85,7 +89,19 @@ export interface RecordResult {
 export function record(rawJson: string, opts: RecordOptions = {}): RecordResult {
   const parsed = parse(rawJson);
   if (!parsed.ok) return parsed.result;
+  const bad = againstError(resolvePaths(findRoot(opts.cwd)), parsed.input);
+  if (bad) return bad;
   return recordInput(parsed.input, opts);
+}
+
+/**
+ * `against` has to name a rule that's in force now: an exception to a rule nobody follows any more
+ * isn't one. Checked when a decision comes in, not when a queued one is judged — by then the rule
+ * may have been replaced, and the clash is still part of the record.
+ */
+function againstError(paths: Paths, input: DecisionInput): RecordResult | null {
+  if (!input.against || readActive(paths).some((d) => d.id === input.against)) return null;
+  return fail([`against: ${input.against} is not an active rule`]);
 }
 
 export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
@@ -93,7 +109,15 @@ export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
   const parsed = parse(rawJson, { pending: true });
   if (!parsed.ok) return parsed.result;
   const paths = resolvePaths(findRoot(opts.cwd));
+  const bad = againstError(paths, parsed.input);
+  if (bad) return bad;
   const pending = readPending(paths);
+
+  // "Not now" on the same screen against the same rule, a second time: it's on the review list
+  // already. Asking about it again is what the list is there to stop.
+  const same = parsed.input.against && pending.find((d) => d.against === parsed.input.against && d.trigger === parsed.input.trigger);
+  if (same) return { exitCode: 0, output: { status: 'already-queued', id: same.id, against: same.against, pending: pending.length } };
+
   const entry: Decision = { ...fill(parsed.input, opts, paths.root), id: nextPendingId(pending), verdict: 'pending' };
 
   const checked = check(entry, paths.root, opts);
@@ -225,6 +249,47 @@ export function retire(ruleId: string, why: string | undefined, opts: RecordOpti
   return recordInput(input, opts);
 }
 
+// ── Reword a rule ──────────────────────────────────────────────────────────
+
+/**
+ * Same rule, clearer words: "Pills are outlined" becomes "Status pills are outlined", or a rule that
+ * beats the design system on purpose becomes "Exception to the design system: …". The id stays, so
+ * everything that names it still points at it. Rewording isn't a change of mind — that's a new rule
+ * that supersedes this one — so the entry is changed in place, in DECISIONS.md and the archive
+ * both, and keeps the wording it replaced.
+ */
+export function reword(ruleId: string, to: string | undefined, opts: RecordOptions = {}): RecordResult {
+  if (!DECISION_ID.test(ruleId)) return fail([`not a rule id: ${ruleId} (looks like D-0003)`]);
+  const next = to?.trim();
+  if (!next) return fail(['reword needs --to "<the new wording>"']);
+  if (/[\r\n]/.test(next)) return fail(['the new wording must be a single line']);
+  const paths = resolvePaths(findRoot(opts.cwd));
+  const active = readActive(paths);
+  const rule = active.find((d) => d.id === ruleId);
+  if (!rule) return fail([`${ruleId} is not an active rule`]);
+  if (next === rule.decision) return fail([`${ruleId} already says that`]);
+
+  const was = `${rule.decision} (until ${now().slice(0, 10)})`;
+  const change = (d: Decision): Decision => (d.id === ruleId ? { ...d, decision: next, reworded: [...d.reworded, was] } : d);
+  const archive = readArchive(paths);
+  if (!opts.dryRun) {
+    writeActive(paths, active.map(change), readConfig(paths)?.activeCap ?? ACTIVE_CAP);
+    // A rule recorded before the archive existed lives only in DECISIONS.md; there's nothing to rewrite.
+    if (archive.some((d) => d.id === ruleId)) writeArchive(paths, archive.map(change));
+    if (rule.candidate) refreshCandidates(paths);
+  }
+  return {
+    exitCode: 0,
+    output: {
+      status: opts.dryRun ? 'dry-run' : 'reworded',
+      id: ruleId,
+      decision: next,
+      was: rule.decision,
+      wrote: opts.dryRun ? [] : ['DECISIONS.md', '.arbiter/archive.md'],
+    },
+  };
+}
+
 // ── Judge a pending item ───────────────────────────────────────────────────
 
 export function judge(pendingId: string, opts: JudgeOptions): RecordResult {
@@ -251,9 +316,17 @@ export function judge(pendingId: string, opts: JudgeOptions): RecordResult {
       decision: to,
       rejected: [`${item.decision} — corrected by ${opts.author ?? item.author}`, ...item.rejected],
       verdict: 'fix',
+      // Whoever made the call before, the user just changed it.
+      call: 'corrected',
     };
   } else {
     input = { ...base, verdict: opts.as };
+  }
+  if (opts.against) {
+    if (!DECISION_ID.test(opts.against)) return fail([`--against needs a rule id like D-0009, not ${opts.against}`]);
+    input = { ...input, against: opts.against };
+    const bad = againstError(paths, input);
+    if (bad) return bad;
   }
 
   const result = recordInput(input, opts);
@@ -268,6 +341,7 @@ export function judgeAll(opts: JudgeOptions & { level?: string; trigger?: string
   if (opts.as === 'fix') return fail(['fix is one at a time — it needs its own --to']);
   // A request is applied by the change made for it, not by everything that happens to be queued.
   if (opts.request) return fail([`--request links one change to ${opts.request}; it can't go on --all`]);
+  if (opts.against) return fail([`--against marks one exception to ${opts.against}; it can't go on --all`]);
   const paths = resolvePaths(findRoot(opts.cwd));
   const targets = readPending(paths).filter(
     (d) => (!opts.level || d.level === opts.level) && (!opts.trigger || d.trigger === opts.trigger),
@@ -412,6 +486,7 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
       supersedes: entry.supersedes,
       verified: entry.verified,
       candidate: entry.candidate,
+      ...(entry.against && { against: entry.against }),
       active: `${nextActive.length} of ${cap}`,
       wrote: opts.dryRun ? [] : entry.verdict === 'rule' || entry.verdict === 'retire' ? ['.arbiter/archive.md', 'DECISIONS.md'] : ['.arbiter/archive.md'],
       ...(request && { request: { id: request.id, status: opts.dryRun ? request.status : 'applied', author: request.author } }),
@@ -471,6 +546,9 @@ function fill(input: DecisionInput, opts: RecordOptions, root: string): Omit<Dec
     expect: input.expect ?? null,
     verified: null,
     candidate: opts.candidate ?? input.candidate ?? null,
+    against: input.against ?? null,
+    call: input.call ?? null,
+    reworded: [],
   };
 }
 

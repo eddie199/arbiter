@@ -55,6 +55,9 @@ export function sweepCommand(id: string, opts: SweepOptions = {}): { text: strin
         expect: rule.expect,
         verified: false,
         candidate: null,
+        against: rule.id,
+        call: null,
+        reworded: [],
       };
       pending.push(entry);
       queued.push(entry.id);

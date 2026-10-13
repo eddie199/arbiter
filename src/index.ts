@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { record, queue, queueFindings, judge, judgeAll, retire, interactiveInput, JudgeAction } from './commands/record';
+import { record, queue, queueFindings, judge, judgeAll, retire, reword, interactiveInput, JudgeAction } from './commands/record';
 import { judgeRequest, RequestAction } from './commands/request';
 import { verifyCommand } from './commands/verify';
 import { sweepCommand } from './commands/sweep';
@@ -34,6 +34,7 @@ program
   .option('--tool <name>', 'with --findings: the scanner name for the record')
   .option('--candidate <id>', 'the candidate (C-0001) this decision was made for')
   .option('--retire <rule-id>', 'drop an active rule with no replacement (needs --why)')
+  .option('--reword <rule-id>', 'change an active rule\'s wording, same id (needs --to); the old wording stays on the entry')
   .option('--why <reason>', 'with --retire: why the rule is dead; with a request and --as decline: why not')
   .option('--unverified', 'record even if the named files contradict the claim')
   .option('--as <action>', 'judge a pending id: accept | rule | skip | fix; answer a request id: apply | decline')
@@ -41,8 +42,9 @@ program
   .option('--all', 'with --as: judge every pending item the same way')
   .option('--level <level>', 'with --all: only this level (feature | pattern | polish)')
   .option('--trigger <text>', 'with --all: only items queued for this piece of work')
-  .option('--to <decision>', 'with --as fix: what it should be instead; with a request and --as apply: what to do instead of what was asked')
+  .option('--to <decision>', 'with --as fix: what it should be instead; with --reword: the new wording; with a request and --as apply: what to do instead of what was asked')
   .option('--supersedes <id>', 'the active rule this one replaces')
+  .option('--against <rule-id>', 'judging a pending id: the rule it goes against — with --as accept, the logged exception to it')
   .option('--ref <url|key>', 'the ticket this was for: a URL or an issue key like ENG-123')
   .option('--keep-both', 'record alongside overlapping rules instead of replacing one')
   .option('--author <name>', 'override the author')
@@ -51,6 +53,8 @@ program
     let result;
     if (opts.retire) {
       result = retire(opts.retire, opts.why, opts);
+    } else if (opts.reword) {
+      result = reword(opts.reword, opts.to, opts);
     } else if (opts.findings) {
       result = queueFindings(opts.findings, opts);
     } else if (opts.all) {

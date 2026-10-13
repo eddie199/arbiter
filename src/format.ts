@@ -8,8 +8,10 @@
  *   - **Rejected:**
  *     - Inline confirm — clicked through without reading
  *   - **Trigger:** Delete-project flow used an inline "Are you sure?" link
- *   - **Scope:** pattern:destructive-confirm · **Dimension:** interaction · **Level:** pattern · **Class:** judgment · **Verdict:** rule
- *   - **Author:** edmond · **Date:** 2026-09-15T14:32:10Z · **Commit:** a1b2c3d · **Supersedes:** —
+ *   - **Scope:** pattern:destructive-confirm · **Dimension:** interaction · **Level:** pattern · **Class:** judgment · **Verdict:** rule · **Call:** asked
+ *   - **Author:** edmond · **Date:** 2026-09-15T14:32:10Z · **Commit:** a1b2c3d · **Supersedes:** — · **Against:** D-0004
+ *
+ * `Call`, `Against`, `Candidate` and the `Reworded:` list appear only when set.
  *
  * DECISIONS.md groups entries under `## <Dimension>` headings; the archive is
  * flat and chronological. Round-trip is lossless: parse(format(d)) deep-equals d.
@@ -17,13 +19,13 @@
  * dates, names).
  */
 
-import { Decision, DecisionClass, Dimension, DIMENSIONS, Evidence, ID_PATTERN, Level, StoredVerdict } from './schema';
+import { Call, Decision, DecisionClass, Dimension, DIMENSIONS, Evidence, ID_PATTERN, Level, StoredVerdict } from './schema';
 
 const SEP = ' · ';
 const NONE = '—';
 
 const HEADING = /^#{2,3} ([DP]-\d{4,}) · (.*)$/;
-const REJECTED_ITEM = /^ {2}- (.*)$/;
+const LIST_ITEM = /^ {2}- (.*)$/;
 const FIELD = /\*\*([A-Za-z]+):\*\* (.*?)(?=\s·\s\*\*|$)/g;
 
 /**
@@ -41,9 +43,10 @@ export function formatEntry(d: Decision): string {
     ...(d.change ? [`- **Change:** ${text(d.change)}`] : []),
     `- **Rationale:** ${text(d.rationale)}`,
     ...(d.rejected.length ? ['- **Rejected:**', ...d.rejected.map((r) => `  - ${text(r)}`)] : []),
+    ...(d.reworded.length ? ['- **Reworded:**', ...d.reworded.map((r) => `  - ${text(r)}`)] : []),
     `- **Trigger:** ${text(d.trigger)}`,
-    `- **Scope:** ${text(d.scope)}${SEP}**Dimension:** ${d.dimension}${SEP}**Level:** ${d.level}${SEP}**Class:** ${d.class}${SEP}**Verdict:** ${d.verdict}`,
-    `- **Author:** ${text(d.author)}${SEP}**Date:** ${text(d.date)}${SEP}**Commit:** ${d.commit ?? NONE}${SEP}**Supersedes:** ${d.supersedes ?? NONE}${d.candidate ? `${SEP}**Candidate:** ${d.candidate}` : ''}`,
+    `- **Scope:** ${text(d.scope)}${SEP}**Dimension:** ${d.dimension}${SEP}**Level:** ${d.level}${SEP}**Class:** ${d.class}${SEP}**Verdict:** ${d.verdict}${d.call ? `${SEP}**Call:** ${d.call}` : ''}`,
+    `- **Author:** ${text(d.author)}${SEP}**Date:** ${text(d.date)}${SEP}**Commit:** ${d.commit ?? NONE}${SEP}**Supersedes:** ${d.supersedes ?? NONE}${d.candidate ? `${SEP}**Candidate:** ${d.candidate}` : ''}${d.against ? `${SEP}**Against:** ${d.against}` : ''}`,
     ...(d.ref ? [`- **Ref:** ${text(d.ref)}`] : []),
     ...(d.files.length ? [`- **Files:** ${d.files.map(text).join(SEP)}`] : []),
     ...(d.paths.length ? [`- **Paths:** ${d.paths.map(text).join(SEP)}`] : []),
@@ -81,7 +84,8 @@ export function parseEntries(md: string): Decision[] {
   const out: Decision[] = [];
   const lines = md.split('\n');
   let cur: Partial<Decision> | null = null;
-  let inRejected = false;
+  // The two indented lists an entry can carry.
+  let inList: 'rejected' | 'reworded' | null = null;
 
   const flush = () => {
     if (!cur) return;
@@ -94,8 +98,8 @@ export function parseEntries(md: string): Decision[] {
     const h = HEADING.exec(line);
     if (h) {
       flush();
-      cur = { id: h[1], decision: h[2].trim(), rejected: [] };
-      inRejected = false;
+      cur = { id: h[1], decision: h[2].trim(), rejected: [], reworded: [] };
+      inList = null;
       continue;
     }
     if (/^#{1,6} /.test(line)) {
@@ -105,17 +109,17 @@ export function parseEntries(md: string): Decision[] {
     }
     if (!cur) continue;
 
-    if (inRejected) {
-      const item = REJECTED_ITEM.exec(line);
+    if (inList) {
+      const item = LIST_ITEM.exec(line);
       if (item) {
-        cur.rejected!.push(item[1].trim());
+        cur[inList]!.push(item[1].trim());
         continue;
       }
-      inRejected = false;
+      inList = null;
     }
     if (!line.startsWith('- **')) continue;
-    if (line === '- **Rejected:**') {
-      inRejected = true;
+    if (line === '- **Rejected:**' || line === '- **Reworded:**') {
+      inList = line === '- **Rejected:**' ? 'rejected' : 'reworded';
       continue;
     }
 
@@ -137,6 +141,8 @@ export function parseEntries(md: string): Decision[] {
         case 'supersedes': cur.supersedes = val === NONE ? null : val; break;
         case 'ref': cur.ref = val === NONE ? null : val; break;
         case 'candidate': cur.candidate = val === NONE ? null : val; break;
+        case 'against': cur.against = val === NONE ? null : val; break;
+        case 'call': cur.call = val === NONE ? null : (val as Call); break;
         case 'files': cur.files = val.split(SEP).map((f) => f.trim()).filter(Boolean); break;
         case 'paths': cur.paths = val.split(SEP).map((f) => f.trim()).filter(Boolean); break;
         case 'expect': cur.expect = JSON.parse(val) as Evidence; break;
@@ -178,6 +184,9 @@ function complete(p: Partial<Decision>): Decision {
     expect: p.expect ?? null,
     verified: p.expect ? (p.verified ?? null) : null,
     candidate: p.candidate ?? null,
+    against: p.against ?? null,
+    call: p.call ?? null,
+    reworded: p.reworded ?? [],
   };
 }
 

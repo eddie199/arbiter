@@ -17,7 +17,7 @@ That's the whole install. It writes:
 | `CANDIDATES.md` | Index of candidates — written only when `destination` is `git`. |
 | `.claude/skills/arbiter/SKILL.md` or `.cursor/rules/arbiter.mdc` | Tells the agent to surface its decisions after UI work and record what you confirm. |
 | `arbiter.json` | Config. `destination: "local"`. `app.url` (from `npx arbiter setup --app http://localhost:3000`) is where the agent opens screens for pictures. |
-| `AGENTS.md` | One line appended, pointing at `DECISIONS.md`. Merged, never overwritten. |
+| `AGENTS.md` | One line appended, pointing at `DECISIONS.md` and saying the design system wins over a decision unless the decision is written as an exception. Merged, never overwritten; a newer `init` refreshes only that line. |
 | `CLAUDE.md` (Claude Code) / `.cursor/commands/arbiter.md` (Cursor) | Same pointer line in Claude Code's own context file; a `/arbiter` command for Cursor. |
 
 Running `init` twice changes nothing.
@@ -29,6 +29,20 @@ Running `init` twice changes nothing.
 3. When you move on, it queues the design calls it made — sized as `feature`, `pattern`, or `polish` — and, after feature-level work, says one line about what changed. When 5 changes are waiting (then 10, 15…), it asks in plain text whether you want to review them now; polish doesn't count, and `setup --checkin quiet` turns both off.
 4. You judge them when you want — in chat with `/arbiter`, or in the browser with `npx arbiter review`. Grouped by piece of work; each item reads **Change** (what happened) / **Pattern** (the rule) / **Rejected** (what lost). Per item: **Confirm**, **Make it a rule**, **Skip**, or type a correction. Polish is one line per group — **Confirm all**. In chat, an item that goes against an active rule says so (*Clashes — D-0009*) and asks which wins: **Follow D-0009**, **Replace D-0009**, or **Keep as exception**.
 5. Rules enter `DECISIONS.md`. Everything judged enters the archive. Skips vanish.
+
+**When something clashes with a rule**, the agent asks before building, once, in the same shape every time: *Before building, Arbiter found a clash*, the facts, one question, two or three options plus Other. It speaks up only when a rule is involved:
+
+| Clash | Asks | Your answer goes into the record as |
+|---|---|---|
+| You ask for something a rule goes against | *Do you still want the undo bar?* | Nothing (follow the rule) · a one-off exception · a new rule replacing the old |
+| A rule goes against the design system | *Which should the empty list follow?* | The rule retired · the rule reworded as *Exception to the design system: …* |
+| Two rules disagree | *Which should they follow?* (only when both can’t be true) | The other retired · both reworded to name what each is for |
+| Other screens don't follow a rule you just built to (asked after building) | *Update Events too?* | Nothing (updated) · a clash on your review list · an exception |
+| A rule needs something the design system doesn't have | *Build one?* | A plan first, then this screen only · a clash on your review list |
+
+The design system, meaning `DESIGN.md`, pattern and component docs, and the shared components, wins over a plain rule. The agent never edits it, never adds to the shared components to fit a rule without asking, and never checks your work against it: that stays with your own tooling.
+
+Only real choices are queued: things you asked for, things you corrected, and options the agent actually weighed. Each records who made the call (`call`). The agent's habits aren't queued.
 
 You can also just say it: *"make that a rule"*, *"reject the tabs, going with a single page"*. It records without asking.
 
@@ -44,10 +58,11 @@ arbiter snapshot "<work>" --file x.png   a picture for a piece of work (or --cap
 arbiter record                      walk through a decision at the terminal
 arbiter record '<json>'             record now (what the agent calls)
 arbiter record --pending '<json>'   queue for later
-arbiter record P-0003 --as rule     judge a queued one: accept | rule | skip | fix --to "…"  [--candidate C-0001]
+arbiter record P-0003 --as rule     judge a queued one: accept | rule | skip | fix --to "…"  [--candidate C-0001] [--against D-0009]
 arbiter record --all --as accept    judge every queued item  [--level polish] [--trigger "Settings build"]
 arbiter record --findings f.json    queue a scanner's findings for verdicts
 arbiter record --retire D-0003 --why "…"   drop a rule with no replacement
+arbiter record --reword D-0003 --to "…"    change a rule's wording, same id; the old wording stays on the entry
 arbiter record R-0001 --as apply    answer a request from the board: apply [--to "<instead>"] | decline --why "…"
 arbiter record '<json>' --request R-0001   record the change made for an approved request; it's applied
 arbiter remove D-0004               take out a record that was never real: a decision, a screen (C-0001),
@@ -172,7 +187,10 @@ change      what happened, as a PM would say it — what the reviewer reads
 decision    the same call as a rule someone could follow — what future sessions read
 rejected    alternatives that lost, "<option> — <why>", one line each
 trigger     the piece of work ("Settings build") — the grouping key for review
-verdict     fix | accept | rule
+verdict     fix | accept | rule | retire
+call        asked | corrected | agent — who made the call | null (before 0.1.7)
+against     D-0011 | null — the rule this goes against: queued, a clash for review; accepted, the exception to it
+reworded    the rule's earlier wordings, "<old> (until 2026-10-13)" — only `record --reword` adds one
 scope       global | file:<path> | pattern:<name>
 rationale   one line, required
 supersedes  id | null
@@ -184,7 +202,9 @@ verified    true | false | null (never checked / not checkable)
 candidate   C-0001 | null
 ```
 
-Only `rule` verdicts enter `DECISIONS.md`. A `rule` whose scope overlaps an active rule is refused until you say whether it replaces the old one; superseded rules leave the active file and stay in the archive.
+Only `rule` verdicts enter `DECISIONS.md`. A `rule` whose scope overlaps an active rule is refused until you say whether it replaces the old one; superseded rules leave the active file and stay in the archive. Rewording is the one change made in place: the id stays, so everything that names the rule still points at it, and the entry keeps its earlier wording. A rule that now says something different isn't reworded; it's superseded.
+
+`arbiter rules D-0011` lists the rule's exceptions and the clashes waiting on it, so the agent doesn't ask about the same screen twice.
 
 ## Kill conditions
 

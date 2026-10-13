@@ -296,6 +296,7 @@ function card(d) {
   const line = (k, v, cls) => { dl.appendChild(el('dt', null, k)); dl.appendChild(el('dd', cls, v)); };
   if (d.change) line('Pattern', d.decision);
   for (const r of d.rejected) line('Rejected', r);
+  if (d.againstRule) line('Clashes', `${d.againstRule.id} · ${d.againstRule.decision}`);
   line('Why', d.rationale, 'muted');
   body.appendChild(dl);
   const meta = el('div', 'meta');
@@ -334,6 +335,16 @@ async function sendRow(d, li, body) {
 
 function actions(d, c) {
   const a = el('div', 'actions');
+  // Goes against a rule: someone has to say which wins. Same three choices as the review in chat.
+  const r = d.againstRule;
+  if (r) {
+    // The page records; it can't change code. Following the rule still needs the agent to do it.
+    a.appendChild(btn(`Follow ${r.id}`, 'primary', () => send(d, c, { as: 'fix', to: r.decision }, `Recorded. Ask your agent to change it to match ${r.id}.`)));
+    a.appendChild(btn(`Replace ${r.id}`, null, () => send(d, c, { as: 'rule', supersedes: r.id })));
+    a.appendChild(btn('Keep as exception', null, () => send(d, c, { as: 'accept' }, `Recorded as an exception to ${r.id}.`)));
+    a.appendChild(btn('Skip', 'quiet', () => send(d, c, { as: 'skip' })));
+    return a;
+  }
   a.appendChild(btn('Confirm', d.level === 'polish' ? 'primary' : null, () => send(d, c, { as: 'accept' })));
   if (d.level !== 'polish') a.appendChild(btn('Make it a rule', 'primary', () => send(d, c, { as: 'rule' })));
   a.appendChild(btn('Skip', 'quiet', () => send(d, c, { as: 'skip' })));
@@ -383,7 +394,7 @@ function contradictedPanel(d, c, res) {
   c.appendChild(p);
 }
 
-async function send(d, c, body) {
+async function send(d, c, body, done) {
   c.querySelectorAll('button').forEach(b => b.disabled = true);
   const res = await (await fetch('/api/judge', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: d.id, ...body }) })).json();
   c.querySelectorAll('button').forEach(b => b.disabled = false);
@@ -392,7 +403,7 @@ async function send(d, c, body) {
   if (res.exitCode === 4) return contradictedPanel(d, c, res);
   if (res.exitCode !== 0) return messagePanel(c, (res.errors || ['Something went wrong']).join(' · '), 'bad');
   results[d.id] = { item: d, kind: res.status === 'skipped' ? 'skip' : 'ok',
-    text: res.status === 'skipped' ? 'Skipped' : `Recorded ${res.id} as ${res.verdict}${res.supersedes ? ', replacing ' + res.supersedes : ''}` };
+    text: res.status === 'skipped' ? 'Skipped' : done ?? `Recorded ${res.id} as ${res.verdict}${res.supersedes ? ', replacing ' + res.supersedes : ''}` };
   await load();
 }
 

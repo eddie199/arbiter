@@ -29,8 +29,15 @@ type Outcome = 'created' | 'updated' | 'unchanged' | 'skipped';
 interface Step { file: string; outcome: Outcome; note?: string }
 
 const AGENTS_MARKER = '<!-- arbiter -->';
-const AGENTS_LINE =
-  `Before any UI work, read \`DECISIONS.md\` — the design decisions this project has already made. Follow them; don't re-decide them. Record new ones with the \`arbiter\` skill. ${AGENTS_MARKER}`;
+/**
+ * The one line in AGENTS.md and CLAUDE.md. It's always loaded, so it carries the one thing that has
+ * to hold even when the skill isn't: which wins when a decision and the design system disagree.
+ * Without it the decision won 17 times in 20; with it the design system won 20 in 20, and an
+ * exception won 20 in 20 (clash study, Opus 5.5, October 2026).
+ */
+export const AGENTS_LINE =
+  `Before any UI work, read \`DECISIONS.md\` — the design decisions this project has already made. Follow them; don't re-decide them. Record new ones with the \`arbiter\` skill. ` +
+  `If a decision disagrees with the design system (DESIGN.md, design-system or pattern docs, component guidelines, or the shared components), the design system wins unless the decision is written as an exception ("Exception to the design system: …"). Either way, say so in your reply. ${AGENTS_MARKER}`;
 
 export const PKG_ROOT = path.join(__dirname, '..', '..');
 const SKILL_TEMPLATE = path.join(PKG_ROOT, 'templates', 'SKILL.md');
@@ -187,7 +194,14 @@ function mergeAgentsLine(root: string, file: string, createIfMissing: boolean): 
     return { file, outcome: 'created' };
   }
   const before = fs.readFileSync(abs, 'utf8');
-  if (before.includes(AGENTS_MARKER)) return { file, outcome: 'unchanged' };
+  if (before.includes(AGENTS_MARKER)) {
+    // The marked line is Arbiter's: an older Arbiter wrote different words, so swap in these.
+    // Only that line — whatever else the file says, and where the line sits in it, stays.
+    const after = before.replace(/^.*<!-- arbiter -->.*$/m, () => AGENTS_LINE);
+    if (after === before) return { file, outcome: 'unchanged' };
+    fs.writeFileSync(abs, after);
+    return { file, outcome: 'updated', note: 'Arbiter line refreshed' };
+  }
   const sep = before.endsWith('\n') ? (before.endsWith('\n\n') ? '' : '\n') : '\n\n';
   fs.writeFileSync(abs, before + sep + AGENTS_LINE + '\n');
   return { file, outcome: 'updated', note: 'one line appended' };
