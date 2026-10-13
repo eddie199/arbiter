@@ -17,7 +17,7 @@ That's the whole install. It writes:
 | `CANDIDATES.md` | Index of candidates — written only when `destination` is `git`. |
 | `.claude/skills/arbiter/SKILL.md` or `.cursor/rules/arbiter.mdc` | Tells the agent to surface its decisions after UI work and record what you confirm. |
 | `arbiter.json` | Config. `destination: "local"`. `app.url` (from `npx arbiter setup --app http://localhost:3000`) is where the agent opens screens for pictures. |
-| `AGENTS.md` | One line appended, pointing at `DECISIONS.md` and saying the design system wins over a decision unless the decision is written as an exception. Merged, never overwritten; a newer `init` refreshes only that line. |
+| `AGENTS.md` | One line appended, pointing at `DECISIONS.md` and saying to ask before building when the request or the design system goes against a decision; a decision written as an exception beats the design system. Merged, never overwritten; a newer `init` refreshes only that line. |
 | `CLAUDE.md` (Claude Code) / `.cursor/commands/arbiter.md` (Cursor) | Same pointer line in Claude Code's own context file; a `/arbiter` command for Cursor. |
 
 Running `init` twice changes nothing.

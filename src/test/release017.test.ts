@@ -1,7 +1,7 @@
 /**
  * 0.1.7, the clash replies: a decision can go against a rule (a one-off exception, or a clash
  * waiting at review), records who made the call, and a rule can be reworded without losing its
- * id. The line in CLAUDE.md says the design system wins, and init refreshes an older line.
+ * id. The line in CLAUDE.md says to ask before building against a decision, and init refreshes an older line.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -116,7 +116,7 @@ test('reword keeps the id and the reason, in both files, and keeps the old wordi
   assert.equal(reword('D-0001', 'two\nlines', o(cwd)).exitCode, 1, 'one line');
 });
 
-test('the CLAUDE.md line says the design system wins, and init refreshes an older line in place', async () => {
+test('the CLAUDE.md line says to ask before building against a decision, and init refreshes an older line in place', async () => {
   const cwd = tmp();
   fs.mkdirSync(path.join(cwd, '.claude'));
   const old = "Before any UI work, read `DECISIONS.md` — the design decisions this project has already made. Follow them; don't re-decide them. Record new ones with the `arbiter` skill. <!-- arbiter -->";
@@ -126,7 +126,7 @@ test('the CLAUDE.md line says the design system wins, and init refreshes an olde
   assert.deepEqual(steps.find((s) => s.file === 'CLAUDE.md'), { file: 'CLAUDE.md', outcome: 'updated', note: 'Arbiter line refreshed' });
   const claude = fs.readFileSync(path.join(cwd, 'CLAUDE.md'), 'utf8');
   assert.equal((claude.match(/<!-- arbiter -->/g) ?? []).length, 1);
-  assert.ok(claude.includes('the design system wins unless the decision is written as an exception ("Exception to the design system: …"). Either way, say so in your reply. <!-- arbiter -->'));
+  assert.ok(claude.includes("goes against a decision, don't build yet: ask first, the way the `arbiter` skill shows. A decision written as an exception (\"Exception to the design system: …\") beats the design system without asking: follow it and say so. <!-- arbiter -->"));
   assert.ok(claude.startsWith('# Agent instructions\n\n'), 'the line stays where it was');
   assert.ok(claude.endsWith('\n\nUse pnpm.\n'), 'the rest of the file is left alone');
 

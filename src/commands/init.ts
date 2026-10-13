@@ -37,7 +37,7 @@ const AGENTS_MARKER = '<!-- arbiter -->';
  */
 export const AGENTS_LINE =
   `Before any UI work, read \`DECISIONS.md\` — the design decisions this project has already made. Follow them; don't re-decide them. Record new ones with the \`arbiter\` skill. ` +
-  `If a decision disagrees with the design system (DESIGN.md, design-system or pattern docs, component guidelines, or the shared components), the design system wins unless the decision is written as an exception ("Exception to the design system: …"). Either way, say so in your reply. ${AGENTS_MARKER}`;
+  `If the request, or the design system (DESIGN.md, design-system or pattern docs, component guidelines, or the shared components), goes against a decision, don't build yet: ask first, the way the \`arbiter\` skill shows. A decision written as an exception ("Exception to the design system: …") beats the design system without asking: follow it and say so. ${AGENTS_MARKER}`;
 
 export const PKG_ROOT = path.join(__dirname, '..', '..');
 const SKILL_TEMPLATE = path.join(PKG_ROOT, 'templates', 'SKILL.md');

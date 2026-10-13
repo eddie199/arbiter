@@ -1,6 +1,6 @@
 ---
 name: arbiter
-description: Record design decisions made during UI work so they never have to be re-made. Use after building or changing any UI, and whenever the user says "record that", "make that a rule", "reject that", "going with X instead", or similar.
+description: Apply and record this project's design decisions (DECISIONS.md). Use before building or changing any UI, to check the work against the decisions and ask first when something goes against one; after it, to record new decisions; and whenever the user says "record that", "make that a rule", "reject that", "going with X instead", or similar.
 ---
 
 # Arbiter
