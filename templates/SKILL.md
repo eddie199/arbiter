@@ -53,9 +53,9 @@ Then ask (widget header: the rule's id):
 
 ```
 Do you still want <what they asked for>?
-1. No, follow <ID> — builds it the rule's way: <what the rule produces, one phrase>.
-2. Yes, just this once — builds <what they asked for> here only; <ID> stays.
-3. Other — type something else, or "update the rule" and why.
+1. No, follow <ID>: builds it the rule's way, <what the rule produces, one phrase>.
+2. Yes, just this once: builds <what they asked for> here only; <ID> stays.
+3. Other: type something else, or "update the rule" and why.
 ```
 
 If you see a way to meet both, say it in one sentence before the question, never as an option.
@@ -90,9 +90,9 @@ Then ask (widget header: the rule's id):
 
 ```
 Which should <the thing being built> follow?
-1. <file> — builds <the design system's version>. <ID> moves to the archive.
-2. <ID>, as an exception — builds <the rule's version>. <ID> becomes an exception.
-3. Other — type something else, or "suggest a design system change" and why.
+1. <file>: builds <the design system's version>. <ID> moves to the archive.
+2. <ID>, as an exception: builds <the rule's version>. <ID> becomes an exception.
+3. Other: type something else, or "suggest a design system change" and why.
 ```
 
 After the answer:
@@ -126,10 +126,10 @@ Then ask (widget header: `Rule clash`), the newer rule first:
 
 ```
 Which should they follow?
-1. <newer ID> (newer) — builds <its version>. Replaces <older ID>, which goes to the decision archive.
-2. <older ID> — builds <its version>. Replaces <newer ID>, which goes to the decision archive.
-3. Both, for different <things> — keeps both. I'll ask which <things> each is for and reword them.
-4. Other — type something else.
+1. <newer ID> (newer): builds <its version>. Replaces <older ID>, which goes to the decision archive.
+2. <older ID>: builds <its version>. Replaces <newer ID>, which goes to the decision archive.
+3. Both, for different <things>: keeps both. I'll ask which <things> each is for and reword them.
+4. Other: type something else.
 ```
 
 After the answer:
@@ -153,9 +153,9 @@ Then ask (widget header: the rule's id):
 
 ```
 Update <Screen> too?
-1. Yes, update <Screen> — <what changes, one phrase>.
-2. Not now — leaves <Screen> as it is. Added to your review list, so it isn't asked again.
-3. Other — type something else.
+1. Yes, update <Screen>: <what changes, one phrase>.
+2. Not now: leaves <Screen> as it is. Added to your review list, so it isn't asked again.
+3. Other: type something else.
 ```
 
 Several screens: `Events and Settings use a trash icon, which goes against it.` and `Update them too?`, with `Yes, update them`. More than three: name three and add `and 2 others`. Facts only: "uses a trash icon", never "still uses" or "doesn't follow it yet".
@@ -179,9 +179,9 @@ Then ask (widget header: the rule's id):
 
 ```
 Build one?
-1. Plan and build one — shows you a short plan for the <thing> first. Builds it once you're happy. This <screen> only.
-2. Leave for now — builds the <screen> without the <thing> for now. Added to your review list.
-3. Other — type something else, or "add it to the shared components".
+1. Plan and build one: shows you a short plan for the <thing> first. Builds it once you're happy. This <screen> only.
+2. Leave for now: builds the <screen> without the <thing> for now. Added to your review list.
+3. Other: type something else, or "add it to the shared components".
 ```
 
 When a shared component exists but works differently, same shape: `**<ID>** · The guest form needs FormError to show one box at the top, but FormError is shared by 12 screens.` and `Change it for this form?`.
