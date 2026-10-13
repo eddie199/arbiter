@@ -453,7 +453,7 @@ Used by `record --pending` (queue) and `record` (record now):
 }
 ```
 
-Two sentences, two jobs. **Write `change` as what a PM would say happened** — concrete, past tense, names the thing on the screen. **Write `decision` as the rule someone could follow** — general, present tense. The user judges from `change`; future sessions obey `decision`. Never cram both into one line.
+Two sentences, two jobs. **Write `change` as what a PM would say happened** — concrete, past tense, names the thing on the screen. **Write `decision` as the rule someone could follow** — present tense, naming exactly what it's about and where it applies. The user judges from `change`; future sessions obey `decision`. Never cram both into one line.
 
 `verdict` is omitted when queueing (`--pending`); include it (`accept | rule | fix`) only when recording directly.
 
@@ -471,7 +471,7 @@ If the work belongs to a candidate (below), add `"candidate": "C-0001"` or pass 
 If the session mentioned a ticket — a Linear or Jira key like `ENG-123`, a GitHub issue, a pasted tracker link — add `"ref": "<url or key>"` or pass `--ref`. It's how the board links each decision to the work it came from. Never ask for one; leave it out when nothing was mentioned. `--ref` on a bulk `--all` stamps every item.
 
 - `change` — what happened, in plain words. One line. Required. This is what the person judging reads.
-- `decision` — the same call as a rule someone could follow. Present tense. One line. This is what future sessions read. For `polish` it can repeat `change`.
+- `decision` — the same call as a rule someone could follow. Present tense. One line. It's the rule's title in `DECISIONS.md`, and with many rules a future session picks what to read from titles alone. So name the exact thing and where it applies: `Reply pills on the guest list are filled`, not `Pills are filled`; `Form errors go in one box at the top of the form`, not `Errors go at the top`. A vague title gets skipped, or looks like it clashes with a rule about something else. For `polish` it can repeat `change`.
 - `level` — `feature | pattern | polish` (table above). Default is `pattern`; set it every time.
 - `trigger` — the thing the user was working on, named the way they'd say it, at the grain they worked at: `Rescan button`, `Delete flow`, `Settings`, `Billing page`. Every decision from the same piece of work gets the **same** trigger — it's the grouping key and the heading they see.
 - `rationale` — why it won. One line. Required.
