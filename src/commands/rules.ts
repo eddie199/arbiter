@@ -160,6 +160,7 @@ function reviewLines(d: Decision): string[] {
   const lines = [`  ${d.id}  Change   ${d.change ?? d.decision}`];
   if (d.change) lines.push(`${pad}Pattern  ${d.decision}`);
   for (const r of d.rejected) lines.push(`${pad}Rejected ${r}`);
+  if (d.against) lines.push(`${pad}Against  ${d.against}`);
   lines.push(`${pad}${d.level} · ${d.dimension} · ${d.scope}`);
   return lines;
 }
@@ -187,8 +188,19 @@ function one(id: string, paths: ReturnType<typeof resolvePaths>, json?: boolean)
   const later = all.find((x) => x.supersedes === id);
   const supersededBy = later?.id ?? null;
   const status = d.verdict !== 'rule' ? d.verdict : activeIds.has(id) ? 'active' : later ? `${later.verdict === 'retire' ? 'retired' : 'superseded'} by ${later.id}` : 'inactive';
-  if (json) return JSON.stringify({ ...d, status, supersededBy }, null, 2);
-  return `${formatEntry(d).trimEnd()}\n- **Status:** ${status}`;
+  // Where a rule doesn't hold, and why that's settled: the exceptions confirmed to it, and the
+  // clashes waiting on the review list. The agent checks these before asking about a screen twice.
+  const short = (x: Decision) => ({ id: x.id, trigger: x.trigger, change: x.change ?? x.decision });
+  const exceptions = id.startsWith('D-') ? all.filter((x) => x.against === id && x.verdict === 'accept').map(short) : [];
+  const waiting = id.startsWith('D-') ? readPending(paths).filter((x) => x.against === id).map(short) : [];
+  if (json) return JSON.stringify({ ...d, status, supersededBy, exceptions, waiting }, null, 2);
+  const list = (xs: ReturnType<typeof short>[]) => xs.map((x) => `${x.id} (${x.trigger})`).join(' · ');
+  return [
+    formatEntry(d).trimEnd(),
+    `- **Status:** ${status}`,
+    ...(exceptions.length ? [`- **Exceptions:** ${list(exceptions)}`] : []),
+    ...(waiting.length ? [`- **Waiting:** ${list(waiting)}`] : []),
+  ].join('\n');
 }
 
 function archive(all: Decision[], active: Decision[], opts: RulesOptions): string {

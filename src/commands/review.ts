@@ -51,10 +51,13 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
       const f = workSnapshot(paths, screen);
       return f ? `/snapshots/${path.basename(f)}` : null;
     };
+    const active = readActive(paths);
     return {
       project: path.basename(root),
       pending: readPending(paths).map((d) => ({
         ...d,
+        // The rule a clash is with, while it's still in force: the page offers Follow / Replace / Keep as exception.
+        againstRule: d.against ? active.filter((r) => r.id === d.against).map((r) => ({ id: r.id, decision: r.decision }))[0] ?? null : null,
         candidateName: d.candidate ? byId.get(d.candidate)?.name ?? null : null,
         snapshotUrl: d.candidate ? byId.get(d.candidate)?.snapshotUrl ?? null : null,
         picture: missingPictures(paths, [d], candidates)[0] ?? null,
@@ -66,7 +69,7 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
       candidates,
       hosted: readLinkOrNull(paths)?.shareUrl ?? null,
       boardVersion: readLinkOrNull(paths)?.boardVersion ?? null,
-      active: readActive(paths).length,
+      active: active.length,
       cap: readConfig(paths)?.activeCap ?? ACTIVE_CAP,
     };
   };

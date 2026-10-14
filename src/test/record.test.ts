@@ -32,9 +32,10 @@ test('format round-trips losslessly', () => {
     verdict: 'rule', scope: 'file:src/a b/c.tsx', rationale: 'Because **bold** and `code` should survive.',
     supersedes: null, ref: 'https://linear.app/acme/issue/ENG-123', commit: null,
     files: ['src/a b/c.tsx', 'src/d.tsx'], paths: ['src/components', 'src/marketing/Hero.tsx'], expect: { present: ['brand.500'], absent: ['#3B7BE0', 'weird · dot'] }, verified: true, candidate: 'C-0002',
+    against: 'D-0009', call: 'corrected', reworded: ['Pills · are outlined (until 2026-10-13)', 'Pills are round (until 2026-10-14)'],
   };
   assert.deepEqual(parseEntries(formatEntry(d)), [d]);
-  const d2: Decision = { ...d, id: 'D-0002', supersedes: 'D-0001', commit: 'abc1234', rejected: [], dimension: 'states', ref: null, files: [], paths: [], expect: null, verified: null, candidate: null };
+  const d2: Decision = { ...d, id: 'D-0002', supersedes: 'D-0001', commit: 'abc1234', rejected: [], dimension: 'states', ref: null, files: [], paths: [], expect: null, verified: null, candidate: null, against: null, call: null, reworded: [] };
   assert.deepEqual(parseEntries(formatEntry(d) + '\n' + formatEntry(d2)), [d, d2]);
 });
 

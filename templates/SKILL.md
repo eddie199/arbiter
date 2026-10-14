@@ -1,6 +1,6 @@
 ---
 name: arbiter
-description: Record design decisions made during UI work so they never have to be re-made. Use after building or changing any UI, and whenever the user says "record that", "make that a rule", "reject that", "going with X instead", or similar.
+description: Apply and record this project's design decisions (DECISIONS.md). Use before building or changing any UI, to check the work against the decisions and ask first when something goes against one; after it, to record new decisions; and whenever the user says "record that", "make that a rule", "reject that", "going with X instead", or similar.
 ---
 
 # Arbiter
@@ -9,7 +9,7 @@ description: Record design decisions made during UI work so they never have to b
 
 ## Before UI work
 
-If `DECISIONS.md` exists, read it before building or changing any component, screen, or style. Treat every entry as settled. Do not re-decide, do not ask about, and do not deviate from an active rule unless the user explicitly asks you to. Do not try the alternatives it lists as rejected.
+If `DECISIONS.md` exists, read it before building or changing any component, screen, or style. Treat every entry as settled. Do not re-decide it, and do not try the alternatives it lists as rejected. When what you're about to build would go against a rule (the user asks for it, the design system says otherwise, another rule disagrees), don't pick a side yourself: **When something clashes with a rule**, below, says when to ask and how.
 
 **Name the rules that shaped the work.** When an active rule made you build something the user might otherwise question (why no undo bar? why are the errors at the top?), say which, in the reply where you built it. One line, each rule by id with a few words on what it made you do:
 
@@ -24,6 +24,173 @@ How often follows the check-in setting (`checkin` in `arbiter.json`; `feature` w
 - `every`: each time a rule changed what you built.
 
 Whatever the setting, leave out rules you'd have followed anyway, rules the work didn't touch, and small visual details. Name a rule once per piece of work, not on every iteration. Never write "and 2 others"; name the ones the user is most likely to wonder about. If none applies, say nothing. The line shows the record working, and tells the user which rule to check the screen against.
+
+## When something clashes with a rule
+
+Arbiter speaks up only when a rule in `DECISIONS.md` is involved. A request that goes against the design system with no rule involved isn't Arbiter's: handle it as you would without Arbiter, and when the work settles queue it like any other decision, with no mention of the design system.
+
+**The design system** is `DESIGN.md`, design-system and pattern docs (brand guidelines included), component guidelines, and the shared components themselves. Not the coding rules in `CLAUDE.md` or `AGENTS.md`, not the app's existing screens, not design skills. It's stable and owned by someone else, so it beats a rule unless the rule is written as an exception: `Exception to the design system: …`. Arbiter reads it only to spot a clash with a rule; following it day to day is the project's business, as it would be without Arbiter. Never flag small differences from it, and never edit it.
+
+Before calling anything a clash, check whether both can be true. Most "clashes" aren't: two rules about different things, a rule for a narrower area, a request that fits inside the rule. Only a real one gets a question. A mechanical detail (13px vs 12px) is never one; that's lint's job.
+
+Every clash gets the same shape: the heading, a line or two of facts, one question, two or three options plus Other. Ask **before building**; other screens (below) are the one question that comes after. Ask **once**: every answer goes into the record, so the same clash doesn't come back. Facts only: no warnings, no opinion on which is better.
+
+Use the selection widget if you have one: labels without numbers, the header each case names, and leave out the last option (the widget adds Other itself, and its text can't be changed). Otherwise, show the numbered text, Other included. Dates read like `25 Sept`.
+
+### The user asks for something a rule goes against
+
+They name something specific: an undo bar when a rule rejected one, coloured text when a rule says filled pills. A vague request ("make errors more noticeable") doesn't go against a rule; follow the rule.
+
+Don't build yet. Write three lines:
+
+```
+**Before building, Arbiter found a clash.**
+You asked for <what they asked for, in their words>, which goes against rule <ID>.
+**<ID>** · <the rule, as an instruction>. <If the rule's Rejected list has what they asked for: what was tried and why it lost, one sentence. Otherwise: the rule's reason>. (<author>, <date>)
+```
+
+Then ask (widget header: the rule's id):
+
+```
+Do you still want <what they asked for>?
+1. No, follow <ID>: builds it the rule's way, <what the rule produces, one phrase>.
+2. Yes, just this once: builds <what they asked for> here only; <ID> stays.
+3. Other: type something else, or "update the rule" and why.
+```
+
+If you see a way to meet both, say it in one sentence before the question, never as an option.
+
+After the answer:
+
+- **1** — build it the rule's way. Say `Following <ID>.`
+- **2** — build what they asked. Record it now, as an exception to the rule for this screen: the usual JSON (below) with `"verdict": "accept"`, `"against": "<ID>"`, `"call": "asked"` and a `file:` scope. Say `Done. Noted as a one-off exception to <ID>.`
+- **Other, "update the rule"** — build what they asked. Record the new rule with their words as the `rationale`: `"verdict": "rule"`, `"call": "asked"`, and `--supersedes <ID>`. Say `Done. <ID> replaced by <new id>.`
+- **Other, anything else** — do what they typed. If that clashes with a rule too, same shape again.
+
+They decided on the spot, so none of this goes to the review queue.
+
+### A rule disagrees with the design system
+
+You notice it while preparing what they asked for; they didn't ask for anything against either.
+
+If the rule is written as an exception, there's no question: build it the rule's way and name it in the `Following` line, `Following <ID> (exception to <file>)`. Name it whatever the check-in setting, since the `CLAUDE.md` line asks you to say so.
+
+Otherwise, don't build yet. Write four lines:
+
+```
+**Before building, Arbiter found a clash.**
+Rule <ID> goes against <file>.
+**<ID>** · <the rule, as an instruction>. <its reason>. (<author>, <date>)
+**<file> · <section>** · <what the design system says, one sentence>.
+```
+
+Name the design-system source the way you name a rule: the file, then the section. Use the file name if it's at the root, otherwise its path (`docs/design-system/empty-state.md · Lists`). If several agree, name the main one and add `(also the EmptyState component)`.
+
+Then ask (widget header: the rule's id):
+
+```
+Which should <the thing being built> follow?
+1. <file>: builds <the design system's version>. <ID> moves to the archive.
+2. <ID>, as an exception: builds <the rule's version>. <ID> becomes an exception.
+3. Other: type something else, or "suggest a design system change" and why.
+```
+
+After the answer:
+
+- **1** — build the design system's version. `npx arbiter record --retire <ID> --why "<file> covers this"`.
+- **2** — build the rule's version. `npx arbiter record --reword <ID> --to "Exception to the design system: <the rule>"`. The id and its reason stay.
+- **Other, "suggest a design system change"** — build what they say. Record their suggestion for whoever owns the design system: the usual JSON with `"trigger": "Suggestion for the design system"`, their words as `change` and `rationale`, `"verdict": "accept"`, `"call": "asked"`. Never edit the design system.
+
+### Two rules disagree
+
+Check these in order and stop at the first that fits:
+
+| | When | Do |
+|---|---|---|
+| 1 | They're about different things: "status pills are outlined", "filter pills are filled" | Follow both, each for its own thing. No question |
+| 2 | One is for a narrower area: "pills are outlined", "checkout pills are filled" | The narrower rule wins in its area. No question |
+| 3 | A small adjustment meets both: filled pills and a strong-contrast rule | Adjust (darker colours, say), say so in one line, and queue the adjustment as a decision (`"call": "agent"`) |
+| 4 | Same thing, opposite answers, or too vague to tell | Ask, below |
+
+For 4, don't build yet. Write five lines, the rules in id order:
+
+```
+**Before building, Arbiter found a clash.**
+Rules <ID> and <ID> disagree.
+**<The thing>: <one answer> or <the other>?**
+**<ID>** · <the rule, as an instruction>. <its reason>. (<author>, <date>)
+**<ID>** · <the rule, as an instruction>. <its reason>. (<author>, <date>)
+```
+
+Then ask (widget header: `Rule clash`), the newer rule first:
+
+```
+Which should they follow?
+1. <newer ID> (newer): builds <its version>. Replaces <older ID>, which goes to the decision archive.
+2. <older ID>: builds <its version>. Replaces <newer ID>, which goes to the decision archive.
+3. Both, for different <things>: keeps both. I'll ask which <things> each is for and reword them.
+4. Other: type something else.
+```
+
+After the answer:
+
+- **1 or 2** — build the chosen rule's version. `npx arbiter record --retire <the other> --why "Replaced by <the chosen one>"`.
+- **3** — one question in plain text, `Which <things> is each for?`, then reword both to name their kind before building: `npx arbiter record --reword <ID> --to "Status pills are outlined"`. Neither is archived.
+- **Other** — do what they typed.
+
+### Other screens don't follow the rule
+
+You build new work and it follows a rule; screens already in the code that you came across while working don't. New work always follows the rule; other screens change only if the user says so. Don't go looking for them.
+
+This one comes **after** building, and only about the other screens. First check `npx arbiter rules <ID> --json`: a screen listed under `exceptions` or `waiting` is settled; leave it out. If nothing's left, say nothing. Ask whatever the check-in setting, `quiet` included.
+
+```
+Following <ID>.
+<Screen> uses <what it does>, which goes against it.
+```
+
+Then ask (widget header: the rule's id):
+
+```
+Update <Screen> too?
+1. Yes, update <Screen>: <what changes, one phrase>.
+2. Not now: leaves <Screen> as it is. Added to your review list, so it isn't asked again.
+3. Other: type something else.
+```
+
+Several screens: `Events and Settings use a trash icon, which goes against it.` and `Update them too?`, with `Yes, update them`. More than three: name three and add `and 2 others`. Facts only: "uses a trash icon", never "still uses" or "doesn't follow it yet".
+
+After the answer:
+
+- **Yes** — change them to follow the rule. Nothing to record.
+- **Not now**, or the widget's Skip — queue one item per screen: `record --pending`, the usual JSON with `"against": "<ID>"`, `"trigger": "<Screen>"`, `"change": "<Screen> uses <what it does>"`. It comes back at review as a clash. A second one for the same screen and rule is refused as `already-queued`; that's fine.
+- **Other, "it's meant to be different"** — record each screen now as an exception, the usual JSON with `"verdict": "accept"`, `"against": "<ID>"`, `"trigger": "<Screen>"`, `"call": "asked"`. It isn't asked again.
+
+### A rule needs something the design system doesn't have
+
+A rule needs a component the shared components don't have, or don't do. Don't add to the shared kit to fit a rule; it belongs to whoever owns the design system. Don't build yet. Two lines:
+
+```
+**Before building, Arbiter found a clash.**
+**<ID>** · The <screen> needs <what the rule needs>, but the design system doesn't have one.
+```
+
+Then ask (widget header: the rule's id):
+
+```
+Build one?
+1. Plan and build one: shows you a short plan for the <thing> first. Builds it once you're happy. This <screen> only.
+2. Leave for now: builds the <screen> without the <thing> for now. Added to your review list.
+3. Other: type something else, or "add it to the shared components".
+```
+
+When a shared component exists but works differently, same shape: `**<ID>** · The guest form needs FormError to show one box at the top, but FormError is shared by 12 screens.` and `Change it for this form?`.
+
+After the answer:
+
+- **1** — a plan of a few lines: what it shows, where it sits, how it looks using the design system's existing styles. Build it once they're happy, in this screen's own files; the shared components stay untouched.
+- **2** — build without it. Queue one item: `record --pending`, the usual JSON with `"against": "<ID>"`, `"trigger": "<Screen>"`, `"change": "<Screen> has no <thing>: the design system doesn't have one"`.
+- **Other, "add it to the shared components"** — build it into the shared kit. When the work settles, queue it with a `change` that starts `Added to the shared components:`, so whoever owns them sees it.
 
 ## After UI work — queue, don't interrupt
 
@@ -95,7 +262,7 @@ Then one question, with the selection widget (text fallback: the same three line
 - **question** — `When should Arbiter check in about decisions?`
 - **options** —
   - `A line after big work` (Recommended) — *When a feature-sized piece settles, one sentence saying what changed. Every 5 changes waiting, a yes/no on reviewing. Never mid-iteration.*
-  - `Nothing until I ask` — *Saved silently, never a question. /arbiter whenever you want to see it.*
+  - `Nothing until I ask` — *Saved silently. Asks only when something clashes with a rule. /arbiter whenever you want to see it.*
   - `A line after everything` — *One sentence every time a piece of work settles, big or small. Every 5 changes waiting, a yes/no on reviewing.*
 
 Record the answer — Skip means the recommended one:
@@ -159,7 +326,17 @@ For each decision, note what it was chosen **over**. Rejected alternatives come 
 2. **Options you weighed and didn't build.** You considered tabs, went with a single page. Tabs are rejected, with your reason.
 3. **Corrections.** Whatever you did that the user then changed is rejected; what they asked for is the decision.
 
-**Any visual change that stays in the UI counts too**: colour, spacing, type, radii, icons, what's shown or hidden. That holds even when no alternative was weighed, and even when the user asked for it. The version it replaced is the rejected alternative. A visual change that would repeat on other screens is a `pattern`. A one-off is `polish`.
+**A visual change the user asked for or corrected counts too**: colour, spacing, type, radii, icons, what's shown or hidden. That holds even when no alternative was weighed. The version it replaced is the rejected alternative. A visual change that would repeat on other screens is a `pattern`. A one-off is `polish`.
+
+**Only real choices.** Queue something only if someone actually chose it, and set `call` to say who:
+
+| `call` | When | Example |
+|---|---|---|
+| `asked` | The user asked for it | "Put the errors at the top of the form" |
+| `corrected` | The user changed what you did. The most valuable kind: what they rejected is on record | "No, make it a word, not an icon" |
+| `agent` | You weighed real options, picked one, and can say why | Tabs or a dropdown for the filters; you picked tabs |
+
+Don't queue your own habits, what you'd do on any project without being asked: keeping what someone typed after an error, 8px corners on a new button. They fill the review and `DECISIONS.md` with rules that change nothing. When unsure, it was a habit. *"Record that"* still records anything on request.
 
 Skip mechanical necessities (imports, prop plumbing, file placement), and non-visual things the user told you to do.
 
@@ -171,13 +348,13 @@ Skip mechanical necessities (imports, prop plumbing, file placement), and non-vi
 | `pattern` | A reusable call that could apply elsewhere | Icon-only buttons on half-width cards; "Status" not "Health"; save buttons bottom-right | Presented; "make it a rule" is the likely answer |
 | `polish` | A one-off fix to one screen | Match heights at `h-9`; drop a chevron; remove a pill | **Never presented.** Queued, then logged automatically when the group is reviewed |
 
-Polish still gets queued — it's part of the record — but the user never gets a question about it; they see "+6 polish logged" in the summary. Rules only ever come from `feature` or `pattern`. When unsure between `pattern` and `polish`, ask: would this apply on a screen that doesn't exist yet? If yes, `pattern`. There's no cap on polish; keep feature + pattern to seven per piece of work.
+An `agent` call is yours, not the user's, so Confirm is its likely answer, not a rule. Polish still gets queued — it's part of the record — but the user never gets a question about it; they see "+6 polish logged" in the summary. Rules only ever come from `feature` or `pattern`. When unsure between `pattern` and `polish`, ask: would this apply on a screen that doesn't exist yet? If yes, `pattern`. There's no cap on polish; keep feature + pattern to seven per piece of work.
 
 ### Clashes with a rule
 
 An item that goes against an active rule is a clash: someone has to say which one wins, so it gets its own options (below). It stays in queue order.
 
-An item's `overlaps` names active rules it may repeat or contradict. They're word and scope matches, not judgments — read both sides and decide, and check every item against `rules` even where there's no hint.
+An item with `against` goes against that rule for certain: it was queued that way (a screen left as it was, something the design system didn't have, a sweep). An item's `overlaps` names active rules it may repeat or contradict. They're word and scope matches, not judgments — read both sides and decide, and check every item against `rules` even where there's no hint.
 
 ### Present with the selection widget
 
@@ -208,7 +385,7 @@ Each question:
 **A clash** adds a line under `Applies to` — `Clashes — D-0009 · Destructive actions undo instead of confirming` — and has its own three options:
 
 - `Follow D-0009` — *Change it back to match the rule.*
-- `Replace D-0009` — *This becomes the rule; D-0009 moves to the archive.*
+- `Replace D-0009` — *This becomes the rule; D-0009 goes to the decision archive.*
 - `Keep as exception` — *Logged as a one-off here; D-0009 stands.*
 
 ### Fallback: present as text
@@ -252,7 +429,7 @@ Omit the `Rejected` line when there's nothing rejected. Never ask an open questi
 | Other: a correction | `fix --to "…"` | Change the code to match, then judge it. What you did becomes a rejected alternative automatically. |
 | Follow D-0009 | `fix --to "<D-0009's decision>"` | Change the code back to match the rule, then judge it. |
 | Replace D-0009 | `rule --supersedes D-0009` | Judge it. The old rule moves to the archive. |
-| Keep as exception | `accept` | Judge it. The rule stands; this screen is the logged exception. |
+| Keep as exception | `accept --against D-0009` | Judge it. The rule stands; this screen is the logged exception. |
 | Widget Skip button | — | Nothing. The queue waits. |
 
 Never judge anything before the user answers.
@@ -271,11 +448,12 @@ Used by `record --pending` (queue) and `record` (record now):
   "trigger":   "Audit page",
   "scope":     "pattern:compact-card-actions",
   "dimension": "interaction",
-  "class":     "judgment"
+  "class":     "judgment",
+  "call":      "corrected"
 }
 ```
 
-Two sentences, two jobs. **Write `change` as what a PM would say happened** — concrete, past tense, names the thing on the screen. **Write `decision` as the rule someone could follow** — general, present tense. The user judges from `change`; future sessions obey `decision`. Never cram both into one line.
+Two sentences, two jobs. **Write `change` as what a PM would say happened** — concrete, past tense, names the thing on the screen. **Write `decision` as the rule someone could follow** — present tense, naming exactly what it's about and where it applies. The user judges from `change`; future sessions obey `decision`. Never cram both into one line.
 
 `verdict` is omitted when queueing (`--pending`); include it (`accept | rule | fix`) only when recording directly.
 
@@ -293,7 +471,7 @@ If the work belongs to a candidate (below), add `"candidate": "C-0001"` or pass 
 If the session mentioned a ticket — a Linear or Jira key like `ENG-123`, a GitHub issue, a pasted tracker link — add `"ref": "<url or key>"` or pass `--ref`. It's how the board links each decision to the work it came from. Never ask for one; leave it out when nothing was mentioned. `--ref` on a bulk `--all` stamps every item.
 
 - `change` — what happened, in plain words. One line. Required. This is what the person judging reads.
-- `decision` — the same call as a rule someone could follow. Present tense. One line. This is what future sessions read. For `polish` it can repeat `change`.
+- `decision` — the same call as a rule someone could follow. Present tense. One line. It's the rule's title in `DECISIONS.md`, and with many rules a future session picks what to read from titles alone. So name the exact thing and where it applies: `Reply pills on the guest list are filled`, not `Pills are filled`; `Form errors go in one box at the top of the form`, not `Errors go at the top`. A vague title gets skipped, or looks like it clashes with a rule about something else. For `polish` it can repeat `change`.
 - `level` — `feature | pattern | polish` (table above). Default is `pattern`; set it every time.
 - `trigger` — the thing the user was working on, named the way they'd say it, at the grain they worked at: `Rescan button`, `Delete flow`, `Settings`, `Billing page`. Every decision from the same piece of work gets the **same** trigger — it's the grouping key and the heading they see.
 - `rationale` — why it won. One line. Required.
@@ -301,6 +479,8 @@ If the session mentioned a ticket — a Linear or Jira key like `ENG-123`, a Git
 - `scope` — `pattern:<kebab-name>` for a recurring UI pattern (`destructive-confirm`, `empty-state`, `sheet-actions`) — this is the usual case. `file:<path>` only when it's genuinely about one screen. `global` when it applies everywhere.
 - `dimension` — one of the seven above.
 - `class` — `mechanical` if it could be checked against a token or lint rule (colours, spacing, type scale, radii); `judgment` otherwise. Most rules are judgment.
+- `call` — who made the call: `asked` · `corrected` · `agent` (see **What counts as a decision**). Set it every time.
+- `against` — only for a clash: the active rule this goes against, `D-0011`. Recorded as `accept`, it's the logged exception to that rule; queued, it comes back at review as a clash.
 - `files` / `expect` — mechanical only. Name the files you touched and the literal strings that prove the claim.
 - `paths` — mechanical rules only: where the rule applies, as directories or files (`["app/components", "app/(marketing)"]`). Sweep scans only these. A `pattern:` rule with no `paths` sweeps the whole project, including token definitions and reference HTML — name the directories.
 
@@ -556,7 +736,7 @@ Removal is for the record being false, not for the user disliking what it says. 
 
 *"Be quieter about decisions"*, *"stop telling me"*, *"stop asking me to review"*, *"tell me after everything"* — run `npx arbiter setup --checkin quiet|feature|every` and confirm in a few words. No question. Only `quiet` stops the review question, and it stops the line after big work too; if they only asked about the question, the confirmation says so: `Quiet now: no lines, no questions.`
 
-## Retiring a rule
+## Retiring or rewording a rule
 
 If the user says a rule is dead with nothing replacing it — *"we don't need the empty-state rule any more"* — retire it, reason in their words:
 
@@ -565,6 +745,14 @@ npx arbiter record --retire D-0004 --why "empty states now come from the design 
 ```
 
 It leaves `DECISIONS.md`; the archive keeps it and the reason. Don't retire on your own judgment.
+
+If the rule stands but its words are wrong — *"that's about status pills, not all pills"* — reword it. Same id, same reason; the old wording stays on the entry:
+
+```
+npx arbiter record --reword D-0003 --to "Status pills are outlined"
+```
+
+A rule that says something different now isn't a rewording: that's a new rule that supersedes it.
 
 ## When invoked as `/arbiter`
 
@@ -576,7 +764,7 @@ It leaves `DECISIONS.md`; the archive keeps it and the reason. Don't retire on y
 If the user says something like *"record that"*, *"make that a rule"*, *"reject the tabs, going with a single page"*, *"always do X from now on"* — mid-conversation, with or without a build:
 
 1. Turn what they said into a `decision` and a `rationale`. Anything they rejected goes in `rejected`. Use their wording where you can.
-2. Default `verdict` to `rule`. Use `accept` only if they signal a one-off (*"just this once"*, *"an exception"*, *"for this screen only"*).
+2. Default `verdict` to `rule`. Use `accept` only if they signal a one-off (*"just this once"*, *"an exception"*, *"for this screen only"*). `call` is `asked`, or `corrected` if they're changing something you did.
 3. Run `record`. Do not ask for confirmation — they already told you.
 4. Confirm in two lines: the id, then the decision as recorded so they can catch a bad phrasing.
 5. If `record`'s reply has a `picture` line, the screen this changed has no picture yet. Take it now, the way **Screenshots** above says, while the app is still running. If you can't, say why in one line, as that section shows.
@@ -600,5 +788,8 @@ Recorded D-0010 (accept), D-0011 (rule), +3 polish · DECISIONS.md: 6 of 40
 - Ask the user to write a rationale. Draft it; they correct it.
 - Re-try an alternative that `DECISIONS.md` lists as rejected.
 - Ask about polish. It's logged with the group.
+- Edit `DESIGN.md`, the design system's docs, or the shared components to fit a rule without asking.
+- Ask about the same clash twice. Every answer is recorded so it doesn't come back.
+- Add a warning or an opinion to a clash. Facts, one question, the options.
 - Cram Change, Pattern and Rejected into one sentence. Three labelled lines, always.
-- Mention Arbiter at the end of a reply except as **After UI work** says: the line after the work the check-in setting names, and a question only when `ask` came back. At most one of those per reply, never mid-iteration. The `Following` line, the stale-skill notice and a `No picture for…` line are separate; their own sections say when.
+- Mention Arbiter at the end of a reply except as **After UI work** says: the line after the work the check-in setting names, and a question only when `ask` came back. At most one of those per reply, never mid-iteration. The `Following` line, a clash, the stale-skill notice and a `No picture for…` line are separate; their own sections say when.

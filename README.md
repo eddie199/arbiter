@@ -101,9 +101,9 @@ Then build UI the way you normally do. Arbiter picks it up from there.
 | `.arbiter/work/` | One picture per piece of work, when the agent could take one. `publish` carries it to the board. |
 | `.arbiter/hosted.json`, `comments.json`, `requests.json` | Which hosted board is yours, and the comments and change requests `pull` brings back. |
 | `CANDIDATES.md` | Index of candidates. Only written when `destination` is `git`. |
-| `.claude/skills/arbiter/SKILL.md` or `.cursor/rules/arbiter.mdc` | Tells the agent to surface its decisions after UI work and record what you confirm. |
+| `.claude/skills/arbiter/SKILL.md` or `.cursor/rules/arbiter.mdc` | Tells the agent to check your rules before UI work, ask when something clashes with one, then surface its decisions and record what you confirm. |
 | `arbiter.json` | Config. `app.url` is where the agent opens screens for pictures. |
-| `AGENTS.md` | One line appended, pointing at `DECISIONS.md`. Merged, never overwritten. |
+| `AGENTS.md` | One line appended, pointing at `DECISIONS.md`. It tells the agent to ask before building when your request or the design system goes against a rule, and that a rule written as an exception beats the design system. Merged, never overwritten. A newer `init` refreshes only that line. |
 | `CLAUDE.md` / `.cursor/commands/arbiter.md` | The same pointer for Claude Code, and an `/arbiter` command for Cursor. |
 
 </details>
@@ -137,7 +137,7 @@ flowchart TB
 
 1. **You ask for a screen.** The agent reads `DECISIONS.md` first. After a sizeable piece of work it names up to three rules that shaped it, like *Following D-0001 (removing asks first, no undo bar)*, so you can see the record working.
 2. **You iterate.** The agent says nothing about decisions while you're going back and forth. Each version you move past becomes a rejected alternative on the one that replaced it.
-3. **You move on.** The agent queues the design calls it made, sized as `feature`, `pattern` or `polish`. When 5 are waiting (then 10, 15…) it asks if you want to review them. Polish doesn't count toward that.
+3. **You move on.** The agent queues the design calls it made, sized as `feature`, `pattern` or `polish`. When 5 are waiting (then 10, 15…) it asks if you want to review them. Polish doesn't count toward that. Only real choices get queued: things you asked for, things you corrected, and options the agent actually weighed. Its habits don't.
 4. **You judge them when you want.** In chat with `/arbiter`, or in the browser with `npx arbiter review`.
 5. **Rules go into `DECISIONS.md`.** Everything you judged goes into the archive. Skipped items disappear. The next session reads the new rules.
 6. **You share it.** `npx arbiter publish` puts the board online, so your team can see each screen, what was decided and why. They can comment or request a change, and `npx arbiter pull` brings that back for you to answer. More in [Share it with your team](#share-it-with-your-team).
@@ -172,6 +172,22 @@ Polish items come as one line per group with a single **Confirm all**. If an ite
 
 > [!TIP]
 > Too chatty? `npx arbiter setup --checkin quiet` turns off the check-ins. `--checkin every` does the opposite and mentions a rule every time one changed something.
+
+### When something clashes with a rule
+
+The agent asks before building, once, and always in the same shape: *Before building, Arbiter found a clash*, the facts, one question, and two or three options plus Other. It only speaks up when a rule is involved.
+
+| Clash | It asks | Your answer goes into the record as |
+|---|---|---|
+| You ask for something a rule goes against | *Do you still want the undo bar?* | Nothing (it follows the rule), a one-off exception, or a new rule replacing the old one |
+| A rule goes against the design system | *Which should the empty list follow?* | The rule retired, or reworded as *Exception to the design system: …* |
+| Two rules disagree (only when both can't be true) | *Which should they follow?* | The other one retired, or both reworded to say what each is for |
+| Other screens don't follow a rule you just built to (asked after building) | *Update Events too?* | Nothing (it updates them), a clash on your review list, or an exception |
+| A rule needs something the design system doesn't have | *Build one?* | A short plan first, then this screen only, or a clash on your review list |
+
+The design system means `DESIGN.md`, pattern and component docs, and the shared components. It ranks above a plain rule, so it's the first option when the two disagree. A rule written as an exception beats it, and the agent follows that rule without asking.
+
+The agent never edits the design system, never adds to the shared components to fit a rule without asking, and never checks your work against it. That stays with your own tooling.
 
 ## Share it with your team
 
@@ -309,10 +325,11 @@ npx arbiter pull           # bring comments and requests back
 | `arbiter record` | Walk through a decision at the terminal. |
 | `arbiter record '<json>'` | Record now (what the agent calls). |
 | `arbiter record --pending '<json>'` | Queue for later. |
-| `arbiter record P-0003 --as rule` | Judge a queued item: `accept`, `rule`, `skip` or `fix --to "…"`. Add `--candidate C-0001` to link it. |
+| `arbiter record P-0003 --as rule` | Judge a queued item: `accept`, `rule`, `skip` or `fix --to "…"`. Add `--candidate C-0001` to link it, or `--against D-0009` to name the rule it goes against (with `accept`, it's logged as an exception to that rule). |
 | `arbiter record --all --as accept` | Judge every queued item. Narrow with `--level polish` or `--trigger "Settings build"`. |
 | `arbiter record --findings f.json` | Queue a scanner's findings for verdicts. |
 | `arbiter record --retire D-0003 --why "…"` | Drop a rule with no replacement. |
+| `arbiter record --reword D-0003 --to "…"` | Change a rule's wording. It keeps its id, and the old wording stays on the entry. |
 | `arbiter record R-0001 --as apply` | Answer a request: `apply [--to "<instead>"]` or `decline --why "…"`. |
 | `arbiter record '<json>' --request R-0001` | Record the change made for an approved request, which applies it. |
 | `arbiter snapshot "<work>" --file x.png` | Attach a picture to a piece of work (or `--capture` on macOS). |
@@ -325,7 +342,7 @@ npx arbiter pull           # bring comments and requests back
 | `arbiter rules [--dimension <name>] [--json]` | Active rules. |
 | `arbiter rules --pending` | The queue, plus requests waiting on an answer. |
 | `arbiter rules --archive` | Everything ever recorded. |
-| `arbiter rules D-0003` | One decision (or `R-0001`, one request) in full. |
+| `arbiter rules D-0003` | One decision (or `R-0001`, one request) in full. For a rule, also its exceptions and the clashes waiting on it, so the agent doesn't ask about the same screen twice. |
 | `arbiter verify [id]` | Re-check a decision's claim against its files. |
 | `arbiter sweep D-0004 [--queue]` | Find existing violations of a mechanical rule. |
 | `arbiter drift` | Deviations per screen: accepts, unverified claims, broken rules. |
@@ -379,7 +396,10 @@ npx arbiter pull           # bring comments and requests back
 | `decision` | The same call written as a rule. What future sessions read. |
 | `rejected` | Alternatives that lost, one per line as `<option> — <why>`. |
 | `trigger` | The piece of work, like `Settings build`. Used to group the review. |
-| `verdict` | `fix`, `accept` or `rule`. |
+| `verdict` | `fix`, `accept`, `rule` or `retire`. |
+| `call` | Who made the call: `asked`, `corrected` or `agent`. `null` on records from before 0.1.7. |
+| `against` | The rule this goes against, like `D-0011`, or `null`. Queued, it's a clash for review. Accepted, it's an exception to that rule. |
+| `reworded` | The rule's earlier wordings, as `<old> (until 2026-10-13)`. Only `record --reword` adds one. |
 | `scope` | `global`, `file:<path>` or `pattern:<name>`. |
 | `rationale` | One line, required. |
 | `supersedes` | The id it replaces, or `null`. |
@@ -391,6 +411,8 @@ npx arbiter pull           # bring comments and requests back
 | `candidate` | `C-0001`, or `null`. |
 
 Only `rule` verdicts go into `DECISIONS.md`. A rule that overlaps an active one is refused until you say whether it replaces it. Superseded rules leave the active file and stay in the archive. `accept` verdicts are never verified, since an exception is a deviation by definition.
+
+Rewording is the one change made in place. The id stays, so everything that names the rule still points at it, and the entry keeps its earlier wording. A rule that now says something different isn't reworded. It's superseded.
 
 </details>
 
@@ -442,7 +464,7 @@ No. Every decision is sized as feature, pattern or polish. Feature and pattern i
 <details>
 <summary><b>Will it stop the agent doing what I ask?</b></summary>
 
-No. Rules inform the agent; they don't gate it. Ask for something a rule says otherwise and you get it, plus a new decision to judge. Nothing blocks, nothing fails, nothing needs approval to proceed.
+No, but it checks first. Ask for something a rule says otherwise and the agent asks once before building: follow the rule, or do it your way just this once. Either answer and it builds. Nothing fails, and the rule only changes if you say so.
 
 </details>
 

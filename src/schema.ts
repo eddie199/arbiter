@@ -17,6 +17,13 @@ export const VERDICTS = ['fix', 'accept', 'rule', 'retire'] as const;
 export const SCOPE_KINDS = ['global', 'file', 'pattern'] as const;
 /** What the decision is about. Fixed order — DECISIONS.md groups by it in this order. */
 export const DIMENSIONS = ['structure', 'interaction', 'states', 'content', 'visual', 'motion', 'access'] as const;
+/**
+ * Who made the call. What lets a real choice be told from the agent's habit:
+ *   asked      the user asked for it
+ *   corrected  the user changed what the agent did — what they rejected is on record
+ *   agent      the agent weighed real options and picked one
+ */
+export const CALLS = ['asked', 'corrected', 'agent'] as const;
 
 export type DecisionClass = (typeof CLASSES)[number];
 export type Level = (typeof LEVELS)[number];
@@ -24,6 +31,7 @@ export type Verdict = (typeof VERDICTS)[number];
 /** A queued decision awaiting judgment lives in .arbiter/pending.md with this verdict and a P- id. */
 export type StoredVerdict = Verdict | 'pending';
 export type Dimension = (typeof DIMENSIONS)[number];
+export type Call = (typeof CALLS)[number];
 
 /** Literal strings that must appear in / be absent from `files`. Checkable, so only meaningful for mechanical decisions. */
 export interface Evidence {
@@ -71,6 +79,15 @@ export interface Decision {
   verified: boolean | null;
   /** Candidate this decision was made for (C-0001), if any. */
   candidate: string | null;
+  /**
+   * The active rule this goes against (D-0011), or null. Queued, it's a clash the review has to
+   * settle; confirmed, it's the logged exception to that rule.
+   */
+  against: string | null;
+  /** Who made the call — asked | corrected | agent. Null on entries from before 0.1.7. */
+  call: Call | null;
+  /** Earlier wordings of this rule, oldest first: "<old wording> (until 2026-10-13)". Only `record --reword` adds one. */
+  reworded: string[];
 }
 
 /** What the caller supplies. Everything else is filled in by `record`. */
@@ -78,7 +95,7 @@ export type DecisionInput = Pick<
   Decision,
   'class' | 'dimension' | 'decision' | 'trigger' | 'verdict' | 'scope' | 'rationale'
 > &
-  Partial<Pick<Decision, 'rejected' | 'author' | 'supersedes' | 'ref' | 'commit' | 'date' | 'files' | 'paths' | 'expect' | 'candidate' | 'change' | 'level'>>;
+  Partial<Pick<Decision, 'rejected' | 'author' | 'supersedes' | 'ref' | 'commit' | 'date' | 'files' | 'paths' | 'expect' | 'candidate' | 'change' | 'level' | 'against' | 'call'>>;
 
 /** Fields in file order. Also the order they're serialized in. */
 export const FIELDS: (keyof Decision)[] = [
@@ -103,6 +120,9 @@ export const FIELDS: (keyof Decision)[] = [
   'expect',
   'verified',
   'candidate',
+  'against',
+  'call',
+  'reworded',
 ];
 
 export const ID_PATTERN = /^[DP]-\d{4,}$/;
@@ -160,6 +180,7 @@ export function validateInput(raw: unknown, options: ValidateOptions = {}): Vali
   const commit = line('commit', false);
   const date = line('date', false);
   const ref = line('ref', false);
+  const call = line('call', false);
   const supersedesRaw = obj.supersedes;
 
   if (cls !== undefined && !(CLASSES as readonly string[]).includes(cls)) {
@@ -173,6 +194,9 @@ export function validateInput(raw: unknown, options: ValidateOptions = {}): Vali
   }
   if (level !== undefined && !(LEVELS as readonly string[]).includes(level)) {
     errors.push(`level must be one of ${LEVELS.join(' | ')}`);
+  }
+  if (call !== undefined && !(CALLS as readonly string[]).includes(call)) {
+    errors.push(`call must be one of ${CALLS.join(' | ')}`);
   }
   if (scope !== undefined && !SCOPE_PATTERN.test(scope)) {
     errors.push('scope must be `global`, `file:<path>`, or `pattern:<name>`');
@@ -257,8 +281,16 @@ export function validateInput(raw: unknown, options: ValidateOptions = {}): Vali
   }
   if (verdict === 'retire' && !supersedes) errors.push('retire needs supersedes: the rule being retired');
 
+  let against: string | null | undefined;
+  if (obj.against !== undefined) {
+    if (obj.against === null || obj.against === '') against = null;
+    else if (typeof obj.against !== 'string' || !DECISION_ID.test(obj.against.trim())) errors.push('against must be a rule id like D-0011, or null');
+    else against = obj.against.trim();
+  }
+  if (against && verdict === 'retire') errors.push('against does not apply to a retire');
+
   for (const key of Object.keys(obj)) {
-    if (!(FIELDS as string[]).includes(key) || key === 'verified' || key === 'id') errors.push(`unknown field: ${key}`);
+    if (!(FIELDS as string[]).includes(key) || key === 'verified' || key === 'id' || key === 'reworded') errors.push(`unknown field: ${key}`);
   }
 
   if (errors.length) return { ok: false, errors };
@@ -284,6 +316,8 @@ export function validateInput(raw: unknown, options: ValidateOptions = {}): Vali
       ...(date !== undefined && { date }),
       ...(supersedes !== undefined && { supersedes }),
       ...(ref !== undefined && { ref }),
+      ...(against !== undefined && { against }),
+      ...(call !== undefined && { call: call as Call }),
     },
   };
 }
