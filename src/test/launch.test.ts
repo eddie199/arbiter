@@ -27,7 +27,7 @@ const decision = (over: Record<string, unknown> = {}) =>
 
 interface Calls { method: string; path: string; body: unknown; at: number }
 /** The hosted routes the CLI calls, in memory, recording every call in order. */
-function fakeService(opts: { createStatus?: number; createError?: string; noPassword?: boolean; noDelete?: boolean } = {}) {
+function fakeService(opts: { createStatus?: number; createError?: string; noPassword?: boolean; noDelete?: boolean; full?: number } = {}) {
   const state = { calls: [] as Calls[], board: null as Record<string, unknown> | null, password: undefined as string | null | undefined, comments: [] as PulledComment[], deleted: false };
   let n = 0;
   return new Promise<{ url: string; state: typeof state; close: () => void }>((resolve) => {
@@ -53,6 +53,7 @@ function fakeService(opts: { createStatus?: number; createError?: string; noPass
         state.deleted = true;
         return send(200, { ok: true, pictures: 2, comments: state.comments.length });
       }
+      if (url.pathname.startsWith('/api/projects/p1/snapshots/') && opts.full) return send(opts.full, { error: 'this board holds 100 pictures (25 MB), and 100 or 25 MB is the most one board can.' });
       if (url.pathname.startsWith('/api/projects/p1/snapshots/')) return send(200, { ok: true, url: `http://x/snap/${url.pathname.split('/').pop()}.png` });
       if (url.pathname === '/api/projects/p1/board') { state.board = body as Record<string, unknown>; return send(200, { ok: true, candidates: 1 }); }
       if (url.pathname === '/api/projects/p1/comments') return send(200, { comments: state.comments, board_version: null });
@@ -287,5 +288,24 @@ test('when the service refuses a new board, its own reason comes through', async
     assert.match(r.steps[0].note!, /from this network is the limit/);
   } finally {
     svc.close();
+  }
+});
+
+test('a picture the board has no room for is left off, and the rest of the board still publishes', async () => {
+  for (const status of [413, 507]) {
+    const cwd = tmp();
+    record(decision(), { cwd });
+    write(cwd, 'shot.png', PNG);
+    snapshotWork('Settings build', { cwd, file: 'shot.png' });
+    const svc = await fakeService({ full: status });
+    try {
+      const r = await publish({ cwd, to: svc.url });
+      assert.ok(r.ok, JSON.stringify(r.steps));
+      const card = (svc.state.board!.candidates as { id: string; snapshot: unknown }[]).find((c) => c.id === 'W-settings-build')!;
+      assert.equal(card.snapshot, null, 'no picture rather than no board');
+      assert.match(r.steps.find((s) => s.step === 'snapshot')!.note!, /W-settings-build: not uploaded — this board holds 100 pictures/);
+    } finally {
+      svc.close();
+    }
   }
 });

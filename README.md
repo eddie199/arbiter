@@ -205,7 +205,7 @@ npx arbiter pull
 
 Brings their comments back into your repo, where `arbiter review` shows them next to each screen.
 
-Git stays the source of truth. The service only holds the latest board and its comments, and only `publish` and `pull` ever touch the network.
+Git stays the source of truth. The service only holds the latest board and its comments, and only `publish` and `pull` ever touch the network. A board holds up to 100 pictures (25 MB); a picture that doesn't fit is left off and `publish` says so.
 
 **Keep it current automatically:**
 

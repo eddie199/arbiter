@@ -260,6 +260,13 @@ export async function publishHosted(paths: Paths, serviceUrl: string, opts: { ad
     if (!c.snapshot || typeof c.snapshot === 'string') continue;
     const up = await api(`${base}/api/projects/${link.projectId}/snapshots/${c.id}`, { method: 'PUT', body: Buffer.from(c.snapshot.data, 'base64'), headers: { 'content-type': c.snapshot.type }, token });
     if (up.status === 401) throw new Error(`the publish token was refused by ${base} — wrong ${TOKEN_ENV}, or the project was deleted`);
+    // The board, or the whole service, is out of room for pictures. The rest of the board is still
+    // worth publishing: this card goes up without its picture, and the reason is reported.
+    if (up.status === 413 || up.status === 507) {
+      skipped.push(`${c.id}: not uploaded — ${up.body.error ?? 'no room for it'}`);
+      c.snapshot = null;
+      continue;
+    }
     if (!up.ok) throw new Error(`${c.id}: snapshot upload failed: ${up.body.error ?? up.status}`);
     c.snapshot = String(up.body.url);
     snapshots++;
