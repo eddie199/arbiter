@@ -365,14 +365,17 @@ Only when asked (see above). If you have a question tool that presents options (
 Each question:
 
 - **header** — the dimension, Title case: `Structure`, `Interaction`, `States`, `Content`, `Visual`
-- **question** — a heading line, a blank line, then four labelled lines:
+- **question** — a heading line, then four labelled lines, with a blank line before each. The widget shows plain text in one block, so the blank lines are what separate them:
 
   ```
   Rescan button · 1 of 1
 
   Change — The Rescan button on the small Health check card is now just an icon
+
   Pattern — Half-width cards use icon-only action buttons with aria-label and title
+
   Rejected — Full-label button: wrapped to a second row on mobile
+
   Applies to — Compact card actions, anywhere
   ```
 
@@ -384,7 +387,7 @@ Each question:
 - The built-in **Other** box is the correction path. If the user types there, treat it as a fix: what they typed is the decision, what you did is rejected. If they type `skip`, drop the item.
 - The widget's own **Skip** button means "not now" — everything stays in the queue. Don't add a Skip option.
 
-**A clash** adds a line under `Applies to` — `Clashes — D-0009 · Destructive actions undo instead of confirming` — and has its own three options:
+**A clash** adds a line under `Applies to`, after a blank line like the others — `Clashes — D-0009 · Destructive actions undo instead of confirming` — and has its own three options:
 
 - `Follow D-0009` — *Change it back to match the rule.*
 - `Replace D-0009` — *This becomes the rule; D-0009 goes to the decision archive.*
@@ -658,12 +661,13 @@ Making 2 changes you approved — Sam: move the danger zone to the bottom · Pri
 **Then open ones** (`requests.open`), before any queued decision. With the widget:
 
 - **header** — `Request`
-- **question** — a heading line, a blank line, then what was asked:
+- **question** — a heading line, then what was asked, with a blank line before each labelled line:
 
   ```
   Sam · Settings — billing
 
   Asked — Move the danger zone to the bottom, not in its own tab
+
   About — D-0012 · Danger zone lives in its own tab
   ```
 
