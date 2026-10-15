@@ -7,6 +7,8 @@ description: Apply and record this project's design decisions (DECISIONS.md). Us
 
 `DECISIONS.md` holds the design calls this project has already made — what was chosen, what was rejected, and why. Your job is to apply them, and to capture new ones as they happen, without asking the user to write anything.
 
+The commands below start with `npx`. On Windows, if one fails with "running scripts is disabled on this system", that's PowerShell blocking `npx`, not Arbiter: run the same command with `npx.cmd`, and keep using it for the rest of the session.
+
 ## Before UI work
 
 If `DECISIONS.md` exists, read it before building or changing any component, screen, or style. Treat every entry as settled. Do not re-decide it, and do not try the alternatives it lists as rejected. When what you're about to build would go against a rule (the user asks for it, the design system says otherwise, another rule disagrees), don't pick a side yourself: **When something clashes with a rule**, below, says when to ask and how.

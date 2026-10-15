@@ -76,6 +76,9 @@ Arbiter fixes that without adding work:
 npx arbiterdesign init
 ```
 
+> [!NOTE]
+> On Windows, in PowerShell, type `npx.cmd` instead of `npx`, here and in every command after. PowerShell blocks plain `npx` out of the box, with "running scripts is disabled on this system". Command Prompt and Git Bash don't.
+
 That's the whole install. Run it in the folder your agent works in, or ask the agent to run it. It detects Claude Code or Cursor, teaches your agent the protocol, and adds `arbiterdesign` to your devDependencies, which is what makes the shorter `npx arbiter` work from then on. Running it twice changes nothing.
 
 No `package.json` in the project? Add `arbiterdesign` as a dev dependency yourself. New to the terminal? Follow the [step-by-step guide](https://arbiter.design/get-started).
