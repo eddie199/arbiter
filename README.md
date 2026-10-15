@@ -212,6 +212,11 @@ Git stays the source of truth. The service only holds the latest board and its c
 - `npx arbiter publish --auto` republishes whenever the record changes. Works anywhere: no GitHub, no CI, no repo needed. If a republish fails (offline, service down) the command still succeeds and tells you the board is behind. `--no-auto` turns it off.
 - `npx arbiter publish --on-push` writes a GitHub Actions workflow that republishes when decisions land on your default branch, and sets the `ARBITER_PUBLISH_TOKEN` secret through `gh` if you're signed in. Commit the workflow along with `.arbiter/hosted.json`.
 
+**Keep it private, or take it down:**
+
+- `npx arbiter publish --password` puts the board behind a password. It makes up a strong one and prints it once, so send it with the link. `--password "<yours>"` sets your own (8 characters or more), `--no-password` takes it off, and a plain `publish` leaves it as it is.
+- `npx arbiter unpublish --yes` deletes the board, its pictures and its comments from the service, saving the comments into `.arbiter/comments.json` first. Without `--yes` it only says what it would delete.
+
 ### Change requests
 
 A comment is just input. **Request change** is different: someone wants something changed, so it gets a proper answer.
@@ -255,6 +260,8 @@ The agent renders pictures with a headless browser. If it can't (no browser, app
 
 > [!TIP]
 > Name each piece of work after the screen it changed, like `Settings, billing` instead of one `Settings build` across four routes. Then one picture per piece of work means one per screen.
+
+Named it something else first? `arbiter rename "Settings build" "Settings, billing"` moves its decisions, its picture and its comments on the board to the new name.
 
 Cards without a picture show an icon of the kind of change, so the board never looks broken. To make sure missing pictures still get noticed, `record` tells the agent the command to add one, the review page marks the group "No picture", and `publish` lists the cards that are missing one.
 
@@ -355,6 +362,7 @@ npx arbiter pull           # bring comments and requests back
 | `arbiter candidate C-0002 --state …` | Set its state. |
 | `arbiter board` | Candidates and their states. |
 | `arbiter unlink D-0004` | Detach a decision from the screen it was recorded against. |
+| `arbiter rename "<work>" "<new name>"` | Rename a piece of work everywhere the record keeps it. Its comments on the board follow at the next publish. |
 | `arbiter remove <id>` | Remove a decision, a screen (`C-0001`) or a picture (`--snapshot "<work>"`) that was never real. |
 
 #### Sharing
@@ -365,6 +373,8 @@ npx arbiter pull           # bring comments and requests back
 | `arbiter publish --to <url\|pages>` | Your own hosted Arbiter, or GitHub Pages. |
 | `arbiter publish --auto` | Republish whenever the record changes. |
 | `arbiter publish --on-push` | Write a GitHub Actions workflow that republishes on every push. |
+| `arbiter publish --password [pw]` | Ask for a password before showing the board. No value makes one up. `--no-password` takes it off. |
+| `arbiter unpublish --yes` | Delete the board, its pictures and its comments, saving the comments to the repo first. |
 | `arbiter pull` | Bring comments and reactions into `.arbiter/comments.json`, and requests into `.arbiter/requests.json`. |
 | `arbiter export [--feature f] [--include-rules] [--open]` | Static folder of the board for people without the repo. |
 
@@ -478,7 +488,7 @@ Yes. Make the new call and the old rule steps aside. It stays in the archive wit
 <details>
 <summary><b>Where does the record live, and who can see it?</b></summary>
 
-In your project, as plain-text files you own: `DECISIONS.md` and the `.arbiter/` folder beside it. The board is a copy at a private link. It's unlisted and never indexed, and people sign in by email to comment. Delete the board and you lose the comments, nothing else.
+In your project, as plain-text files you own: `DECISIONS.md` and the `.arbiter/` folder beside it. The board is a copy at a private link. It's unlisted and never indexed, people sign in by email to comment, and `publish --password` puts it behind a password. `arbiter unpublish` deletes it from the service, after saving its comments into your repo.
 
 </details>
 

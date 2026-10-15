@@ -16,6 +16,40 @@ export const workId = (trigger: string): string => 'W-' + trigger.toLowerCase().
 
 export const workDir = (paths: Paths): string => path.join(paths.archiveDir, 'work');
 
+/**
+ * Pieces of work renamed after the fact, old id to new: .arbiter/renamed.json, committed. The id comes
+ * from the name, so a renamed piece of work is a new card on the board, and the comments on the old
+ * card have to be told where it went. Every publish sends the list, from whoever's machine, and the
+ * board moves what's still on an old id; once moved, sending it again changes nothing.
+ */
+export interface Rename { from: string; to: string }
+const RENAMED_FILE = 'renamed.json';
+
+export function readRenames(paths: Paths): Rename[] {
+  const f = path.join(paths.archiveDir, RENAMED_FILE);
+  if (!fs.existsSync(f)) return [];
+  try {
+    const all = JSON.parse(fs.readFileSync(f, 'utf8').replace(/^﻿/, ''));
+    if (!Array.isArray(all)) throw new Error('not a list');
+    return (all as Rename[]).filter((r) => typeof r?.from === 'string' && typeof r?.to === 'string');
+  } catch (e) {
+    throw new Error(`.arbiter/${RENAMED_FILE} can't be read (${(e as Error).message.split('\n')[0]}) — a merge conflict? Fix the file, then run this again.`);
+  }
+}
+
+/**
+ * Note one rename. Earlier names that led to `from` now lead to `to`, so a card renamed twice still
+ * gathers all its comments; and nothing leads away from `to`, which is a live name again.
+ */
+export function addRename(paths: Paths, from: string, to: string): void {
+  const all = readRenames(paths)
+    .filter((r) => r.from !== to && r.from !== from)
+    .map((r) => (r.to === from ? { ...r, to } : r));
+  all.push({ from, to });
+  fs.mkdirSync(paths.archiveDir, { recursive: true });
+  fs.writeFileSync(path.join(paths.archiveDir, RENAMED_FILE), JSON.stringify(all, null, 2) + '\n');
+}
+
 /** The snapshot file for a piece of work, if one was attached. */
 export function workSnapshot(paths: Paths, id: string): string | null {
   for (const ext of IMAGE_EXT) {

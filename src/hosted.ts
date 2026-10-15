@@ -10,10 +10,11 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomInt } from 'node:crypto';
 import { readCandidates, decisionsFor, candidatesDir } from './candidates';
 import { Paths, readActive, readArchive, readConfig } from './store';
 import type { Decision } from './schema';
-import { workId, workSnapshot } from './work';
+import { readRenames, workId, workSnapshot } from './work';
 import { cardOf, readRequests } from './requests';
 
 export interface HostedLink {
@@ -185,7 +186,11 @@ export function buildManifest(paths: Paths, opts: { includeRules?: boolean } = {
         return d ? [{ id: d.id, change: d.change ?? d.decision, card: cardOf(paths, d, ids) }] : [];
       }),
     }));
-  return { manifest: { project: path.basename(paths.root), exported: new Date().toISOString().slice(0, 10), candidates, rules, requests }, skipped };
+  // Renamed pieces of work, so the board moves their comments. Not one whose old name is a card again:
+  // the board would move the new card's comments away to the old one's new name.
+  const live = new Set(candidates.map((c) => c.id as string));
+  const renamed = readRenames(paths).filter((r) => !live.has(r.from));
+  return { manifest: { project: path.basename(paths.root), exported: new Date().toISOString().slice(0, 10), candidates, rules, requests, renamed }, skipped };
 }
 
 async function api(url: string, init: RequestInit & { token?: string; admin?: string } = {}): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
@@ -199,11 +204,27 @@ async function api(url: string, init: RequestInit & { token?: string; admin?: st
   return { ok: res.ok, status: res.status, body };
 }
 
+/** The service's own floor for a board password. */
+export const PASSWORD_MIN = 8;
+
 /**
- * Create the project on first publish; then the images, one request each; then the board.
- * Keeps every request under Vercel's 4.5 MB body cap however many screens there are.
+ * A password nobody will guess: 12 characters from 31 that can't be misread (no 0/o, 1/l/i), in
+ * three groups so it can be read out. About 59 bits.
  */
-export async function publishHosted(paths: Paths, serviceUrl: string, opts: { admin?: string } = {}): Promise<{ link: HostedLink; candidates: number; snapshots: number; skipped: string[]; created: boolean }> {
+export function newPassword(): string {
+  const abc = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const pick = () => Array.from({ length: 4 }, () => abc[randomInt(abc.length)]).join('');
+  return `${pick()}-${pick()}-${pick()}`;
+}
+
+/**
+ * Create the project on first publish; then the password, if one was given; then the images, one
+ * request each; then the board. The password goes before anything else, so a new board is never
+ * readable without it. Keeps every request under Vercel's 4.5 MB body cap however many screens there are.
+ *
+ * `password`: a string sets it, null takes it off, left out leaves it as it is.
+ */
+export async function publishHosted(paths: Paths, serviceUrl: string, opts: { admin?: string; password?: string | null } = {}): Promise<{ link: HostedLink; candidates: number; snapshots: number; skipped: string[]; created: boolean }> {
   const base = serviceUrl.replace(/\/$/, '');
   let link = readLink(paths);
   let created = false;
@@ -216,7 +237,8 @@ export async function publishHosted(paths: Paths, serviceUrl: string, opts: { ad
     const admin = opts.admin ?? process.env[ADMIN_ENV];
     const r = await api(`${base}/api/projects`, { method: 'POST', body: JSON.stringify({ name: path.basename(paths.root) }), admin });
     if (r.status === 401) throw new Error(`${base} only lets an admin create boards. Ask whoever runs it for the token, then: npx arbiter publish --to ${base} --admin-token <token>`);
-    if (r.status === 429) throw new Error(`${base} is busy right now — try again in an hour`);
+    // The service says which limit it was: this network's, or everyone's.
+    if (r.status === 429) throw new Error(typeof r.body.error === 'string' ? r.body.error : `${base} is busy right now — try again in an hour`);
     if (!r.ok) throw new Error(`could not create project on ${base}: ${r.body.error ?? r.status}`);
     link = { url: base, projectId: String(r.body.id), slug: String(r.body.slug), shareUrl: String(r.body.url) };
     writeLink(paths, link);
@@ -225,6 +247,12 @@ export async function publishHosted(paths: Paths, serviceUrl: string, opts: { ad
   }
   const token = readToken(paths);
   if (!token) throw new Error(`no publish token for ${link.shareUrl}. Teammate? Get it from whoever first published, then: ${TOKEN_ENV}=<token> npx arbiter publish`);
+  if (opts.password !== undefined) {
+    const pw = await api(`${base}/api/projects/${link.projectId}/password`, { method: 'PUT', body: JSON.stringify({ password: opts.password }), token });
+    if (pw.status === 401) throw new Error(`the publish token was refused by ${base} — wrong ${TOKEN_ENV}, or the project was deleted`);
+    if (pw.status === 404 || pw.status === 405) throw new Error(`${base} doesn't take board passwords yet — it runs an older Arbiter than this one. Nothing was published.`);
+    if (!pw.ok) throw new Error(`password not ${opts.password === null ? 'removed' : 'set'}: ${pw.body.error ?? pw.status}. Nothing was published.`);
+  }
   const config = readConfig(paths);
   const { manifest, skipped } = buildManifest(paths, { includeRules: !!(config?.pages && config.pages.includeRules) });
   let snapshots = 0;
@@ -257,7 +285,13 @@ export async function pullHosted(paths: Paths): Promise<{ link: HostedLink; fres
   // An empty list would read as every request withdrawn, so a reply without one is a failure.
   if (!Array.isArray(r.body.comments)) throw new Error('pull failed: the board sent no comment list');
   const current = r.body.comments as PulledComment[];
-  const existing = readComments(paths);
+  // What's on file keeps its words, but takes the board's card: a renamed piece of work's comments
+  // move there at publish, and a copy pulled before that would still point at the old card.
+  const onBoard = new Map(current.map((c) => [c.id, c]));
+  const existing = readComments(paths).map((c) => {
+    const now = onBoard.get(c.id);
+    return now && now.candidate_id !== c.candidate_id ? { ...c, candidate_id: now.candidate_id } : c;
+  });
   const seen = new Set(existing.map((c) => c.id));
   const fresh = current.filter((c) => !seen.has(c.id));
   const merged = [...existing, ...fresh].sort((a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')));
@@ -270,4 +304,23 @@ export async function pullHosted(paths: Paths): Promise<{ link: HostedLink; fres
     writeLink(paths, { ...rest, boardVersion });
   }
   return { link, fresh, current, total: merged.length };
+}
+
+/**
+ * Delete the board from the service: the board, its pictures, every comment. Comments are pulled
+ * into .arbiter/comments.json first, so nothing said on the board is lost with it. Then the link
+ * goes, so nothing here publishes to a board that no longer exists.
+ */
+export async function unpublishHosted(paths: Paths): Promise<{ link: HostedLink; saved: number; pictures: number; comments: number }> {
+  const link = readLink(paths);
+  if (!link) throw new Error('this project has no hosted board (.arbiter/hosted.json)');
+  const token = readToken(paths);
+  if (!token) throw new Error(`no publish token for ${link.shareUrl}. Only someone who can publish the board can delete it: ${TOKEN_ENV}=<token> npx arbiter unpublish --yes`);
+  const { total } = await pullHosted(paths);
+  const r = await api(`${link.url}/api/projects/${link.projectId}`, { method: 'DELETE', token });
+  if (r.status === 401) throw new Error(`${link.url} refused the publish token — wrong ${TOKEN_ENV}, or the board is already gone. If it is, delete .arbiter/hosted.json and .arbiter/hosted.token.`);
+  if (r.status === 404 || r.status === 405) throw new Error(`${link.url} can't delete boards yet — it runs an older Arbiter than this one. Nothing was deleted.`);
+  if (!r.ok) throw new Error(`delete failed: ${r.body.error ?? r.status}. Nothing here was changed.`);
+  for (const f of [LINK_FILE, TOKEN_FILE]) fs.rmSync(path.join(paths.archiveDir, f), { force: true });
+  return { link, saved: total, pictures: Number(r.body.pictures ?? 0), comments: Number(r.body.comments ?? 0) };
 }

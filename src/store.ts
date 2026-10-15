@@ -106,7 +106,7 @@ export function appendArchive(paths: Paths, d: Decision): void {
 }
 
 /**
- * Rewrites the archive in full. Only `remove` and `unlink` use this: the archive is append-only
+ * Rewrites the archive in full. Only `remove`, `unlink` and `rename` use this: the archive is append-only
  * for judgments — a decision you changed your mind about is superseded, never rewritten — but a
  * record of something that never happened is noise, not history, and has to be able to leave.
  */

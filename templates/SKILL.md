@@ -534,6 +534,8 @@ A picture isn't evidence of the change; there's one image and nothing to compare
 
 **Name the piece of work after the screen it changed**, where the work honestly splits that way: `Settings — billing`, `Settings — profile`, rather than one `Settings build` covering four routes. One picture per piece of work is then one per screen, and the review reads screen by screen instead of one lump. Work that shouldn't be split — a flow across three steps, a nav change touching every page — stays one piece of work and gets one representative picture.
 
+When the user wants a piece of work called something else after it's recorded (*"call that Settings — billing"*), rename it; don't re-record it: `npx arbiter rename "Settings build" "Settings — billing"`. Its decisions, picture, requests and comments follow, and the board's comments move to the new card at the next publish. From then on, use the new name as the `trigger`. A screen (`C-0001`) keeps its id whatever it's called, so it never needs this.
+
 ### Taking it
 
 Your own screenshot tool hands the image back to you in the conversation; `arbiter snapshot` needs a **file on disk**. So write one:
@@ -634,6 +636,10 @@ It goes to arbiter.design. Nothing to set up, no token, no account: the first pu
 *"Keep the board up to date"*, *"publish automatically"* — `npx arbiter publish --auto`. The board then republishes whenever the record changes: after judging, after a screen changes state, after a picture is attached. It needs no GitHub, no CI and no git repository, so it's the right answer unless they specifically want it tied to pushes. `--no-auto` stops it.
 
 *"Every time I push"*, and the project is on GitHub — `npx arbiter publish --on-push`. That publishes, writes `.github/workflows/arbiter.yml` (republishes when decisions land on the default branch), and sets the repository secret through `gh` if it's signed in — otherwise it prints the one-line instruction; relay it. Tell the user to commit the workflow and `.arbiter/hosted.json` together.
+
+*"Put a password on it"*, *"make the board private"* — `npx arbiter publish --password`. It makes up a strong password, prints it once on the `password` line, and the board asks for it before showing anything. Give the user the password with the link: nothing can show it again. `--password "<theirs>"` uses one they chose (8 characters or more), and `--no-password` takes it off. Only when they ask: every `--password` makes a new one and locks out everyone who had the old one. A plain `publish` keeps it.
+
+*"Take the board down"*, *"delete the board"* — `npx arbiter unpublish`. Without `--yes` it deletes nothing and says what would go, for everyone: relay that and ask. Run `npx arbiter unpublish --yes` only after they say yes. Their comments are saved to `.arbiter/comments.json` first, and the record in the repo stays. Tell them to commit the removal of `.arbiter/hosted.json`.
 
 ## Requests from the board
 
@@ -781,7 +787,7 @@ Recorded D-0010 (accept), D-0011 (rule), +3 polish · DECISIONS.md: 6 of 40
 
 ## Never
 
-- Edit `DECISIONS.md` or `.arbiter/archive.md` by hand. Always go through `record`, `remove` or `unlink`.
+- Edit `DECISIONS.md` or `.arbiter/archive.md` by hand. Always go through `record`, `remove`, `unlink` or `rename`.
 - Remove a record because the user disagrees with it. Removal is for records that are false; a call they've changed their mind about is a new decision that supersedes the old one.
 - Record something the user didn't select.
 - Make a change someone asked for on the board before the owner approved it, or write a decline's reason for them.

@@ -9,6 +9,8 @@ import { board } from './commands/board';
 import { drift } from './commands/drift';
 import { exportBoard } from './commands/export';
 import { publish } from './commands/publish';
+import { unpublish } from './commands/unpublish';
+import { renameWork } from './commands/rename';
 import { pull } from './commands/pull';
 import { snapshotWork } from './commands/snapshot';
 import { setup } from './commands/setup';
@@ -221,12 +223,33 @@ program
   .option('--on-push', 'also write a GitHub Actions workflow that republishes on every push, and set its secret')
   .option('--auto', 'republish whenever the record changes — no GitHub, no CI, no repository needed')
   .option('--no-auto', 'stop republishing automatically')
+  .option('--password [password]', 'the board asks for a password before showing anything; leave the value out to get a strong one made up. Once: later publishes keep it')
+  .option('--no-password', 'take the password off: anyone with the link can see the board')
   .action(async (opts) => {
-    const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken, onPush: opts.onPush, auto: opts.auto === undefined ? undefined : !!opts.auto });
-    const w = Math.max(...r.steps.map((s) => s.step.length));
-    for (const s of r.steps) process.stdout.write(`  ${s.step.padEnd(w)}  ${s.outcome}${s.note ? `  — ${s.note}` : ''}\n`);
+    const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken, onPush: opts.onPush, auto: opts.auto === undefined ? undefined : !!opts.auto, password: opts.password });
+    printSteps(r.steps);
     if (r.url) process.stdout.write(`\n${r.ok ? 'Live in about a minute' : 'Once the failed step is fixed'}: ${r.url}\n`);
     process.exit(r.ok ? 0 : 1);
+  });
+
+program
+  .command('unpublish')
+  .description('Delete the hosted board, for everyone: the board, its pictures and every comment on it. Comments are saved to .arbiter/comments.json first; the record in the repo is untouched.')
+  .option('--yes', 'go ahead; without it, nothing is deleted and it says what would be')
+  .action(async (opts) => {
+    const r = await unpublish({ yes: !!opts.yes });
+    printSteps(r.steps);
+    process.exit(r.ok ? 0 : 1);
+  });
+
+program
+  .command('rename <work> <new-name>')
+  .description('Rename a piece of work everywhere the record keeps it. Its comments on the board follow it at the next publish.')
+  .action(async (work: string, newName: string, opts) => {
+    const result = renameWork(work, newName, opts);
+    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    if (result.exitCode === 0) await boardUpdated(opts.cwd);
+    process.exit(result.exitCode);
   });
 
 program
@@ -304,6 +327,12 @@ program.parseAsync(process.argv).catch((e: Error) => {
   process.stderr.write(`arbiter: ${e.message}\n`);
   process.exit(1);
 });
+
+/** `publish` and `unpublish` report one line per step: name, outcome, why. */
+function printSteps(steps: { step: string; outcome: string; note?: string }[]): void {
+  const w = Math.max(...steps.map((s) => s.step.length));
+  for (const s of steps) process.stdout.write(`  ${s.step.padEnd(w)}  ${s.outcome}${s.note ? `  — ${s.note}` : ''}\n`);
+}
 
 /** With `hosted.auto`, the board follows the record. Prints a line when it does, or why it didn't. */
 async function boardUpdated(cwd?: string): Promise<void> {
