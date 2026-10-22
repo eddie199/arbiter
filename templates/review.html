@@ -3,70 +3,122 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Arbiter review</title>
+<title>Review Board</title>
 <style>
+  /* Geist, as on arbiter.design and the board. Served by `arbiter review` from templates/fonts. */
+  @font-face { font-family: "Geist"; src: url(/fonts/Geist-Variable.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
+  @font-face { font-family: "Geist Mono"; src: url(/fonts/GeistMono-Variable.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
+  /* The board's tokens (arbiter.design globals.css): cool, flat greys; colour only when it means something.
+     --card is the board's surface, --tag its surface-2. */
   :root {
     color-scheme: light dark;
-    --bg: #fafaf9; --card: #fff; --ink: #1c1917; --muted: #78716c; --line: #e7e5e4;
-    --accent: #1c1917; --accent-ink: #fff; --ok: #15803d; --warn: #b45309; --bad: #b91c1c;
-    --tag: #f5f5f4; --shot: #f5f5f4;
+    --bg: #ffffff; --card: #fafafa; --tag: #f2f2f2; --shot: #f2f2f2;
+    --ink: #171717; --muted: #666666; --faint: #8f8f8f; --line: #ebebeb; --line-strong: #c2c2c2;
+    --accent: #171717; --accent-ink: #ffffff;
+    --ok: #0f7b3f; --warn: #a15c00; --bad: #d4111f; --info: #0060d0;
+    --ok-bg: #e8f5ee; --warn-bg: #fff4e0; --bad-bg: #fdecec;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0c0a09; --card: #1c1917; --ink: #fafaf9; --muted: #a8a29e; --line: #292524;
-      --accent: #fafaf9; --accent-ink: #0c0a09; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
-      --tag: #292524; --shot: #0c0a09;
+      --bg: #000000; --card: #0a0a0a; --tag: #141414; --shot: #141414;
+      --ink: #ededed; --muted: #a1a1a1; --faint: #6f6f6f; --line: #262626; --line-strong: #454545;
+      --accent: #ededed; --accent-ink: #000000;
+      --ok: #3ecf8e; --warn: #f5a623; --bad: #ff6166; --info: #52a8ff;
+      --ok-bg: #062b1a; --warn-bg: #2a1c00; --bad-bg: #2a0a0d;
     }
   }
   * { box-sizing: border-box; }
+  /* Type follows the board: hierarchy from colour and size, not weight. Nothing is uppercase or letter-spaced. */
   body {
     margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    font: 14px/1.5 "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
     padding: 0 16px 80px;
   }
+  /* The board's top bar: full width, a hairline under it, the lockup, then the project after a faint slash. */
   header {
-    max-width: 800px; margin: 0 auto; padding: 28px 0 8px;
-    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    position: sticky; top: 0; z-index: 5; margin: 0 -16px; padding: 0 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg); background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(8px);
   }
-  header h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  header .bar { max-width: 800px; height: 48px; margin: 0 auto; display: flex; align-items: center; gap: 12px; font-size: 16px; }
+  /* The lockup: the mark and the lowercase wordmark, 8px apart, semibold tight. */
+  .lockup { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.025em; }
+  .mark { flex-shrink: 0; }
+  .mark rect { fill: currentColor; }
+  .mark path { fill: var(--bg); }
+  header .slash { color: var(--faint); }
   header .project { color: var(--muted); }
-  header .count { color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
-  nav { max-width: 800px; margin: 12px auto 0; display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+  @media (max-width: 639px) { header .slash, header .project { display: none; } }
+  /* Top right: the team board, or how to publish one. */
+  .bar-end { margin-left: auto; position: relative; }
+  .pop {
+    position: absolute; right: 0; top: calc(100% + 8px); width: 300px; z-index: 6; padding: 12px;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .08);
+    font-size: 13px; color: var(--muted);
+  }
+  .pop p { margin: 0 0 10px; }
+  .pop .cmd { display: flex; align-items: center; gap: 8px; }
+  .pop code { flex: 1; color: var(--ink); padding: 4px 8px; }
+  /* PageTitle */
+  h1 { max-width: 800px; margin: 32px auto 0; font-size: 22px; font-weight: 600; letter-spacing: -0.025em; }
+  /* Lede: one sentence under the title. */
+  .page-lede { max-width: 800px; margin: 6px auto 0; font-size: 15px; color: var(--muted); }
+  nav { max-width: 800px; margin: 16px auto 0; display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
   nav button {
     border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted);
-    padding: 8px 12px; margin-bottom: -1px; font-weight: 500;
+    height: auto; padding: 8px 12px; margin-bottom: -1px; font-size: 14px; font-weight: 400;
   }
-  nav button:hover { border-color: var(--line); color: var(--ink); }
-  nav button.on { color: var(--ink); border-bottom-color: var(--ink); }
+  nav button:hover:not(:disabled) { border-color: var(--line); color: var(--ink); }
+  nav button.on, nav button.on:hover:not(:disabled) { color: var(--ink); border-bottom-color: var(--ink); font-weight: 500; }
+  /* Newest | Oldest, styled like the team board's Cards/List toggle: the chosen one tinted, no weight change. */
+  .toolbar { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+  .toolbar + .group { margin-top: 20px; }
+  .seg { margin-left: auto; display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; }
+  .seg button { height: 24px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; font-size: 13px; font-weight: 400; color: var(--muted); }
+  .seg button:hover:not(:disabled) { color: var(--ink); }
+  .seg button.on { background: var(--tag); color: var(--ink); }
   main { max-width: 800px; margin: 0 auto; }
-  h2 {
-    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--muted); margin: 32px 0 10px;
-  }
+  /* SectionTitle */
+  h2 { font-size: 15px; font-weight: 600; letter-spacing: -0.025em; color: var(--ink); margin: 32px 0 12px; }
   .card {
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-    padding: 18px 20px 16px; margin-bottom: 12px;
+    padding: 16px; margin-bottom: 12px;
   }
-  .card.done { opacity: 0.55; padding: 12px 20px; }
-  .card h3 { font-size: 16px; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.01em; }
-  .card .why { margin: 0 0 8px; }
-  .lines { margin: 0 0 10px; display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; }
-  .lines dt { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; padding-top: 3px; }
+  .card.done { opacity: 0.55; padding: 10px 16px; }
+  .card h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.025em; }
+  /* A decision, as on the board: id and badges on one row, "n of N" at the end, then key/value lines. */
+  .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .id { font: 12px "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); }
+  .faint { font-size: 12px; color: var(--faint); }
+  .top .end { margin-left: auto; }
+  /* Badge: title case, always. */
+  .badge {
+    display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 500; line-height: 1; background: var(--tag); color: var(--muted); white-space: nowrap;
+  }
+  .badge.info { color: var(--info); }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .badge.bad { background: var(--bad-bg); color: var(--bad); }
+  .card h3 .badge { margin-left: 8px; vertical-align: 2px; }
+  /* KeyValues: a fixed label column (Label, 13px muted), values beside it. */
+  .lines { margin: 0; display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: 6px 12px; font-size: 14px; }
+  .lines dt { color: var(--muted); font-size: 13px; padding-top: 1px; }
   .lines dd { margin: 0; }
   .lines dd.muted { color: var(--muted); }
-  .level { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--tag); color: var(--muted); vertical-align: 2px; margin-left: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
-  .level.feature { color: var(--ink); }
-  .group { display: flex; align-items: baseline; gap: 10px; margin: 32px 0 10px; }
-  .group h2 { margin: 0; text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--ink); }
+  .lines dd.change { font-weight: 500; }
+  .lines a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  .lines a:hover { color: var(--ink); }
+  .group { display: flex; align-items: baseline; gap: 10px; margin: 32px 0 12px; }
+  .group h2 { margin: 0; }
   .group span { color: var(--muted); font-size: 13px; }
-  .group .nopic { color: var(--warn); cursor: help; }
-  .polish { background: var(--card); border: 1px dashed var(--line); border-radius: 12px; padding: 12px 20px; margin-bottom: 12px; }
+  .group .nopic { color: var(--warn); cursor: help; }  .polish { background: var(--card); border: 1px dashed var(--line); border-radius: 12px; padding: 12px 20px; margin-bottom: 12px; }
   .polish .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .polish .row .n { color: var(--muted); flex: 1; }
   .polish ul { list-style: none; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); }
   .polish li { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
   .polish li span { flex: 1; }
-  .polish li button { padding: 3px 10px; font-size: 13px; }
   .card ul { margin: 0 0 10px; padding: 0; list-style: none; }
   .card ul.rejected li { padding-left: 18px; position: relative; }
   .card ul.rejected li::before { content: "✗"; position: absolute; left: 0; color: var(--muted); }
@@ -78,19 +130,22 @@
   }
   .thumb img { display: block; width: 100%; height: auto; }
   .thumb .cap { font-size: 12px; color: var(--muted); padding: 4px 8px; border-top: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .meta { color: var(--muted); font-size: 13px; display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-  .meta .tag { background: var(--tag); padding: 1px 8px; border-radius: 4px; cursor: help; }
-  .meta a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
-  .meta a:hover { color: var(--ink); }
-  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  button {
-    font: inherit; font-size: 14px; border-radius: 8px; border: 1px solid var(--line);
-    background: var(--card); color: var(--ink); padding: 7px 14px; cursor: pointer;
+  .meta { color: var(--muted); font-size: 13px; display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  /* The homepage's Button, size sm: secondary by default, .primary filled, .quiet its ghost. Done is size md. */
+  button, .button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; text-decoration: none;
+    font: inherit; font-size: 13px; font-weight: 500; height: 28px; padding: 0 10px; border-radius: 6px;
+    border: 1px solid var(--line-strong); background: var(--bg); color: var(--ink); cursor: pointer;
+    transition: color .15s, background-color .15s, border-color .15s;
   }
-  button:hover { border-color: var(--ink); }
+  button:hover:not(:disabled), .button:hover { border-color: var(--ink); }
+  button:disabled { cursor: not-allowed; opacity: .5; }
   button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  button.quiet { color: var(--muted); border-color: transparent; }
-  button.quiet:hover { border-color: var(--line); }
+  button.primary:hover:not(:disabled) { opacity: .9; }
+  button.quiet { background: transparent; color: var(--muted); border-color: transparent; }
+  button.quiet:hover:not(:disabled) { background: var(--tag); color: var(--ink); border-color: transparent; }
+  footer button { height: 32px; padding: 0 12px; font-size: 14px; }
   textarea {
     font: inherit; width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px;
     background: var(--bg); color: var(--ink); padding: 10px 12px; margin: 10px 0; resize: vertical;
@@ -107,20 +162,25 @@
   .result .skip { color: var(--muted); }
   .bad { color: var(--bad); }
   .empty { text-align: center; color: var(--muted); padding: 80px 0; }
-  .empty h2 { text-transform: none; letter-spacing: 0; font-size: 18px; color: var(--ink); }
+  .empty h2 { margin-bottom: 6px; }
   /* candidates */
   .cand { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 18px; }
   @media (max-width: 640px) { .cand { grid-template-columns: 1fr; } .split { flex-direction: column; } .thumb { max-width: 100%; flex-basis: auto; } }
   .cand .shot { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--shot); cursor: zoom-in; min-height: 80px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
   .cand .shot img { display: block; width: 100%; height: auto; }
-  .state { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--tag); color: var(--muted); vertical-align: middle; margin-left: 8px; font-weight: 500; }
-  .state.approved { color: var(--ok); }
-  .state.rejected, .state.superseded { color: var(--bad); }
-  .state.in_review { color: var(--warn); }
   .cand .decs { margin: 8px 0 12px; padding: 0; list-style: none; font-size: 14px; }
   .cand .decs li { color: var(--muted); }
   .cand .decs b { color: var(--ink); font-weight: 500; }
-  .reason { color: var(--muted); font-style: italic; margin: 0 0 10px; }
+  .reason { color: var(--muted); margin: 0 0 10px; }
+  /* rules: the board's Standing rules. A divided list per dimension, id in the label column, the rule beside it, its reason under. */
+  .lede { margin: 24px 0 0; color: var(--muted); font-size: 13px; }
+  .lede.near { color: var(--warn); }
+  .rule-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .rule-list li { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 0 12px; padding: 12px 0; font-size: 14px; }
+  .rule-list li + li { border-top: 1px solid var(--line); }
+  .rule-list .id { padding-top: 2px; }
+  .rule-list .why { margin-top: 2px; font-size: 13px; color: var(--muted); }
+  .rule-list .from { margin-top: 4px; font-size: 13px; color: var(--muted); }
   .comments { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; font-size: 14px; }
   .comments .ok { color: var(--ok); }
   .comments p { margin: 4px 0; } .comments b { font-weight: 500; }
@@ -129,7 +189,7 @@
   .card h3.ask { font-weight: 500; white-space: pre-line; }
   .card.approved { border-style: dashed; }
   .card.approved h3.ask { color: var(--muted); }
-  code { font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--tag); padding: 1px 5px; border-radius: 4px; }
+  code { font: 13px "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--tag); padding: 1px 5px; border-radius: 4px; }
   #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; cursor: zoom-out; z-index: 10; padding: 24px; }
   #lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; }
   footer {
@@ -140,11 +200,14 @@
 </style>
 </head>
 <body>
-<header>
-  <h1>Arbiter</h1>
+<header><div class="bar">
+  <span class="lockup"><svg class="mark" width="18" height="18" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="8.11884"/><path d="M26.4434 21.5508C32.1562 21.5509 37.1773 24.5124 40.0547 28.9844L40.5361 29.583L53.3994 47.5586V53.8984H45.7041L31.5664 34.2197H31.5645C30.45 32.732 28.6728 31.7695 26.6709 31.7695C23.2967 31.7697 20.5618 34.5047 20.5615 37.8789C20.5615 41.2533 23.2965 43.989 26.6709 43.9893C29.567 43.9893 31.9906 41.974 32.6201 39.2695L38.8975 48.042C35.9308 51.619 31.4536 53.8983 26.4434 53.8984C17.5109 53.8984 10.2697 46.657 10.2695 37.7246C10.2695 28.792 17.5108 21.5508 26.4434 21.5508ZM37.4053 10.4082C43.3357 10.4082 53.3994 14.0025 53.3994 26.2227V43.9814L43.3359 29.9189V25.6836C43.3359 21.0112 38.4835 20.292 37.4053 20.292H18.3564L10.2695 10.4082H37.4053Z"/></svg>arbiter</span>
+  <span class="slash">/</span>
   <span class="project" id="project"></span>
-  <span class="count" id="count"></span>
-</header>
+  <div class="bar-end" id="team-board"></div>
+</div></header>
+<h1>Review Board</h1>
+<p class="page-lede">Only you see this page. Nothing here reaches your team until you publish.</p>
 <nav id="nav"></nav>
 <main id="main"></main>
 <div id="lightbox" onclick="this.style.display='none'"><img alt=""></div>
@@ -169,16 +232,64 @@ async function load() {
 
 function render() {
   document.getElementById('project').textContent = state.project;
-  document.getElementById('count').textContent = `${state.active} of ${state.cap} rules`;
+  document.title = `Review Board · ${state.project}`;
+  teamBoard();
   const nav = document.getElementById('nav');
   nav.innerHTML = '';
   const asks = state.requests.filter(r => r.status === 'open').length;
   if (state.requests.length || Object.keys(answered).length) nav.appendChild(tabBtn('requests', `Requests · ${asks}`));
   nav.appendChild(tabBtn('decisions', `Decisions · ${state.pending.length}`));
-  nav.appendChild(tabBtn('candidates', `Candidates · ${state.candidates.length}`));
+  nav.appendChild(tabBtn('candidates', `Screens · ${state.candidates.length}`));
+  nav.appendChild(tabBtn('rules', `Rules · ${state.active}`));
   const main = document.getElementById('main');
   main.innerHTML = '';
-  ({ requests: renderRequests, decisions: renderDecisions, candidates: renderCandidates })[tab](main);
+  ({ requests: renderRequests, decisions: renderDecisions, candidates: renderCandidates, rules: renderRules })[tab](main);
+}
+
+/* ── the team board, top right ───────────────────────────────────────── */
+// Published: a link to it. Not yet: the command, not a button that publishes. The first publish
+// creates the board on arbiter.design, which is a step to take on purpose.
+const OUT = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>';
+function teamBoard() {
+  const box = document.getElementById('team-board');
+  if (box.childElementCount) return;
+  if (state.hosted) {
+    const a = el('a', 'button', 'Open team board'); a.href = state.hosted; a.target = '_blank'; a.rel = 'noreferrer';
+    a.insertAdjacentHTML('beforeend', OUT);
+    box.appendChild(a);
+    return;
+  }
+  const pop = el('div', 'pop'); pop.hidden = true;
+  pop.appendChild(el('p', null, 'Publish a team board: your team can see each screen and why it is that way, comment, and request changes. Run this in the project:'));
+  const row = el('div', 'cmd');
+  const code = el('code', null, 'npx arbiter publish');
+  row.appendChild(code);
+  // Selected either way, so a blocked clipboard still leaves it one keypress from copied.
+  const copy = btn('Copy', 'quiet', async () => {
+    const range = document.createRange(); range.selectNodeContents(code);
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    let ok;
+    try { await navigator.clipboard.writeText(code.textContent); ok = true; } catch { ok = document.execCommand('copy'); }
+    copy.textContent = ok ? 'Copied' : 'Selected';
+  });
+  row.appendChild(copy);
+  pop.appendChild(row);
+  box.append(btn('Share team board', null, () => { pop.hidden = !pop.hidden; copy.textContent = 'Copy'; }), pop);
+  document.addEventListener('click', (e) => { if (!box.contains(e.target)) pop.hidden = true; });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') pop.hidden = true; });
+}
+
+/* Newest or oldest first. Remembered in this browser only; it changes nothing in the record. */
+const SORT_KEY = 'arbiter-review-sort';
+let sort = (() => { try { return localStorage.getItem(SORT_KEY) || 'new'; } catch { return 'new'; } })();
+function sortControl() {
+  const seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Sort');
+  for (const [key, label] of [['new', 'Newest'], ['old', 'Oldest']]) {
+    const b = btn(label, sort === key ? 'on' : '', () => { sort = key; try { localStorage.setItem(SORT_KEY, key); } catch {} render(); });
+    b.setAttribute('aria-pressed', String(sort === key));
+    seg.appendChild(b);
+  }
+  return seg;
 }
 
 function tabBtn(id, label) {
@@ -199,12 +310,16 @@ function refLink(ref) {
   catch { a.textContent = ref; }
   return a;
 }
+// Worded as the board words it.
 function scopeWords(scope) {
   if (scope === 'global') return 'Everywhere';
   const i = scope.indexOf(':'); const kind = scope.slice(0, i), target = scope.slice(i + 1);
   if (kind === 'file') return target.split('/').pop();
-  return target.replace(/[-_]+/g, ' ').replace(/^\w/, ch => ch.toUpperCase()) + ' pattern';
+  return target.replace(/[-_]+/g, ' ').replace(/^\w/, ch => ch.toUpperCase()) + ', anywhere';
 }
+function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+function day(iso) { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
+const STATE_TONE = { approved: 'ok', in_review: 'warn', rejected: 'bad', superseded: 'bad' };
 function messagePanel(c, text, cls) {
   clearPanel(c);
   const p = el('div', 'panel');
@@ -219,17 +334,20 @@ const promoted = {}; // polish id -> shown as a full card
 
 function renderDecisions(main) {
   const done = Object.keys(results).filter(id => !state.pending.some(p => p.id === id)).map(id => results[id].item);
-  const all = [...state.pending, ...done];
+  // Sorted before grouping, so groups follow their newest (or oldest) decision and cards follow within each.
+  // ISO dates compare as text; the id breaks ties in queue order.
+  const when = d => d.date + d.id;
+  const all = [...state.pending, ...done].sort((a, b) => (when(a) < when(b) ? -1 : when(a) > when(b) ? 1 : 0) * (sort === 'new' ? -1 : 1));
   if (!all.length) {
     main.innerHTML = '<div class="empty"><h2>All caught up.</h2><p>Nothing pending. The agent queues decisions here when work settles.</p></div>';
     return;
   }
   const polishTotal = state.pending.filter(d => d.level === 'polish').length;
-  if (polishTotal > 1) {
-    const bar = el('div', 'actions'); bar.style.margin = '20px 0 0';
-    bar.appendChild(btn(`Confirm all ${polishTotal} polish`, null, () => sendAll({ as: 'accept', level: 'polish' })));
-    main.appendChild(bar);
-  }
+  // A toolbar row, as on the team board: Confirm all polish on the left, the sort on the right.
+  const bar = el('div', 'toolbar');
+  if (polishTotal > 1) bar.appendChild(btn(`Confirm all ${polishTotal} polish`, null, () => sendAll({ as: 'accept', level: 'polish' })));
+  if (all.length > 1) bar.appendChild(sortControl());
+  if (bar.childElementCount) main.appendChild(bar);
   for (const g of groupByTrigger(all)) {
     const items = g.items, polish = g.polish.filter(d => !results[d.id] || promoted[d.id]);
     const head = el('div', 'group');
@@ -240,7 +358,7 @@ function renderDecisions(main) {
     const pics = [...new Map(items.filter(d => !results[d.id] && d.picture).map(d => [d.picture.command, d.picture])).values()];
     if (pics.length) { const p = el('span', 'nopic', '· No picture'); p.title = 'Take one while the screen is open:\n' + pics.map(m => m.command).join('\n'); head.appendChild(p); }
     main.appendChild(head);
-    for (const d of items) main.appendChild(results[d.id] ? doneCard(d) : card(d));
+    items.forEach((d, i) => main.appendChild(results[d.id] ? doneCard(d) : card(d, i, items.length)));
     for (const d of g.polish.filter(d => promoted[d.id])) main.appendChild(results[d.id] ? doneCard(d) : card(d));
     const rest = g.polish.filter(d => !promoted[d.id]);
     if (rest.length) main.appendChild(polishRow(g.trigger, rest));
@@ -285,27 +403,29 @@ function polishRow(trigger, list) {
   return box;
 }
 
-function card(d) {
+// The same shape as a decision on the board: id and badges on top, then Change, Pattern, Rejected,
+// Applies to. Why sits after Rejected here, since it's what you judge by.
+function card(d, i, n) {
   const c = el('div', 'card'); c.dataset.id = d.id;
   const split = el('div', 'split');
   const body = el('div', 'body');
-  const h = el('h3', null, d.change || d.decision);
-  h.appendChild(el('span', 'level ' + d.level, d.level));
-  body.appendChild(h);
+  const top = el('div', 'top');
+  top.appendChild(el('span', 'id', d.id));
+  top.appendChild(el('span', 'badge info', cap(d.level)));
+  if (d.dimension) top.appendChild(el('span', 'badge', LABEL[d.dimension] || cap(d.dimension)));
+  if (d.verified === false) { const v = el('span', 'badge bad', 'Unverified'); v.title = 'The files did not match this claim when it was queued'; top.appendChild(v); }
+  top.appendChild(el('span', 'faint end', `${d.author}, ${day(d.date)}${n ? ` · ${i + 1} of ${n}` : ''}`));
+  body.appendChild(top);
   const dl = el('dl', 'lines');
-  const line = (k, v, cls) => { dl.appendChild(el('dt', null, k)); dl.appendChild(el('dd', cls, v)); };
-  if (d.change) line('Pattern', d.decision);
-  for (const r of d.rejected) line('Rejected', r);
+  const line = (k, v, cls) => { dl.appendChild(el('dt', null, k)); const dd = el('dd', cls, v); dl.appendChild(dd); return dd; };
+  line('Change', d.change || d.decision, 'change');
+  if (d.change && d.change !== d.decision) line('Pattern', d.decision, 'muted');
+  if (d.rejected.length) { const dd = line('Rejected', null, 'muted'); for (const r of d.rejected) dd.appendChild(el('div', null, r)); }
+  if (d.rationale) line('Why', d.rationale, 'muted');
   if (d.againstRule) line('Clashes', `${d.againstRule.id} · ${d.againstRule.decision}`);
-  line('Why', d.rationale, 'muted');
+  line('Applies to', scopeWords(d.scope), 'muted').title = d.scope;
+  if (d.ref) line('Ticket', null, 'muted').appendChild(refLink(d.ref));
   body.appendChild(dl);
-  const meta = el('div', 'meta');
-  const tag = el('span', 'tag', scopeWords(d.scope)); tag.title = d.scope; meta.appendChild(tag);
-  meta.appendChild(el('span', null, d.class));
-  if (d.verified === false) { const v = el('span', 'bad', '· unverified'); v.title = 'The files did not match this claim when it was queued'; meta.appendChild(v); }
-  meta.appendChild(el('span', null, '· ' + d.author + ', ' + d.date.slice(0, 10)));
-  if (d.ref) { meta.appendChild(el('span', null, '·')); meta.appendChild(refLink(d.ref)); }
-  body.appendChild(meta);
   body.appendChild(actions(d, c));
   split.appendChild(body);
   if (d.snapshotUrl) {
@@ -345,8 +465,8 @@ function actions(d, c) {
     a.appendChild(btn('Skip', 'quiet', () => send(d, c, { as: 'skip' })));
     return a;
   }
-  a.appendChild(btn('Confirm', d.level === 'polish' ? 'primary' : null, () => send(d, c, { as: 'accept' })));
-  if (d.level !== 'polish') a.appendChild(btn('Make it a rule', 'primary', () => send(d, c, { as: 'rule' })));
+  a.appendChild(btn('Confirm', 'primary', () => send(d, c, { as: 'accept' })));
+  if (d.level !== 'polish') a.appendChild(btn('Make it a rule', null, () => send(d, c, { as: 'rule' })));
   a.appendChild(btn('Skip', 'quiet', () => send(d, c, { as: 'skip' })));
   a.appendChild(btn('Fix', 'quiet', () => fixPanel(d, c)));
   return a;
@@ -426,7 +546,7 @@ function renderRequests(main) {
   const approved = state.requests.filter(r => r.status === 'approved');
   const declined = Object.values(answered);
   if (!open.length && !approved.length && !declined.length) {
-    main.innerHTML = '<div class="empty"><h2>No requests.</h2><p>When someone presses Request change on the board, it lands here after <code>npx arbiter pull</code>.</p></div>';
+    main.innerHTML = '<div class="empty"><h2>No requests.</h2><p>When someone presses Request change on the team board, it lands here after <code>npx arbiter pull</code>.</p></div>';
     return;
   }
   if (open.length || declined.length) {
@@ -454,7 +574,7 @@ function requestCard(r) {
   meta.appendChild(el('span', null, r.screenName ? `on ${r.screenName}` : `on ${r.screen}`));
   if (r.decision) meta.appendChild(el('span', null, `· about ${r.decision}`));
   meta.appendChild(el('span', null, '· ' + r.date.slice(0, 10)));
-  if (r.earlierVersion) { const s = el('span', null, '· earlier version'); s.title = 'Asked about a version of the board that has since been republished'; meta.appendChild(s); }
+  if (r.earlierVersion) { const s = el('span', null, '· earlier version'); s.title = 'Asked about a version of the team board that has since been republished'; meta.appendChild(s); }
   meta.appendChild(el('span', null, '· ' + r.id));
   body.appendChild(meta);
   if (r.status === 'approved') {
@@ -494,7 +614,7 @@ function insteadPanel(r, c) {
 function declinePanel(r, c) {
   clearPanel(c);
   const p = el('div', 'panel');
-  p.appendChild(el('p', null, `Why not? ${r.author} reads this on the board.`));
+  p.appendChild(el('p', null, `Why not? ${r.author} reads this on the team board.`));
   const ta = el('textarea'); ta.placeholder = 'One line'; p.appendChild(ta);
   const row = el('div', 'actions');
   row.appendChild(btn('Decline', 'primary', () => { if (ta.value.trim()) sendRequest(r, c, { as: 'decline', why: ta.value.trim() }); else ta.focus(); }));
@@ -516,7 +636,7 @@ async function sendRequest(r, c, body) {
 function renderCandidates(main) {
   const all = state.candidates;
   if (!all.length) {
-    main.innerHTML = '<div class="empty"><h2>No candidates yet.</h2><p>When the agent explores several directions for one feature, each one shows up here with its picture, its decisions, and — once you pick — why the others lost.</p></div>';
+    main.innerHTML = '<div class="empty"><h2>No screens yet.</h2><p>When the agent explores several directions for one feature, each one shows up here with its picture, its decisions, and — once you pick — why the others lost.</p></div>';
     return;
   }
   const features = [...new Set(all.map(c => c.feature || '—'))];
@@ -531,7 +651,7 @@ function candCard(c) {
   const grid = el('div', 'cand');
   const body = el('div');
   const h = el('h3', null, `${c.name}`);
-  const st = el('span', 'state ' + c.state, STATE_LABEL[c.state] + (c.state === 'superseded' && c.supersededBy ? ` → ${c.supersededBy}` : ''));
+  const st = el('span', 'badge ' + (STATE_TONE[c.state] || ''), STATE_LABEL[c.state] + (c.state === 'superseded' && c.supersededBy ? ` → ${c.supersededBy}` : ''));
   h.appendChild(st); body.appendChild(h);
   if (c.reason) body.appendChild(el('p', 'reason', '“' + c.reason + '”'));
   const decs = el('ul', 'decs');
@@ -587,6 +707,39 @@ async function sendCand(card, c, body) {
   card.querySelectorAll('button').forEach(b => b.disabled = false);
   if (res.exitCode !== 0) return messagePanel(card, (res.errors || ['Something went wrong']).join(' · '), 'bad');
   await load();
+}
+
+/* ── rules tab ───────────────────────────────────────────────────────── */
+// DECISIONS.md, read only: what's already settled, so you can check before making another rule.
+function renderRules(main) {
+  const rules = state.rules;
+  if (!rules.length) {
+    main.innerHTML = `<div class="empty"><h2>No rules yet.</h2><p>Make it a rule on a decision and it lands here, in DECISIONS.md, which the agent reads before any UI work. It holds ${state.cap} at most.</p></div>`;
+    return;
+  }
+  const full = state.active >= state.cap;
+  main.appendChild(el('p', 'lede' + (state.cap - state.active <= 5 ? ' near' : ''),
+    `${state.active} of ${state.cap} rules in DECISIONS.md. The agent reads these before any UI work.${full ? ' Full: a new rule has to replace one.' : ''}`));
+  const dims = [...new Set(rules.map(r => r.dimension))].sort((a, b) => DIMS.indexOf(a) - DIMS.indexOf(b));
+  for (const dim of dims) {
+    const rs = rules.filter(r => r.dimension === dim);
+    const head = el('div', 'group');
+    head.appendChild(el('h2', null, LABEL[dim] || cap(dim)));
+    head.appendChild(el('span', null, String(rs.length)));
+    main.appendChild(head);
+    const ul = el('ul', 'rule-list');
+    for (const r of rs) {
+      const li = el('li');
+      li.appendChild(el('span', 'id', r.id));
+      const body = el('div');
+      body.appendChild(el('div', null, r.decision));
+      if (r.rationale) body.appendChild(el('div', 'why', r.rationale));
+      body.appendChild(el('div', 'from', `Decided on ${r.trigger} · ${r.author}, ${day(r.date)}`));
+      li.appendChild(body);
+      ul.appendChild(li);
+    }
+    main.appendChild(ul);
+  }
 }
 
 document.getElementById('done').onclick = async () => {
