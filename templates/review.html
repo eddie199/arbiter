@@ -239,8 +239,9 @@ function render() {
   const asks = state.requests.filter(r => r.status === 'open').length;
   if (state.requests.length || Object.keys(answered).length) nav.appendChild(tabBtn('requests', `Requests · ${asks}`));
   nav.appendChild(tabBtn('decisions', `Decisions · ${state.pending.length}`));
-  nav.appendChild(tabBtn('candidates', `Screens · ${state.candidates.length}`));
-  nav.appendChild(tabBtn('rules', `Rules · ${state.active}`));
+  // The team board's words: candidates are options, rules are design rules.
+  nav.appendChild(tabBtn('candidates', `Options · ${state.candidates.length}`));
+  nav.appendChild(tabBtn('rules', `Design rules · ${state.active}`));
   const main = document.getElementById('main');
   main.innerHTML = '';
   ({ requests: renderRequests, decisions: renderDecisions, candidates: renderCandidates, rules: renderRules })[tab](main);
@@ -423,7 +424,9 @@ function card(d, i, n) {
   if (d.rejected.length) { const dd = line('Rejected', null, 'muted'); for (const r of d.rejected) dd.appendChild(el('div', null, r)); }
   if (d.rationale) line('Why', d.rationale, 'muted');
   if (d.againstRule) line('Clashes', `${d.againstRule.id} · ${d.againstRule.decision}`);
-  line('Applies to', scopeWords(d.scope), 'muted').title = d.scope;
+  // Applies to names a screen, never a file: a decision about one file is about the change it was made on.
+  if (d.scope.startsWith('file:')) line('Applies to', d.candidateName || d.trigger, 'muted');
+  else line('Applies to', scopeWords(d.scope), 'muted');
   if (d.ref) line('Ticket', null, 'muted').appendChild(refLink(d.ref));
   body.appendChild(dl);
   body.appendChild(actions(d, c));
@@ -636,7 +639,7 @@ async function sendRequest(r, c, body) {
 function renderCandidates(main) {
   const all = state.candidates;
   if (!all.length) {
-    main.innerHTML = '<div class="empty"><h2>No screens yet.</h2><p>When the agent explores several directions for one feature, each one shows up here with its picture, its decisions, and — once you pick — why the others lost.</p></div>';
+    main.innerHTML = '<div class="empty"><h2>No options yet.</h2><p>When the agent tries several options for one thing, each one shows up here with its picture and its decisions. Once you pick one, it keeps why the others lost.</p></div>';
     return;
   }
   const features = [...new Set(all.map(c => c.feature || '—'))];
@@ -714,12 +717,13 @@ async function sendCand(card, c, body) {
 function renderRules(main) {
   const rules = state.rules;
   if (!rules.length) {
-    main.innerHTML = `<div class="empty"><h2>No rules yet.</h2><p>Make it a rule on a decision and it lands here, in DECISIONS.md, which the agent reads before any UI work. It holds ${state.cap} at most.</p></div>`;
+    main.innerHTML = `<div class="empty"><h2>No design rules yet.</h2><p>Make it a rule on a decision and it lands here, in DECISIONS.md, which the agent reads before any UI work. It holds ${state.cap} at most.</p></div>`;
     return;
   }
   const full = state.active >= state.cap;
   main.appendChild(el('p', 'lede' + (state.cap - state.active <= 5 ? ' near' : ''),
-    `${state.active} of ${state.cap} rules in DECISIONS.md. The agent reads these before any UI work.${full ? ' Full: a new rule has to replace one.' : ''}`));
+    // The team board's subline (its rule D-0012), then how full it is.
+    `${state.active === 1 ? '1 rule' : `${state.active} rules`} you've saved in DECISIONS.md. Everything new follows ${state.active === 1 ? 'it' : 'them'}. ${full ? 'Full: a new rule has to replace one.' : `It holds ${state.cap} at most.`}`));
   const dims = [...new Set(rules.map(r => r.dimension))].sort((a, b) => DIMS.indexOf(a) - DIMS.indexOf(b));
   for (const dim of dims) {
     const rs = rules.filter(r => r.dimension === dim);
