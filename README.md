@@ -351,7 +351,7 @@ npx arbiter pull           # bring comments and requests back
 
 | Command | What it does |
 |---|---|
-| `arbiter review` | Judge the queue, screens and requests in a browser page. What still needs a code change waits for your agent at the next `/arbiter`. |
+| `arbiter review` | Your local board, in the browser: what's waiting for you to judge, requests from your team, every change with its picture, and your design rules. Nothing is uploaded. What still needs a code change waits for your agent at the next `/arbiter`. |
 | `arbiter review --json` | How the agent opens it: waits until you press Done, then hands over what you decided as JSON. |
 | `arbiter rules [--dimension <name>] [--json]` | Active rules. |
 | `arbiter rules --pending` | The queue, plus requests waiting on an answer. |

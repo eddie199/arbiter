@@ -50,17 +50,19 @@ test('the local board: the publish manifest with pictures as links, what waits f
   assert.deepEqual(data.waiting, { 'W-settings-build': 1 }, 'polish is never waited on');
   assert.equal(data.pending, 2, 'but the queue counts it');
   assert.equal(data.hosted, null);
-  assert.equal(data.review, '/');
+  assert.equal(data.live, true, 'served, so the queue can be judged');
   assert.equal((await get(p, data.board.candidates[0].snapshot)).status, 200);
 
-  const page = await get(p, '/board/');
+  // The board is the page: the review queue is one of its pages now.
+  const page = await get(p, '/');
   assert.equal(page.status, 200);
   assert.match(page.body, /<div id="root"><\/div>/);
-  assert.equal((await get(p, '/board/board.js')).status, 200);
-  assert.equal((await get(p, '/board/board.css')).status, 200);
-  assert.equal((await get(p, '/board')).status, 301);
-  assert.equal((await get(p, '/board/..%2F..%2Fpackage.json')).status, 404);
-  assert.equal((await get(p, '/board/review.html')).status, 404, 'only the board’s own files');
+  assert.equal((await get(p, '/board.js')).status, 200);
+  assert.equal((await get(p, '/board.css')).status, 200);
+  assert.equal((await get(p, '/board')).status, 301, 'where the board used to be');
+  assert.equal((await get(p, '/board/')).status, 301);
+  assert.equal((await get(p, '/review.html')).status, 404, 'the old page is gone');
+  assert.equal((await get(p, '/package.json')).status, 404, 'only the board’s own files');
 
   await post(p, '/api/done', {});
   await done;

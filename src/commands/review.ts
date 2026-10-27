@@ -1,9 +1,9 @@
 /**
- * `arbiter review` — a local page for judging pending decisions.
+ * `arbiter review` — the local board: what's waiting for review, and everything decided.
  *
- * Plain node:http on 127.0.0.1, one HTML file, no framework. Reads and writes
- * the same files the CLI does; the page has no state of its own. Stops when
- * the user presses Done or Ctrl-C.
+ * Plain node:http on 127.0.0.1. The page is the team board's own, built in the site repo
+ * (hosted/local) into templates/board; it reads and writes the same files the CLI does and has no
+ * state of its own. Stops when the user presses Done or Ctrl-C.
  *
  * It keeps every answer given, and resolves with the handoff (src/handoff.ts): what was decided,
  * and what's left for the agent to do in the code. With `json`, the agent opened the page and is
@@ -34,13 +34,13 @@ export interface ReviewOptions {
   cwd?: string;
 }
 
-const PAGE = path.join(__dirname, '..', '..', 'templates', 'review.html');
 // Geist, as on arbiter.design. Shipped with the package: the page never loads anything from the network.
 const FONTS = path.join(__dirname, '..', '..', 'templates', 'fonts');
 const FONT_FILES = new Set(['Geist-Variable.woff2', 'GeistMono-Variable.woff2']);
 // The local board: the team board's pages, built in the site repo (hosted/local) and copied here.
 const BOARD = path.join(__dirname, '..', '..', 'templates', 'board');
-const BOARD_FILES: Record<string, string> = { 'index.html': 'text/html; charset=utf-8', 'board.js': 'text/javascript; charset=utf-8', 'board.css': 'text/css; charset=utf-8' };
+const BOARD_FILES: Record<string, string> = { '/': 'index.html', '/board.js': 'board.js', '/board.css': 'board.css' };
+const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 export function review(opts: ReviewOptions = {}): Promise<Handoff> {
   const root = findRoot(opts.cwd);
@@ -105,7 +105,7 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
       waiting[card] = (waiting[card] ?? 0) + 1;
     }
     const link = readLinkOrNull(paths);
-    return { board: manifest, comments: readComments(paths), waiting, pending: queued.length, hosted: link?.shareUrl ?? null, version: link?.boardVersion ?? null, review: '/' };
+    return { board: manifest, comments: readComments(paths), waiting, pending: queued.length, hosted: link?.shareUrl ?? null, version: link?.boardVersion ?? null, live: true };
   };
 
   let changed = false;
@@ -143,9 +143,16 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
       }
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
 
-      if (req.method === 'GET' && url.pathname === '/') {
-        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-        res.end(fs.readFileSync(PAGE, 'utf8'));
+      if (req.method === 'GET' && BOARD_FILES[url.pathname]) {
+        const file = path.join(BOARD, BOARD_FILES[url.pathname]);
+        res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-cache' });
+        fs.createReadStream(file).pipe(res);
+        return;
+      }
+      // Where the board was before the review queue moved into it.
+      if (req.method === 'GET' && (url.pathname === '/board' || url.pathname === '/board/')) {
+        res.writeHead(301, { location: '/' });
+        res.end();
         return;
       }
       // Every write is JSON from this page. A form or a plain-text POST from another site in the same
@@ -161,23 +168,6 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
       }
       if (req.method === 'GET' && url.pathname === '/api/board') {
         json(res, 200, boardData());
-        return;
-      }
-      if (req.method === 'GET' && url.pathname === '/board') {
-        res.writeHead(301, { location: '/board/' });
-        res.end();
-        return;
-      }
-      if (req.method === 'GET' && url.pathname.startsWith('/board/')) {
-        const file = url.pathname.slice('/board/'.length) || 'index.html';
-        const type = BOARD_FILES[file];
-        if (!type || !fs.existsSync(path.join(BOARD, file))) {
-          res.writeHead(404);
-          res.end();
-          return;
-        }
-        res.writeHead(200, { 'content-type': type, 'cache-control': 'no-cache' });
-        fs.createReadStream(path.join(BOARD, file)).pipe(res);
         return;
       }
       if (req.method === 'POST' && url.pathname === '/api/judge') {
@@ -300,8 +290,9 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
       }
       const asks = s.requests.filter((r) => r.status === 'open').length;
       // With --json, stdout is the handoff and nothing else; the agent reads it whole.
-      say(`Arbiter review — ${s.pending.length} pending${asks ? ` · ${asks} request${asks === 1 ? '' : 's'}` : ''} · ${s.candidates.length} candidate${s.candidates.length === 1 ? '' : 's'} · ${s.active} of ${s.cap} rules\n${url}\nPress Done in the page, or Ctrl-C here, to stop.\n`);
-      if (opts.open !== false) openBrowser(url);
+      say(`Arbiter review — ${s.pending.length} pending${asks ? ` · ${asks} request${asks === 1 ? '' : 's'}` : ''} · ${s.candidates.length} candidate${s.candidates.length === 1 ? '' : 's'} · ${s.active} of ${s.cap} rules\n${url}#/review\nPress Done in the page, or Ctrl-C here, to stop.\n`);
+      // Straight to what's waiting: that's what `review` is opened for.
+      if (opts.open !== false) openBrowser(`${url}#/review`);
     });
 
     const say = (text: string) => (opts.json ? process.stderr : process.stdout).write(text);
