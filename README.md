@@ -81,6 +81,8 @@ npx arbiterdesign init
 
 That's the whole install. Run it in the folder your agent works in, or ask the agent to run it. It detects Claude Code or Cursor, teaches your agent the protocol, and adds `arbiterdesign` to your devDependencies, which is what makes the shorter `npx arbiter` work from then on. Running it twice changes nothing.
 
+It asks one question, once: how often the agent should check in about decisions while you work. If the agent ran the install, it asks you in chat instead.
+
 No `package.json` in the project? Add `arbiterdesign` as a dev dependency yourself. New to the terminal? Follow the [step-by-step guide](https://arbiter.design/get-started).
 
 If you want the agent to take screenshots of the screens it changes, tell it where your app runs:
@@ -451,7 +453,7 @@ A call the agent made where a reasonable alternative existed: layout, flow, word
 <details>
 <summary><b>How do I set it up?</b></summary>
 
-Run `npx arbiterdesign init` in the folder your agent works in, or ask the agent to run it. It adds a few plain files and a one-line note telling the agent to read the rules before UI work. Nothing to sign up for, nothing to configure. From the next session, the agent records as it goes. Step by step, with what you'll see: [Get started](https://arbiter.design/get-started).
+Run `npx arbiterdesign init` in the folder your agent works in, or ask the agent to run it. It adds a few plain files and a one-line note telling the agent to read the rules before UI work, and asks one question: how often to check in. Nothing to sign up for. From the next session, the agent records as it goes. Step by step, with what you'll see: [Get started](https://arbiter.design/get-started).
 
 </details>
 

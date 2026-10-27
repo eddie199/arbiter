@@ -206,7 +206,7 @@ Design work is iterative. A screen redesigned six times is one piece of work, no
 npx arbiter record --pending '<json>'
 ```
 
-(JSON shape below). The output carries `checkin`, the user's answer from their first `/arbiter`; `waiting`, how many changes are waiting for them (polish isn't counted, since they're never asked about it); sometimes `ask`; and sometimes `picture`, a screen this changed that has no picture yet (see **Screenshots**).
+(JSON shape below). The output carries `checkin`, the user's answer to the check-in question; `waiting`, how many changes are waiting for them (polish isn't counted, since they're never asked about it); sometimes `ask`; and sometimes `picture`, a screen this changed that has no picture yet (see **Screenshots**).
 
 - `feature` (default) — **only if the piece of work included a `feature`-level decision**, add one line to your reply carrying its Change line, not a count.
 - `quiet` — say nothing. Ever. They run `/arbiter` when they want it. `ask` never comes back.
@@ -242,9 +242,13 @@ Arbiter's skill file is from 0.1.3 (the CLI is 0.1.4) — say "update arbiter" a
 
 Never run it unasked. When they say yes — or say *"update arbiter"* unprompted — run the command `update.command` names and relay what it prints. It leaves `DECISIONS.md`, the archive and the settings alone.
 
-## The first `/arbiter` — intro, then the queue
+## Right after install
 
-The queue JSON carries `firstRun: true` until the project has been through this once. When it does, before anything else, say this — verbatim, it's been written for the reader:
+Install asks one question: when Arbiter should check in. Run in a terminal, it asks there. Run by you, nobody can answer, so its last lines hand you the question. Ask it then, on its own, before anything else: the widget below, with just this one question. Then save the answer with `setup --checkin`, as below. Asked once; `/arbiter` never asks it again.
+
+## The first `/arbiter`, if nobody answered at install — intro, then the queue
+
+The queue JSON carries `firstRun: true` only while nobody has answered the check-in question (an install from before it asked, or one where it was never relayed) and nothing has been judged yet. When it does, before anything else, say this — verbatim, it's been written for the reader:
 
 > **Arbiter's on.** While I build UI, I record the design decisions I make — what changed, the rule behind it, what was rejected — so nothing gets re-decided and your team can see why things are the way they are.
 >
@@ -258,7 +262,7 @@ The queue JSON carries `firstRun: true` until the project has been through this 
 > - **publish** — say it, get the board link
 > - **"record that"** / **"make that a rule"** — mid-chat, recorded, no questions
 
-Then one question, with the selection widget (text fallback: the same three lines, numbered):
+Then one question, with the selection widget (text fallback: the same three lines, numbered). It goes alone, before the queue. Never fold it into the review's questions: dismissed along with them, it comes back on every `/arbiter`.
 
 - **header** — `While you work`
 - **question** — `When should Arbiter check in about decisions?`
@@ -267,7 +271,7 @@ Then one question, with the selection widget (text fallback: the same three line
   - `Nothing until I ask` — *Saved silently. Asks only when something clashes with a rule. /arbiter whenever you want to see it.*
   - `A line after everything` — *One sentence every time a piece of work settles, big or small. Every 5 changes waiting, a yes/no on reviewing.*
 
-Record the answer — Skip means the recommended one:
+Record the answer, whatever comes back. Skip, a dismissed widget or no answer all mean the recommended one, so it's asked once:
 
 ```
 npx arbiter setup --checkin feature     # A line after big work

@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { init } from '../commands/init';
+import { Readable } from 'node:stream';
+import { askCheckin, checkinHandoff, init } from '../commands/init';
+import { Prompter } from '../commands/prompt';
 import { record } from '../commands/record';
-import { readActive, resolvePaths } from '../store';
+import { readActive, readConfig, resolvePaths } from '../store';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'arbiter-init-'));
 
@@ -54,4 +56,38 @@ test('init writes a Cursor rule when told to', async () => {
   assert.ok(mdc.includes('# Arbiter'));
   assert.ok(fs.existsSync(path.join(cwd, '.cursor', 'commands', 'arbiter.md')));
   assert.ok(!fs.existsSync(path.join(cwd, 'CLAUDE.md')), 'no CLAUDE.md for a Cursor project');
+});
+
+test('install asks the check-in question once; nobody at the terminal leaves it for the agent', async () => {
+  const cwd = tmp();
+  await init({ cwd, yes: true, skipInstall: true, author: 'test' });
+  const unasked = readConfig(resolvePaths(cwd))!;
+  assert.equal(unasked.onboarded, undefined, 'no answer recorded that nobody gave');
+  assert.equal(unasked.checkin, undefined);
+  assert.match(checkinHandoff(), /npx arbiter setup --checkin feature/);
+  assert.match(checkinHandoff(), /ask the user now, in chat/);
+
+  // The agent asked in chat and passes the answer along.
+  await init({ cwd, yes: true, skipInstall: true, checkin: 'quiet' });
+  const answered = readConfig(resolvePaths(cwd))!;
+  assert.equal(answered.checkin, 'quiet');
+  assert.ok(answered.onboarded);
+
+  // A second install keeps the answer and when it was given.
+  await init({ cwd, yes: true, skipInstall: true });
+  assert.deepEqual(readConfig(resolvePaths(cwd)), answered);
+
+  await assert.rejects(init({ cwd, yes: true, skipInstall: true, checkin: 'loud' }), /--checkin must be one of/);
+});
+
+test('the check-in question at the terminal: a number or a name, Enter for the recommended, null with nobody there', async () => {
+  const ask = (input: string[]) => {
+    const p = new Prompter(Readable.from(input));
+    return askCheckin(p).finally(() => p.close());
+  };
+  assert.equal(await ask(['2\n']), 'quiet');
+  assert.equal(await ask(['every\n']), 'every');
+  assert.equal(await ask(['\n']), 'feature', 'Enter takes the recommended one');
+  assert.equal(await ask(['loud\n', '3\n']), 'every', 'asks again until it gets one of the three');
+  assert.equal(await ask([]), null, "an agent's closed input isn't an answer");
 });

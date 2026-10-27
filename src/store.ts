@@ -29,7 +29,7 @@ export interface Config {
   activeCap?: number;
   /** When the agent adds its one line: after feature-level work (default), never, or after every piece of work. */
   checkin?: 'feature' | 'quiet' | 'every';
-  /** Set the first time /arbiter runs — the intro has been shown. */
+  /** Set once the check-in question is answered: at install, or by `setup --checkin` after it. */
   onboarded?: string;
   /** Where the app runs, so the agent has an address to open for screenshots. Set by `arbiter setup --app`. */
   app?: { url: string };

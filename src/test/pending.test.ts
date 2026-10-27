@@ -253,3 +253,13 @@ test('the queue carries the active rules, and flags items that may clash with on
   assert.equal(actions.overlaps, undefined, 'no key without a hit');
   assert.equal(out.groups[0].polish[0].overlaps, undefined, 'polish is never checked');
 });
+
+test('first /arbiter: a project with judged decisions is past it, even when arbiter.json lost the stamp', () => {
+  // The stamp can sit on a branch that never merged; the decisions judged on main still show a review happened.
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'arbiter-onboard-'));
+  writeConfig(resolvePaths(cwd), { version: 1, destination: 'local', author: 'test' });
+  queue(JSON.stringify({ change: 'c', decision: 'Cards use 16px padding', rationale: 'r', trigger: 'T', scope: 'global', dimension: 'visual', class: 'judgment', level: 'pattern' }), { cwd, author: 'test' });
+  assert.equal(JSON.parse(rules(undefined, { cwd, pending: true, json: true })).firstRun, true, 'queued but never judged');
+  assert.equal(judge('P-0001', { cwd, author: 'test', as: 'accept' }).exitCode, 0);
+  assert.equal(JSON.parse(rules(undefined, { cwd, pending: true, json: true })).firstRun, false);
+});

@@ -15,12 +15,13 @@ import { pull } from './commands/pull';
 import { snapshotWork } from './commands/snapshot';
 import { setup } from './commands/setup';
 import { rules } from './commands/rules';
-import { init } from './commands/init';
+import { checkinHandoff, init } from './commands/init';
 import { review } from './commands/review';
 import { update } from './commands/update';
 import { remove, removeSnapshot, unlink } from './commands/remove';
 import { autoPublish } from './autopublish';
 import { ADMIN_ENV } from './hosted';
+import { readConfig, resolvePaths } from './store';
 
 const program = new Command();
 
@@ -102,6 +103,7 @@ program
   .option('--client <name>', 'claude-code or cursor (default: detected)')
   .option('--author <name>', 'who decides rules (default: git user.name)')
   .option('--destination <name>', 'local (default) or git — git also commits candidate pages and prints GitHub links')
+  .option('--checkin <mode>', 'how Arbiter checks in while you work: feature | quiet | every (default: asked)')
   .option('-y, --yes', 'no questions — use detected values')
   .option('--skip-install', 'do not add the package to devDependencies')
   .action(async (opts) => {
@@ -111,6 +113,7 @@ program
       process.stdout.write(`  ${s.file.padEnd(w)}  ${s.outcome}${s.note ? `  — ${s.note}` : ''}\n`);
     }
     process.stdout.write('\nDone. Start a new agent session — it will read DECISIONS.md before UI work.\n');
+    if (!readConfig(resolvePaths(process.cwd()))?.onboarded) process.stdout.write(checkinHandoff());
     if (opts.destination === 'git') {
       process.stdout.write([
         '',
