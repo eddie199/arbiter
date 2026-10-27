@@ -350,7 +350,7 @@ Skip mechanical necessities (imports, prop plumbing, file placement), and non-vi
 
 | Level | What it is | Examples | Review behaviour |
 |---|---|---|---|
-| `feature` | A new surface, flow, or structure | Settings shell with four routes; a second card on Audit; a stage-aware back link | Always presented |
+| `feature` | A new surface, flow, or structure | Settings split into four tabs; a second card on Audit; a back link that knows which step you came from | Always presented |
 | `pattern` | A reusable call that could apply elsewhere | Icon-only buttons on half-width cards; "Status" not "Health"; save buttons bottom-right | Presented; "make it a rule" is the likely answer |
 | `polish` | A one-off fix to one screen | Match heights at `h-9`; drop a chevron; remove a pill | **Never presented.** Queued, then logged automatically when the group is reviewed |
 
@@ -368,23 +368,24 @@ Only when asked (see above). If you have a question tool that presents options (
 
 Each question:
 
-- **header** — the dimension, Title case: `Structure`, `Interaction`, `States`, `Content`, `Visual`
+- **header** — the dimension, Title case: `Structure`, `Interaction`, `States`, `Content`, `Visual`. Some apps don't show the header, so the heading line carries it too.
 - **question** — a heading line, then four labelled lines, with a blank line before each. The widget shows plain text in one block, so the blank lines are what separate them:
 
   ```
-  Rescan button · 1 of 1
+  Rescan button · Interaction · 1 of 1
 
   Change — The Rescan button on the small Health check card is now just an icon
 
-  Pattern — Half-width cards use icon-only action buttons with aria-label and title
+  Pattern — Half-width cards use icon-only action buttons
 
   Rejected — Full-label button: wrapped to a second row on mobile
 
   Applies to — Compact card actions, anywhere
   ```
 
-  - The heading is **the thing the user was working on, at the grain they worked at** — `Rescan button`, `Delete flow`, `Settings`, `Billing page`. Say it the way they'd say it. It's the `trigger`. Then `n of N` within that piece of work.
-  - `Change` is what happened, as a PM would say it. `Pattern` is the rule-shaped sentence (`decision`). `Rejected` is each alternative with why it lost, `·`-separated if more than one; omit the line if nothing was rejected. `Applies to` is the scope in words: a file name, `<Pattern name>, anywhere`, or `Everywhere`.
+  - The heading is **the thing the user was working on, at the grain they worked at** — `Rescan button`, `Delete flow`, `Settings`, `Billing page`. Say it the way they'd say it. It's the `trigger`. Then the dimension, then `n of N` within that piece of work.
+  - `Change` is what happened, as a PM would say it. `Pattern` is the rule-shaped sentence (`decision`). `Rejected` is each alternative with why it lost, `·`-separated if more than one; omit the line if nothing was rejected. `Applies to` is the scope in words: the screen or area (`Writing list`), `<Pattern name>, anywhere`, or `Everywhere`. Never a file name.
+  - Every line in plain words, as **Write it for a PM or a designer** shows. The widget can't bold or format anything, so short lines are all that makes it readable.
 - **options**, these two, in this order:
   - `Confirm` — *Saved to the decision log.*
   - `Make it a rule` — *Kept in DECISIONS.md, referenced in future sessions.*
@@ -419,7 +420,7 @@ Settings build — 2 decisions, +4 polish
    Pattern:  Destructive actions confirm in a dialog
    Clashes:  D-0009 · Destructive actions undo instead of confirming
    → follow D-0009 · replace D-0009 · keep as exception
-5. Change:   Settings is now a tab-row shell with four routes under it   [feature]
+5. Change:   Settings is now one page with four tabs   [feature]
    …
 
 Reply per number — confirm · rule · skip · or type what it should be
@@ -464,6 +465,29 @@ Used by `record --pending` (queue) and `record` (record now):
 
 Two sentences, two jobs. **Write `change` as what a PM would say happened** — concrete, past tense, names the thing on the screen. **Write `decision` as the rule someone could follow** — present tense, naming exactly what it's about and where it applies. The user judges from `change`; future sessions obey `decision`. Never cram both into one line.
 
+### Write it for a PM or a designer
+
+The people judging are PMs and designers. They read these lines in the review, on the board and in `DECISIONS.md`, never next to the code. You've just been in the code, so you'll reach for its words: catch that.
+
+- **Say what a person sees or does**, not how it was built. "Jumps to that rule", not "the row is an anchor".
+- **No code words.** No file names, component names, class names, CSS values or attributes (`aria-label`, `text-xs`, `ArrowUpRight`, `lib/writing.ts`, `1fr`). Call things what they're called on screen.
+- **One thing per line, 20 words or fewer.** A line that lists four parts of a card is four details, and the person only needs the one that was decided.
+- **`Applies to` is a screen or an area**: `Writing list`, `Project cards, anywhere`. Never a file.
+
+This goes for `change`, `decision` and each `rejected`. A mechanical rule's `decision` may name a token, since that's what its check looks for; its `change` still says it in words.
+
+Not this → this, from real queues:
+
+| Not this | This |
+|---|---|
+| The rule badge on a screen page links to that rule's row under Standing rules; the row is an anchor and its id turns fg when it is the target | Clicking a Rule badge jumps to that rule, with its number highlighted |
+| The Projects page now has an Other projects section: three cards in a row under the main cards, each with a title, impact line, tag pills and a screen, tinted per project | The Projects page has a new Other projects row: three smaller cards under the main ones |
+| Writing rows that link off-site use an ArrowUpRight and a text-xs source line with the site mark under the excerpt | Articles from other sites show an arrow pointing out and a small line naming the site |
+| Rejected: source label in the date column, too cramped at the w-24 mobile column | Rejected: source in the date column, too cramped on phones |
+| Applies to: lib/writing.ts | Applies to: Writing list |
+
+`record` checks. A line over 25 words, or one with something that's surely code (a file name, a class name, a name like `onClick` or `ArrowUpRight`, backticks), exits `1` with `status: "unclear"` and the words it caught. Nothing is written. Say it again in plain words and re-run.
+
 `verdict` is omitted when queueing (`--pending`); include it (`accept | rule | fix`) only when recording directly.
 
 For **mechanical** decisions, add evidence so Arbiter can check the claim against the files you wrote:
@@ -479,7 +503,7 @@ If the work belongs to a candidate (below), add `"candidate": "C-0001"` or pass 
 
 If the session mentioned a ticket — a Linear or Jira key like `ENG-123`, a GitHub issue, a pasted tracker link — add `"ref": "<url or key>"` or pass `--ref`. It's how the board links each decision to the work it came from. Never ask for one; leave it out when nothing was mentioned. `--ref` on a bulk `--all` stamps every item.
 
-- `change` — what happened, in plain words. One line. Required. This is what the person judging reads.
+- `change` — what happened, in plain words. One line, 20 words or fewer. Required. This is what the person judging reads.
 - `decision` — the same call as a rule someone could follow. Present tense. One line. It's the rule's title in `DECISIONS.md`, and with many rules a future session picks what to read from titles alone. So name the exact thing and where it applies: `Reply pills on the guest list are filled`, not `Pills are filled`; `Form errors go in one box at the top of the form`, not `Errors go at the top`. A vague title gets skipped, or looks like it clashes with a rule about something else. For `polish` it can repeat `change`.
 - `level` — `feature | pattern | polish` (table above). Default is `pattern`; set it every time.
 - `trigger` — the thing the user was working on, named the way they'd say it, at the grain they worked at: `Rescan button`, `Delete flow`, `Settings`, `Billing page`. Every decision from the same piece of work gets the **same** trigger — it's the grouping key and the heading they see.
@@ -496,7 +520,7 @@ If the session mentioned a ticket — a Linear or Jira key like `ENG-123`, a Git
 The command prints JSON and exits:
 
 - `0` — recorded. Note the `id`. If the output has a `sweep` block with violations, see **Sweep** below.
-- `1` — invalid. Fix the payload and retry.
+- `1` — invalid. Fix the payload and retry. With `status: "unclear"`, a line reads like code or runs on: rewrite it (see **Write it for a PM or a designer**) and retry.
 - `2` — **overlap**. Nothing was written. See below.
 - `3` — `DECISIONS.md` is at its cap. Tell the user, and ask which existing rule this replaces.
 - `4` — **contradicted**. The files don't match the claim. Nothing was written. Fix the code or the claim.
@@ -668,14 +692,14 @@ Making 2 changes you approved — Sam: move the danger zone to the bottom · Pri
 - **question** — a heading line, then what was asked, with a blank line before each labelled line:
 
   ```
-  Sam · Settings — billing
+  Request from Sam · Settings — billing
 
   Asked — Move the danger zone to the bottom, not in its own tab
 
   About — D-0012 · Danger zone lives in its own tab
   ```
 
-  The heading is who asked and `screenName`. `About` only when it was asked about one decision: `decision` (its id) and `decisionText` (what it says). If `earlierVersion` is true, end the heading with `· asked about an earlier version` — the screen may have changed since.
+  The heading is `Request from` who asked, then `screenName`: some apps don't show the header, so the heading says it's a request. `About` only when it was asked about one decision: `decision` (its id) and `decisionText` (what it says). If `earlierVersion` is true, end the heading with `· asked about an earlier version` — the screen may have changed since.
 - **options**, in this order:
   - `Apply` — *I make the change now. Sam sees it done on the board.*
   - `Decline` — *Sam sees your reason on the board.*

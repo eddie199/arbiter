@@ -142,7 +142,7 @@ test('judgeAll: --level polish confirms only polish; --trigger scopes to one pie
   const o = { cwd, author: 'test' };
   const q = (over: Record<string, unknown>) => queue(input({ verdict: undefined, ...over }), o);
   q({ decision: 'Shell', level: 'feature', trigger: 'Settings build', scope: 'file:a.tsx' });
-  q({ decision: 'h-9', level: 'polish', trigger: 'Settings build', scope: 'file:a.tsx', change: 'Buttons match at h-9' });
+  q({ decision: 'Same height', level: 'polish', trigger: 'Settings build', scope: 'file:a.tsx', change: 'The buttons in the row are the same height' });
   q({ decision: 'chevron', level: 'polish', trigger: 'Audit page', scope: 'file:b.tsx', change: 'Dropped the chevron' });
   q({ decision: 'Cards', level: 'pattern', trigger: 'Audit page', scope: 'pattern:cards' });
   const p = resolvePaths(cwd);
