@@ -16,6 +16,7 @@ import { readLinkOrNull } from '../hosted';
 import { ChangeRequest, describe, findRequest, oneLine, readRequests, REQUEST_ID, screenName } from '../requests';
 import { updateNotice } from './update';
 import { findOverlaps, type Overlap } from '../overlap';
+import { HANDOFF_FILE, readHandoff } from '../handoff';
 
 export interface RulesOptions {
   /** Filled in by rules(); the queue's JSON reports firstRun and checkin from it. */
@@ -80,8 +81,11 @@ function pendingList(pending: Decision[], opts: RulesOptions, paths: Paths): str
   if (opts.json) {
     const active = readActive(paths);
     const ignore = opts.config?.overlap?.ignore;
+    // A Review Board sitting nobody was waiting on: its fixes and approved requests are still to make.
+    const lastReview = readHandoff(paths);
     return JSON.stringify(
       {
+        ...(lastReview && { lastReview: { ...lastReview, file: HANDOFF_FILE } }),
         // Judged decisions mean someone has been through a review, whatever arbiter.json says: the
         // stamp lives in a committed file, and a branch that never merged takes it along.
         firstRun: !opts.config?.onboarded && !archiveAll.length && !active.length,

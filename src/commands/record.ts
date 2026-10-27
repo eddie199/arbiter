@@ -180,10 +180,13 @@ export const REVIEW_EVERY = 5;
  * At 5, 10, 15 changes waiting, the agent asks whether to review now. A "no" just waits for the
  * next multiple, and judging brings the count down, so the next ask comes when it climbs back.
  * Quiet means quiet: someone who chose "Nothing until I ask" is never asked.
+ * "In the browser" opens the Review Board and waits for Done; "here" is the review in chat.
  */
+export const REVIEW_ANSWERS = '(yes, in the browser / yes, here / no)';
+
 function askToReview(before: number, after: number, checkin: string): { ask?: string } {
   if (checkin === 'quiet' || Math.floor(after / REVIEW_EVERY) <= Math.floor(before / REVIEW_EVERY)) return {};
-  return { ask: `You have ${after} changes waiting in Arbiter. Review them now? (yes / no)` };
+  return { ask: `You have ${after} changes waiting in Arbiter. Review them now? ${REVIEW_ANSWERS}` };
 }
 
 /** Queue one pending decision per finding in a scanner's JSON output. */

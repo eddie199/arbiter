@@ -143,7 +143,7 @@ flowchart TB
 1. **You ask for a screen.** The agent reads `DECISIONS.md` first. After a sizeable piece of work it names up to three rules that shaped it, like *Following D-0001 (removing asks first, no undo bar)*, so you can see the record working.
 2. **You iterate.** The agent says nothing about decisions while you're going back and forth. Each version you move past becomes a rejected alternative on the one that replaced it.
 3. **You move on.** The agent queues the design calls it made, sized as `feature`, `pattern` or `polish`. When 5 are waiting (then 10, 15…) it asks if you want to review them. Polish doesn't count toward that. Only real choices get queued: things you asked for, things you corrected, and options the agent actually weighed. Its habits don't.
-4. **You judge them when you want.** In chat with `/arbiter`, or in the browser with `npx arbiter review`.
+4. **You judge them when you want.** In chat with `/arbiter`, or in the browser: answer "yes, in the browser" when it asks, and the agent opens your Review Board and waits. When you press Done, it makes any fixes you asked for straight away. You can also open it yourself with `npx arbiter review`.
 5. **Rules go into `DECISIONS.md`.** Everything you judged goes into the archive. Skipped items disappear. The next session reads the new rules.
 6. **You share it.** `npx arbiter publish` puts the board online, so your team can see each screen, what was decided and why. They can comment or request a change, and `npx arbiter pull` brings that back for you to answer. More in [Share it with your team](#share-it-with-your-team).
 
@@ -351,7 +351,8 @@ npx arbiter pull           # bring comments and requests back
 
 | Command | What it does |
 |---|---|
-| `arbiter review` | Judge the queue, screens and requests in a browser page. |
+| `arbiter review` | Judge the queue, screens and requests in a browser page. What still needs a code change waits for your agent at the next `/arbiter`. |
+| `arbiter review --json` | How the agent opens it: waits until you press Done, then hands over what you decided as JSON. |
 | `arbiter rules [--dimension <name>] [--json]` | Active rules. |
 | `arbiter rules --pending` | The queue, plus requests waiting on an answer. |
 | `arbiter rules --archive` | Everything ever recorded. |

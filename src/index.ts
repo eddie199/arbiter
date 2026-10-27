@@ -17,6 +17,7 @@ import { setup } from './commands/setup';
 import { rules } from './commands/rules';
 import { checkinHandoff, init } from './commands/init';
 import { review } from './commands/review';
+import { handoffLine } from './handoff';
 import { update } from './commands/update';
 import { remove, removeSnapshot, unlink } from './commands/remove';
 import { autoPublish } from './autopublish';
@@ -266,11 +267,17 @@ program
 
 program
   .command('review')
-  .description('Open a local page to judge pending decisions.')
+  .description('Open a local page to judge pending decisions. When you press Done, what you decided goes to your agent.')
   .option('--port <n>', 'port (default: any free port)', (v) => Number(v))
   .option('--no-open', "print the URL, don't open a browser")
+  .option('--json', "for an agent waiting on Done: print what was decided, and what's left to change in the code, as JSON")
   .action(async (opts) => {
-    await review(opts);
+    const handoff = await review(opts);
+    if (opts.json) process.stdout.write(JSON.stringify(handoff, null, 2) + '\n');
+    else {
+      const line = handoffLine(handoff);
+      if (line) process.stdout.write(line + '\n');
+    }
   });
 
 program

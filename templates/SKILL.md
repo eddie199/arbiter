@@ -221,16 +221,16 @@ Arbiter saved: Settings is now a tab row with four pages. Type /arbiter to revie
 **`ask` means the waiting count just reached 5, 10, 15…** If any `record --pending` call for this piece of work returned it, the line ends in a question instead, with the last `waiting` you got:
 
 ```
-Arbiter saved: Settings is now a tab row with four pages. You have 5 waiting. Review them now? (yes / no)
+Arbiter saved: Settings is now a tab row with four pages. You have 5 waiting. Review them now? (yes, in the browser / yes, here / no)
 ```
 
 With no line to merge into (small work under `feature`), use the `ask` text as it came:
 
 ```
-You have 5 changes waiting in Arbiter. Review them now? (yes / no)
+You have 5 changes waiting in Arbiter. Review them now? (yes, in the browser / yes, here / no)
 ```
 
-Plain text, never the widget. **yes**: start the review below, as if they'd typed `/arbiter`. **no**: say "Okay" and carry on; don't raise it again until another `ask` comes back. Anything else means they've moved on, so carry on.
+Plain text, never the widget. **yes, in the browser**: open the Review Board and wait for them (see **Reviewing in the browser**). **yes, here**, or a plain **yes**: start the review below, as if they'd typed `/arbiter`. **no**: say "Okay" and carry on; don't raise it again until another `ask` comes back. Anything else means they've moved on, so carry on.
 
 A count on every reply gets ignored; a sentence about what changed, only after something big, gets read; a question only when enough has piled up to be worth a sitting. Otherwise queue silently, since the user knows the queue exists. Under `feature`, if the work was only patterns and polish and no `ask` came back, say nothing. Do not list the decisions. The queue lives in `.arbiter/pending.md`, so it survives the session; the user can judge it here, in the review page, or never.
 
@@ -284,6 +284,8 @@ That also marks the project as onboarded. Then continue with the queue as below;
 **When they ask** — `/arbiter`, "let's review", "what did you decide" — read the queue with `npx arbiter rules --pending --json`.
 
 If the project publishes to a hosted board (`.arbiter/hosted.json` exists), run `npx arbiter pull` first — it's how requests made on the board since last time arrive, and how ones taken back leave. Relay nothing from its output except a `withdrew` line, word for word: the queue shows the rest. If it fails (offline, or no publish token on this machine), say so in one line and carry on with the queue.
+
+The queue may carry `lastReview`: a sitting on the Review Board that nobody was waiting on. Its answers are recorded already, but the code side isn't done. Before anything else, make its `todo` exactly as **Reviewing in the browser** says, then delete the file it names (`lastReview.file`), so it isn't made twice.
 
 The queue may carry `requests` — changes someone asked for on the board. Those come first, before any decision: make the `requests.approved` ones without asking again, then present the `requests.open` ones. See **Requests from the board**, below.
 
@@ -443,6 +445,38 @@ Omit the `Rejected` line when there's nothing rejected. Never ask an open questi
 | Widget Skip button | — | Nothing. The queue waits. |
 
 Never judge anything before the user answers.
+
+## Reviewing in the browser
+
+When they answer **yes, in the browser**, or ask for it (*"review in the browser"*, *"open the review page"*), open the Review Board and wait for them:
+
+```
+npx arbiter review --json
+```
+
+Run it in the background (in Claude Code, `run_in_background`). It runs until they press **Done**, however long they take, and a command in the foreground gets cut off. Say one line, then stop and wait. Don't carry on with other work in the meantime:
+
+```
+Opened your Review Board. I'll wait. Press Done when you're finished.
+```
+
+When it ends, its output is JSON: what they decided, and what's left for you. The page has recorded every answer already, so never judge or record those decisions again. Make each item in `todo`, in order:
+
+| `kind` | What it means | What you do |
+|---|---|---|
+| `fix` | They corrected `id`: the code still does `change` | Make it do `to` |
+| `follow` | They chose the rule `rule` over this change | Change the code back so it does `to` |
+| `request` | An approved request from the board | Make `do`, then record it with `--request <id>`, as **Requests from the board** says |
+
+`confirmed`, `rules`, `fixed`, `skipped`, `declined` and `options` are what they decided; they need nothing from you. Then one line, as **After recording**:
+
+```
+Recorded D-0010 (accept), D-0011 (rule), D-0012 (fix, made) · DECISIONS.md: 6 of 40
+```
+
+- `finished` is `closed`: they stopped it without pressing Done. Say what got through, and that the rest is still queued.
+- Nothing decided: one line, `Nothing decided. 21 still waiting.`
+- If you can't run a command in the background, run it in the foreground. If it's cut off before they press Done, nothing is lost: the answers so far come back with the next queue read as `lastReview` (see **When they ask**).
 
 ## The JSON shape
 
@@ -652,7 +686,7 @@ If the user points you at a design-lint or drift scanner's JSON output, don't ac
 npx arbiter record --findings <file.json> --tool <scanner name>
 ```
 
-Each finding becomes a pending item with a verdict to attach. Then one line: `12 findings queued — /arbiter to review, or npx arbiter review.` If the output has `ask`, end on the question instead: `12 findings queued. You have 15 changes waiting in Arbiter. Review them now? (yes / no)`
+Each finding becomes a pending item with a verdict to attach. Then one line: `12 findings queued — /arbiter to review, or npx arbiter review.` If the output has `ask`, end on the question instead: `12 findings queued. You have 15 changes waiting in Arbiter. Review them now? (yes, in the browser / yes, here / no)`
 
 ## Publishing a board
 
@@ -796,7 +830,8 @@ A rule that says something different now isn't a rewording: that's a new rule th
 
 ## When invoked as `/arbiter`
 
-- `/arbiter` alone — `npx arbiter pull` if the project has a hosted board, then read `npx arbiter rules --pending --json`. Approved requests first (make them), then open requests (answer them), then everything queued, widget or text format above, judging each with `record P-xxxx --as …`. If nothing is queued and no request is waiting, say so in one line.
+- `/arbiter` alone — `npx arbiter pull` if the project has a hosted board, then read `npx arbiter rules --pending --json`. A `lastReview` first (make its `todo`, then delete its file), then approved requests (make them), then open requests (answer them), then everything queued, widget or text format above, judging each with `record P-xxxx --as …`. If nothing is queued and no request is waiting, say so in one line.
+- `/arbiter` in the browser (*"review in the browser"*) — see **Reviewing in the browser**.
 - `/arbiter <text>` — treat the text as a direct request: record it, per the next section.
 
 ## When the user asks directly

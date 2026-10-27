@@ -319,6 +319,8 @@ function scopeWords(scope) {
   return target.replace(/[-_]+/g, ' ').replace(/^\w/, ch => ch.toUpperCase()) + ', anywhere';
 }
 function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+// When code changes happen: right after Done when the agent opened this page and is waiting, else at the next /arbiter.
+function whenAgent() { return state && state.handoff ? 'when you press Done' : 'at the next /arbiter'; }
 function day(iso) { return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
 const STATE_TONE = { approved: 'ok', in_review: 'warn', rejected: 'bad', superseded: 'bad' };
 function messagePanel(c, text, cls) {
@@ -462,7 +464,7 @@ function actions(d, c) {
   const r = d.againstRule;
   if (r) {
     // The page records; it can't change code. Following the rule still needs the agent to do it.
-    a.appendChild(btn(`Follow ${r.id}`, 'primary', () => send(d, c, { as: 'fix', to: r.decision }, `Recorded. Ask your agent to change it to match ${r.id}.`)));
+    a.appendChild(btn(`Follow ${r.id}`, 'primary', () => send(d, c, { as: 'fix', to: r.decision, follows: r.id }, `Recorded. Your agent changes it to match ${r.id} ${whenAgent()}.`)));
     a.appendChild(btn(`Replace ${r.id}`, null, () => send(d, c, { as: 'rule', supersedes: r.id })));
     a.appendChild(btn('Keep as exception', null, () => send(d, c, { as: 'accept' }, `Recorded as an exception to ${r.id}.`)));
     a.appendChild(btn('Skip', 'quiet', () => send(d, c, { as: 'skip' })));
@@ -526,7 +528,7 @@ async function send(d, c, body, done) {
   if (res.exitCode === 4) return contradictedPanel(d, c, res);
   if (res.exitCode !== 0) return messagePanel(c, (res.errors || ['Something went wrong']).join(' · '), 'bad');
   results[d.id] = { item: d, kind: res.status === 'skipped' ? 'skip' : 'ok',
-    text: res.status === 'skipped' ? 'Skipped' : done ?? `Recorded ${res.id} as ${res.verdict}${res.supersedes ? ', replacing ' + res.supersedes : ''}` };
+    text: res.status === 'skipped' ? 'Skipped' : done ?? `Recorded ${res.id} as ${res.verdict}${res.supersedes ? ', replacing ' + res.supersedes : ''}${res.verdict === 'fix' ? `. Your agent makes the change ${whenAgent()}` : ''}` };
   await load();
 }
 
@@ -562,7 +564,7 @@ function renderRequests(main) {
     }
   }
   if (approved.length) {
-    main.appendChild(el('h2', null, 'Approved — the agent makes these at your next /arbiter'));
+    main.appendChild(el('h2', null, `Approved. Your agent makes these ${whenAgent()}`));
     for (const r of approved) main.appendChild(requestCard(r));
   }
 }
@@ -748,7 +750,10 @@ function renderRules(main) {
 
 document.getElementById('done').onclick = async () => {
   await fetch('/api/done', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
-  document.body.innerHTML = '<div class="empty"><h2>Review closed.</h2><p>You can close this tab.</p></div>';
+  // The agent that opened this page is waiting on Done; otherwise the answers wait for the next /arbiter.
+  document.body.innerHTML = state && state.handoff
+    ? '<div class="empty"><h2>Done.</h2><p>Your agent has your answers and is picking up from here. You can close this tab.</p></div>'
+    : '<div class="empty"><h2>Review closed.</h2><p>Your answers are saved. Anything left to change in the code waits for your agent at the next /arbiter. You can close this tab.</p></div>';
 };
 
 load();
