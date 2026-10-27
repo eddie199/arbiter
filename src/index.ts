@@ -209,14 +209,14 @@ program
 
 program
   .command('export')
-  .description('Write a static, self-contained folder of the board for people without the repo. Opens anywhere.')
+  .description('Write your board as a read-only folder for people without the repo: the same pages as arbiter review, without the review queue. Opens anywhere.')
   .option('--out <dir>', 'output folder (default: arbiter-export)')
   .option('--feature <name>', 'one feature only')
-  .option('--include-rules', 'append the standing rules')
+  .option('--include-rules', 'add the design rules page')
   .option('--open', 'open it in the browser')
   .action((opts) => {
     const r = exportBoard(opts);
-    process.stdout.write(`Exported ${r.candidates} screen${r.candidates === 1 ? '' : 's'}, ${r.snapshots} snapshot${r.snapshots === 1 ? '' : 's'} → ${r.dir}\nOpen ${r.index}, or put the folder on any static host.\n`);
+    process.stdout.write(`Exported ${r.candidates} change${r.candidates === 1 ? '' : 's'}, ${r.snapshots} picture${r.snapshots === 1 ? '' : 's'} → ${r.dir}\nOpen ${r.index}, or put the folder on any static host.\n`);
   });
 
 program

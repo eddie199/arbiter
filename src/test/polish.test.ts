@@ -104,7 +104,7 @@ function post(port: number, p: string, body: unknown): Promise<any> {
   });
 }
 
-test('export writes a self-contained folder: index.html, snapshots, stakeholder view only', () => {
+test('export writes the board as a self-contained, read-only folder: the page, its data, pictures and fonts', () => {
   const cwd = tmp();
   const o = { cwd, author: 'test' };
   write(cwd, 'shot.svg', '<svg xmlns="http://www.w3.org/2000/svg"/>');
@@ -121,17 +121,28 @@ test('export writes a self-contained folder: index.html, snapshots, stakeholder 
   assert.equal(r.candidates, 3);
   assert.equal(r.snapshots, 1);
   const html = fs.readFileSync(r.index, 'utf8');
-  assert.ok(fs.existsSync(path.join(r.dir, 'snapshots', 'C-0001.svg')));
-  assert.ok(html.includes('Settings — single &lt;page&gt;'), 'escaped');
-  assert.ok(html.includes('Replaced by Settings — single &lt;page&gt;'));
-  assert.ok(html.includes('Danger zone is at the bottom'), 'Change text, not rule text');
-  assert.ok(html.includes('over Tabs'));
+  for (const f of ['board.js', 'board.css', 'snapshots/C-0001.svg']) assert.ok(fs.existsSync(path.join(r.dir, f)), f);
+  // The board carries its data in the page: an export has no server to ask.
+  const json = /window\.__ARBITER_BOARD__ = (.*);<\/script>/.exec(html)?.[1];
+  assert.ok(json, 'data in the page');
+  assert.ok(!html.includes('<page>'), 'nothing in a name can close the script');
+  const data = JSON.parse(json!);
+  assert.equal(data.live, false, 'read-only: no queue, no buttons');
+  assert.deepEqual(data.comments, [], 'comments stay on the team board');
+  const [single, tabs] = data.board.candidates;
+  assert.equal(single.name, 'Settings — single <page>');
+  assert.equal(single.snapshot, 'snapshots/C-0001.svg', 'a link beside the page, so it opens from disk');
+  assert.equal(tabs.state, 'superseded');
+  assert.equal(tabs.supersededBy, 'C-0001');
+  assert.equal(single.decisions[0].change, 'Danger zone is at the bottom');
+  assert.deepEqual(single.decisions[0].rejected, ['Tabs — hid it']);
   assert.ok(!html.includes('h-9'), 'polish omitted');
   assert.ok(!html.includes('Pending thing'), 'pending omitted');
-  assert.ok(html.includes('Design rules'));
-  assert.ok(!html.includes('Make it a rule'), 'no verdict controls');
+  assert.equal(data.board.rules.length, 1);
+  assert.ok(html.includes('data:font/woff2;base64,'), 'Geist inside the page: opened from disk, a font file next to it is refused');
 
   const one = exportBoard({ cwd, feature: 'billing', out: 'out-billing' });
   assert.equal(one.candidates, 1);
   assert.ok(!fs.readFileSync(one.index, 'utf8').includes('Settings'));
+  assert.equal(JSON.parse(/window\.__ARBITER_BOARD__ = (.*);<\/script>/.exec(fs.readFileSync(one.index, 'utf8'))![1]).board.rules, null, 'rules only when asked for');
 });
