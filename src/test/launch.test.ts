@@ -42,6 +42,13 @@ function fakeService(opts: { createStatus?: number; createError?: string; noPass
         if (opts.createStatus) return send(opts.createStatus, { error: opts.createError });
         return send(201, { id: 'p1', slug: 'abc123', token: 'tok', url: 'http://x/p/abc123' });
       }
+      // An admin takedown names the board by the slug in its link, with the server's admin token instead of the publish token.
+      if (req.method === 'DELETE' && req.headers['x-admin-token']) {
+        if (req.headers['x-admin-token'] !== 'adm') return send(401, { error: 'unknown project or bad token' });
+        if (url.pathname !== '/api/projects/abc123' || state.deleted) return send(404, { error: 'no board with that id or link' });
+        state.deleted = true;
+        return send(200, { ok: true, pictures: 3, comments: 1 });
+      }
       if (req.headers.authorization !== 'Bearer tok' || state.deleted) return send(401, { error: 'unknown project or bad token' });
       if (url.pathname === '/api/projects/p1/password' && req.method === 'PUT') {
         if (opts.noPassword) return send(404, {});
@@ -272,6 +279,44 @@ test('unpublish against an older service changes nothing here', async () => {
     assert.match(r.steps[0].note!, /can't delete boards yet/);
     assert.ok(readLink(paths), 'still linked');
   } finally {
+    svc.close();
+  }
+});
+
+test('an admin takes down any board by its link, and nothing in a project changes', async () => {
+  const svc = await fakeService();
+  const cwd = tmp();
+  const before = process.env.ARBITER_ADMIN_TOKEN;
+  try {
+    const link = `${svc.url}/p/abc123/c/C-0001`;
+    delete process.env.ARBITER_ADMIN_TOKEN;
+    assert.match((await unpublish({ cwd, board: link, admin: true, yes: true })).steps[0].note!, /set ARBITER_ADMIN_TOKEN/);
+    assert.match((await unpublish({ cwd, board: link, yes: true })).steps[0].note!, /with --admin/, 'a link alone deletes nothing');
+    assert.match((await unpublish({ cwd, admin: true, yes: true })).steps[0].note!, /needs the link/);
+    assert.match((await unpublish({ cwd, board: 'not a link', admin: true, yes: true })).steps[0].note!, /isn't a board link/);
+
+    process.env.ARBITER_ADMIN_TOKEN = 'wrong';
+    const refused = await unpublish({ cwd, board: link, admin: true, yes: true });
+    assert.equal(refused.ok, false);
+    assert.match(refused.steps[0].note!, /refused the admin token/);
+
+    process.env.ARBITER_ADMIN_TOKEN = 'adm';
+    const dry = await unpublish({ cwd, board: link, admin: true });
+    assert.equal(dry.ok, false);
+    assert.match(dry.steps[0].note!, new RegExp(`nothing deleted\\. This deletes ${svc.url}/p/abc123 for everyone.*--admin --yes`));
+    assert.ok(!svc.state.deleted);
+
+    const r = await unpublish({ cwd, board: link, admin: true, yes: true });
+    assert.ok(r.ok, JSON.stringify(r.steps));
+    assert.match(r.steps[0].note!, new RegExp(`deleted ${svc.url}/p/abc123, with 3 pictures and 1 comment$`));
+    assert.ok(svc.state.calls.some((c) => c.method === 'DELETE' && c.path === '/api/projects/abc123'), 'named by the slug in the link');
+    assert.ok(!fs.existsSync(path.join(cwd, '.arbiter')), 'no project was needed, and none was touched');
+
+    const again = await unpublish({ cwd, board: link, admin: true, yes: true });
+    assert.match(again.steps[0].note!, /already gone/);
+  } finally {
+    if (before === undefined) delete process.env.ARBITER_ADMIN_TOKEN;
+    else process.env.ARBITER_ADMIN_TOKEN = before;
     svc.close();
   }
 });

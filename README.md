@@ -219,6 +219,7 @@ Git stays the source of truth. The service only holds the latest board and its c
 
 - `npx arbiter publish --password` puts the board behind a password. It makes up a strong one and prints it once, so send it with the link. `--password "<yours>"` sets your own (8 characters or more), `--no-password` takes it off, and a plain `publish` leaves it as it is.
 - `npx arbiter unpublish --yes` deletes the board, its pictures and its comments from the service, saving the comments into `.arbiter/comments.json` first. Without `--yes` it only says what it would delete.
+- Lost the project folder, so you can't run it? Use **Report or remove this board** at the bottom of the board, and it's taken down by hand.
 
 ### Change requests
 
@@ -378,6 +379,7 @@ npx arbiter pull           # bring comments and requests back
 | `arbiter publish --on-push` | Write a GitHub Actions workflow that republishes on every push. |
 | `arbiter publish --password [pw]` | Ask for a password before showing the board. No value makes one up. `--no-password` takes it off. |
 | `arbiter unpublish --yes` | Delete the board, its pictures and its comments, saving the comments to the repo first. |
+| `arbiter unpublish <board link> --admin --yes` | For whoever runs the server: take down any board on it, with the admin token in `ARBITER_ADMIN_TOKEN`. |
 | `arbiter pull` | Bring comments and reactions into `.arbiter/comments.json`, and requests into `.arbiter/requests.json`. |
 | `arbiter export [--feature f] [--include-rules] [--open]` | Static folder of the board for people without the repo. |
 

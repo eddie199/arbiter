@@ -331,3 +331,27 @@ export async function unpublishHosted(paths: Paths): Promise<{ link: HostedLink;
   for (const f of [LINK_FILE, TOKEN_FILE]) fs.rmSync(path.join(paths.archiveDir, f), { force: true });
   return { link, saved: total, pictures: Number(r.body.pictures ?? 0), comments: Number(r.body.comments ?? 0) };
 }
+
+/** The share link of a board, from any page on it: `https://arbiter.design/p/abc123/c/C-0001` is board abc123. */
+export function parseBoardLink(link: string): { origin: string; slug: string; shareUrl: string } | null {
+  let u: URL;
+  try { u = new URL(link); } catch { return null; }
+  const slug = u.pathname.match(/^\/p\/([a-z0-9]+)(?:\/|$)/)?.[1];
+  return slug ? { origin: u.origin, slug, shareUrl: `${u.origin}/p/${slug}` } : null;
+}
+
+/**
+ * Take down any board on a server you run, by its link, with that server's admin token: for a board
+ * reported as unlawful, or an owner who lost the publish token with the folder. Nothing in this
+ * project changes, since the board isn't this project's, and nobody gets its comments back.
+ */
+export async function takedownHosted(link: string, admin: string): Promise<{ shareUrl: string; pictures: number; comments: number }> {
+  const board = parseBoardLink(link);
+  if (!board) throw new Error(`${link} isn't a board link. One looks like https://arbiter.design/p/abc123`);
+  const r = await api(`${board.origin}/api/projects/${board.slug}`, { method: 'DELETE', admin });
+  if (r.status === 404) throw new Error(`${board.origin} has no board at ${board.shareUrl}: it's already gone, or the link is wrong`);
+  if (r.status === 401) throw new Error(`${board.origin} refused the admin token (${ADMIN_ENV}), or runs an older Arbiter that can't take boards down. Nothing was deleted.`);
+  if (r.status === 405) throw new Error(`${board.origin} can't delete boards yet — it runs an older Arbiter than this one. Nothing was deleted.`);
+  if (!r.ok) throw new Error(`delete failed: ${r.body.error ?? r.status}. Nothing was deleted.`);
+  return { shareUrl: board.shareUrl, pictures: Number(r.body.pictures ?? 0), comments: Number(r.body.comments ?? 0) };
+}

@@ -12,11 +12,16 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { readLinkOrNull, unpublishHosted } from '../hosted';
+import { ADMIN_ENV, parseBoardLink, readLinkOrNull, takedownHosted, unpublishHosted } from '../hosted';
 import { findRoot, resolvePaths } from '../store';
 import { WORKFLOW_FILE, type PublishResult } from './publish';
 
-export async function unpublish(opts: { yes?: boolean; cwd?: string } = {}): Promise<PublishResult> {
+/**
+ * With `board` and `admin`: a takedown of any board on a server you run, by its link, with the
+ * server's admin token from ARBITER_ADMIN_TOKEN. Needs no project here and changes nothing in one.
+ */
+export async function unpublish(opts: { yes?: boolean; cwd?: string; board?: string; admin?: boolean } = {}): Promise<PublishResult> {
+  if (opts.board || opts.admin) return takedown(opts);
   const root = findRoot(opts.cwd);
   const paths = resolvePaths(root);
   const steps: PublishResult['steps'] = [];
@@ -48,4 +53,27 @@ export async function unpublish(opts: { yes?: boolean; cwd?: string } = {}): Pro
     steps.push({ step: 'workflow', outcome: 'skipped', note: `${WORKFLOW_FILE} still runs on every push, and will fail now there's no board. Delete it` });
   }
   return { ok: true, steps, url: null };
+}
+
+async function takedown(opts: { yes?: boolean; board?: string; admin?: boolean }): Promise<PublishResult> {
+  const fail = (note: string): PublishResult => ({ ok: false, steps: [{ step: 'board', outcome: 'failed', note }], url: null });
+  if (!opts.admin) return fail("a board link is for taking down someone else's board, with --admin. To delete this project's own board, leave the link out");
+  if (!opts.board) return fail('--admin needs the link of the board to take down: npx arbiter unpublish <board link> --admin --yes');
+  const board = parseBoardLink(opts.board);
+  if (!board) return fail(`${opts.board} isn't a board link. One looks like https://arbiter.design/p/abc123`);
+  const admin = process.env[ADMIN_ENV]?.trim();
+  if (!admin) return fail(`set ${ADMIN_ENV} to the admin token of ${board.origin} first`);
+  if (!opts.yes) {
+    return {
+      ok: false,
+      steps: [{ step: 'board', outcome: 'skipped', note: `nothing deleted. This deletes ${board.shareUrl} for everyone: the board, its pictures and every comment on it, and its owner can't get the comments back. To go ahead: npx arbiter unpublish ${board.shareUrl} --admin --yes` }],
+      url: board.shareUrl,
+    };
+  }
+  try {
+    const r = await takedownHosted(board.shareUrl, admin);
+    return { ok: true, steps: [{ step: 'board', outcome: 'done', note: `deleted ${r.shareUrl}, with ${r.pictures} picture${r.pictures === 1 ? '' : 's'} and ${r.comments} comment${r.comments === 1 ? '' : 's'}` }], url: null };
+  } catch (e) {
+    return fail((e as Error).message);
+  }
 }

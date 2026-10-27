@@ -20,6 +20,7 @@ import { review } from './commands/review';
 import { update } from './commands/update';
 import { remove, removeSnapshot, unlink } from './commands/remove';
 import { autoPublish } from './autopublish';
+import { ADMIN_ENV } from './hosted';
 
 const program = new Command();
 
@@ -233,11 +234,12 @@ program
   });
 
 program
-  .command('unpublish')
+  .command('unpublish [board-link]')
   .description('Delete the hosted board, for everyone: the board, its pictures and every comment on it. Comments are saved to .arbiter/comments.json first; the record in the repo is untouched.')
   .option('--yes', 'go ahead; without it, nothing is deleted and it says what would be')
-  .action(async (opts) => {
-    const r = await unpublish({ yes: !!opts.yes });
+  .option('--admin', `with a board's link: take down any board on a server you run, with its admin token in ${ADMIN_ENV}`)
+  .action(async (boardLink: string | undefined, opts) => {
+    const r = await unpublish({ yes: !!opts.yes, board: boardLink, admin: !!opts.admin });
     printSteps(r.steps);
     process.exit(r.ok ? 0 : 1);
   });
