@@ -29,7 +29,7 @@ export interface Config {
   activeCap?: number;
   /** When the agent adds its one line: after feature-level work (default), never, or after every piece of work. */
   checkin?: 'feature' | 'quiet' | 'every';
-  /** Set the first time /arbiter runs — the intro has been shown. */
+  /** Set once the check-in question is answered: at install, or by `setup --checkin` after it. */
   onboarded?: string;
   /** Where the app runs, so the agent has an address to open for screenshots. Set by `arbiter setup --app`. */
   app?: { url: string };
@@ -106,7 +106,7 @@ export function appendArchive(paths: Paths, d: Decision): void {
 }
 
 /**
- * Rewrites the archive in full. Only `remove` and `unlink` use this: the archive is append-only
+ * Rewrites the archive in full. Only `remove`, `unlink` and `rename` use this: the archive is append-only
  * for judgments — a decision you changed your mind about is superseded, never rewritten — but a
  * record of something that never happened is noise, not history, and has to be able to leave.
  */

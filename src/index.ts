@@ -9,15 +9,19 @@ import { board } from './commands/board';
 import { drift } from './commands/drift';
 import { exportBoard } from './commands/export';
 import { publish } from './commands/publish';
+import { unpublish } from './commands/unpublish';
+import { renameWork } from './commands/rename';
 import { pull } from './commands/pull';
 import { snapshotWork } from './commands/snapshot';
 import { setup } from './commands/setup';
 import { rules } from './commands/rules';
-import { init } from './commands/init';
+import { checkinHandoff, init } from './commands/init';
 import { review } from './commands/review';
 import { update } from './commands/update';
 import { remove, removeSnapshot, unlink } from './commands/remove';
 import { autoPublish } from './autopublish';
+import { ADMIN_ENV } from './hosted';
+import { readConfig, resolvePaths } from './store';
 
 const program = new Command();
 
@@ -99,6 +103,7 @@ program
   .option('--client <name>', 'claude-code or cursor (default: detected)')
   .option('--author <name>', 'who decides rules (default: git user.name)')
   .option('--destination <name>', 'local (default) or git — git also commits candidate pages and prints GitHub links')
+  .option('--checkin <mode>', 'how Arbiter checks in while you work: feature | quiet | every (default: asked)')
   .option('-y, --yes', 'no questions — use detected values')
   .option('--skip-install', 'do not add the package to devDependencies')
   .action(async (opts) => {
@@ -108,6 +113,7 @@ program
       process.stdout.write(`  ${s.file.padEnd(w)}  ${s.outcome}${s.note ? `  — ${s.note}` : ''}\n`);
     }
     process.stdout.write('\nDone. Start a new agent session — it will read DECISIONS.md before UI work.\n');
+    if (!readConfig(resolvePaths(process.cwd()))?.onboarded) process.stdout.write(checkinHandoff());
     if (opts.destination === 'git') {
       process.stdout.write([
         '',
@@ -221,12 +227,34 @@ program
   .option('--on-push', 'also write a GitHub Actions workflow that republishes on every push, and set its secret')
   .option('--auto', 'republish whenever the record changes — no GitHub, no CI, no repository needed')
   .option('--no-auto', 'stop republishing automatically')
+  .option('--password [password]', 'the board asks for a password before showing anything; leave the value out to get a strong one made up. Once: later publishes keep it')
+  .option('--no-password', 'take the password off: anyone with the link can see the board')
   .action(async (opts) => {
-    const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken, onPush: opts.onPush, auto: opts.auto === undefined ? undefined : !!opts.auto });
-    const w = Math.max(...r.steps.map((s) => s.step.length));
-    for (const s of r.steps) process.stdout.write(`  ${s.step.padEnd(w)}  ${s.outcome}${s.note ? `  — ${s.note}` : ''}\n`);
+    const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken, onPush: opts.onPush, auto: opts.auto === undefined ? undefined : !!opts.auto, password: opts.password });
+    printSteps(r.steps);
     if (r.url) process.stdout.write(`\n${r.ok ? 'Live in about a minute' : 'Once the failed step is fixed'}: ${r.url}\n`);
     process.exit(r.ok ? 0 : 1);
+  });
+
+program
+  .command('unpublish [board-link]')
+  .description('Delete the hosted board, for everyone: the board, its pictures and every comment on it. Comments are saved to .arbiter/comments.json first; the record in the repo is untouched.')
+  .option('--yes', 'go ahead; without it, nothing is deleted and it says what would be')
+  .option('--admin', `with a board's link: take down any board on a server you run, with its admin token in ${ADMIN_ENV}`)
+  .action(async (boardLink: string | undefined, opts) => {
+    const r = await unpublish({ yes: !!opts.yes, board: boardLink, admin: !!opts.admin });
+    printSteps(r.steps);
+    process.exit(r.ok ? 0 : 1);
+  });
+
+program
+  .command('rename <work> <new-name>')
+  .description('Rename a piece of work everywhere the record keeps it. Its comments on the board follow it at the next publish.')
+  .action(async (work: string, newName: string, opts) => {
+    const result = renameWork(work, newName, opts);
+    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    if (result.exitCode === 0) await boardUpdated(opts.cwd);
+    process.exit(result.exitCode);
   });
 
 program
@@ -304,6 +332,12 @@ program.parseAsync(process.argv).catch((e: Error) => {
   process.stderr.write(`arbiter: ${e.message}\n`);
   process.exit(1);
 });
+
+/** `publish` and `unpublish` report one line per step: name, outcome, why. */
+function printSteps(steps: { step: string; outcome: string; note?: string }[]): void {
+  const w = Math.max(...steps.map((s) => s.step.length));
+  for (const s of steps) process.stdout.write(`  ${s.step.padEnd(w)}  ${s.outcome}${s.note ? `  — ${s.note}` : ''}\n`);
+}
 
 /** With `hosted.auto`, the board follows the record. Prints a line when it does, or why it didn't. */
 async function boardUpdated(cwd?: string): Promise<void> {

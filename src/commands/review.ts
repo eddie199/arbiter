@@ -28,6 +28,9 @@ export interface ReviewOptions {
 }
 
 const PAGE = path.join(__dirname, '..', '..', 'templates', 'review.html');
+// Geist, as on arbiter.design. Shipped with the package: the page never loads anything from the network.
+const FONTS = path.join(__dirname, '..', '..', 'templates', 'fonts');
+const FONT_FILES = new Set(['Geist-Variable.woff2', 'GeistMono-Variable.woff2']);
 
 export function review(opts: ReviewOptions = {}): Promise<void> {
   const root = findRoot(opts.cwd);
@@ -69,6 +72,8 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
       candidates,
       hosted: readLinkOrNull(paths)?.shareUrl ?? null,
       boardVersion: readLinkOrNull(paths)?.boardVersion ?? null,
+      // The rules in force, for the Rules tab: what's already settled before you make another.
+      rules: active,
       active: active.length,
       cap: readConfig(paths)?.activeCap ?? ACTIVE_CAP,
     };
@@ -154,6 +159,17 @@ export function review(opts: ReviewOptions = {}): Promise<void> {
         const type = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }[path.extname(file)] ?? 'application/octet-stream';
         res.writeHead(200, { 'content-type': type, 'cache-control': 'no-cache' });
         fs.createReadStream(abs).pipe(res);
+        return;
+      }
+      if (req.method === 'GET' && url.pathname.startsWith('/fonts/')) {
+        const file = path.basename(url.pathname);
+        if (!FONT_FILES.has(file)) {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'font/woff2', 'cache-control': 'max-age=86400' });
+        fs.createReadStream(path.join(FONTS, file)).pipe(res);
         return;
       }
       if (req.method === 'POST' && url.pathname === '/api/candidate') {

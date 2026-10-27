@@ -82,7 +82,9 @@ function pendingList(pending: Decision[], opts: RulesOptions, paths: Paths): str
     const ignore = opts.config?.overlap?.ignore;
     return JSON.stringify(
       {
-        firstRun: !opts.config?.onboarded,
+        // Judged decisions mean someone has been through a review, whatever arbiter.json says: the
+        // stamp lives in a committed file, and a branch that never merged takes it along.
+        firstRun: !opts.config?.onboarded && !archiveAll.length && !active.length,
         checkin: opts.config?.checkin ?? 'feature',
         ...updateNotice(paths),
         requests: { open, approved },

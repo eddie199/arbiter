@@ -10,9 +10,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { Config, gitUserName, readConfig, resolvePaths, writeActive, writeConfig, ACTIVE_CAP } from '../store';
+import { Config, gitUserName, now, readConfig, resolvePaths, writeActive, writeConfig, ACTIVE_CAP } from '../store';
 import { archiveHeader } from '../format';
 import { Prompter } from './prompt';
+import { CHECKINS, type Checkin } from './setup';
 
 export type Client = 'claude-code' | 'cursor';
 
@@ -21,6 +22,8 @@ export interface InitOptions {
   client?: Client;
   author?: string;
   destination?: 'local' | 'git';
+  /** The check-in answer, when it's already known: an agent asked in chat, or a script. */
+  checkin?: string;
   yes?: boolean;
   skipInstall?: boolean;
 }
@@ -96,8 +99,35 @@ export async function init(opts: InitOptions = {}): Promise<Step[]> {
       }
     }
 
+    // ── Question 3: how Arbiter checks in while you work ─────────────────
+    // Asked once, here, so no /arbiter has to. Nobody at the terminal (an agent ran this, or
+    // --yes): it stays unanswered, and the closing lines hand the question to the agent.
+    let checkin = existing?.checkin;
+    let onboarded = existing?.onboarded;
+    if (opts.checkin !== undefined) {
+      if (!(CHECKINS as readonly string[]).includes(opts.checkin)) throw new Error(`--checkin must be one of ${CHECKINS.join(' | ')}`);
+      checkin = opts.checkin as Checkin;
+      onboarded ??= now();
+    } else if (!onboarded && ask) {
+      const picked = await askCheckin(ask);
+      if (picked) {
+        checkin = picked;
+        onboarded = now();
+      }
+    }
+
     // ── arbiter.json ─────────────────────────────────────────────────────
-    const config: Config = { version: 1, destination: 'local', hosted: { url: 'https://arbiter.design' }, ...existing, author, client, ...(opts.destination && { destination: opts.destination }) };
+    const config: Config = {
+      version: 1,
+      destination: 'local',
+      hosted: { url: 'https://arbiter.design' },
+      ...existing,
+      author,
+      client,
+      ...(opts.destination && { destination: opts.destination }),
+      ...(checkin && { checkin }),
+      ...(onboarded && { onboarded }),
+    };
     if (!existing) {
       writeConfig(paths, config);
       steps.push({ file: 'arbiter.json', outcome: 'created' });
@@ -158,6 +188,50 @@ export function detectClient(root: string): Client[] {
 }
 
 const label = (c: Client) => (c === 'cursor' ? 'Cursor' : 'Claude Code');
+
+/** The one preference Arbiter asks for. The skill asks the same, in the same words, when install couldn't. */
+const CHECKIN_QUESTION = 'When should Arbiter check in about decisions while you work?';
+const CHECKIN_OPTIONS: { mode: Checkin; label: string; detail: string }[] = [
+  { mode: 'feature', label: 'A line after big work (recommended)', detail: 'When a feature-sized piece settles, one sentence saying what changed. Every 5 changes waiting, a yes/no on reviewing. Never mid-iteration.' },
+  { mode: 'quiet', label: 'Nothing until I ask', detail: 'Saved silently. Asks only when something clashes with a rule. /arbiter whenever you want to see it.' },
+  { mode: 'every', label: 'A line after everything', detail: 'One sentence every time a piece of work settles, big or small. Every 5 changes waiting, a yes/no on reviewing.' },
+];
+
+/**
+ * The check-in question at the terminal. Enter takes the recommended one. Null when input ended
+ * with no answer: an agent ran install, and a choice nobody made mustn't be recorded as theirs.
+ */
+export async function askCheckin(ask: Prompter): Promise<Checkin | null> {
+  const menu = CHECKIN_OPTIONS.map((o, i) => `  ${i + 1}. ${o.label}. ${o.detail}`).join('\n');
+  let q = `\n${CHECKIN_QUESTION}\n${menu}\n(1): `;
+  for (;;) {
+    const a = await ask.answer(q);
+    if (a === null) return null;
+    const t = a.trim().toLowerCase();
+    if (!t) return 'feature';
+    const n = Number(t);
+    if (Number.isInteger(n) && n >= 1 && n <= CHECKIN_OPTIONS.length) return CHECKIN_OPTIONS[n - 1].mode;
+    if ((CHECKINS as readonly string[]).includes(t)) return t as Checkin;
+    q = 'Pick 1, 2 or 3 (1): ';
+  }
+}
+
+/**
+ * Install's closing lines when nobody at the terminal answered the check-in question. Usually an
+ * agent ran it: it asks the user in chat, on its own, then saves the answer. Bundled with review
+ * questions it got dismissed with them and came back on every /arbiter.
+ */
+export function checkinHandoff(): string {
+  const w = Math.max(...CHECKINS.map((c) => c.length));
+  return [
+    '',
+    `One question left, asked once. ${CHECKIN_QUESTION}`,
+    ...CHECKIN_OPTIONS.map((o) => `  ${o.mode.padEnd(w)}  ${o.label}. ${o.detail}`),
+    'Save the answer: npx arbiter setup --checkin feature (or quiet, or every)',
+    'Agent: ask the user now, in chat, as one pick-one question on its own, then save their answer. No answer means feature.',
+    '',
+  ].join('\n');
+}
 
 function skillFor(client: Client): { file: string; content: string } {
   // A Windows checkout with autocrlf hands us CRLF; the frontmatter regex and the marker line assume LF.

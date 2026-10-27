@@ -53,6 +53,7 @@ import { updateNotice } from './update';
 import { missingPictures, pictureHint } from '../pictures';
 import { markApplied, requestGate, withRequest } from './request';
 import type { ChangeRequest } from '../requests';
+import { unclearLines } from '../wording';
 
 export interface RecordOptions {
   supersedes?: string;
@@ -89,6 +90,8 @@ export interface RecordResult {
 export function record(rawJson: string, opts: RecordOptions = {}): RecordResult {
   const parsed = parse(rawJson);
   if (!parsed.ok) return parsed.result;
+  const unclear = plainWords(parsed.input);
+  if (unclear) return unclear;
   const bad = againstError(resolvePaths(findRoot(opts.cwd)), parsed.input);
   if (bad) return bad;
   return recordInput(parsed.input, opts);
@@ -104,10 +107,29 @@ function againstError(paths: Paths, input: DecisionInput): RecordResult | null {
   return fail([`against: ${input.against} is not an active rule`]);
 }
 
+/**
+ * A PM or a designer reads these lines, so one in code words or one that runs on is refused
+ * before it's written, and the agent says it again. Nothing is written either way.
+ */
+function plainWords(input: DecisionInput): RecordResult | null {
+  const problems = unclearLines(input);
+  if (!problems.length) return null;
+  return {
+    exitCode: 1,
+    output: {
+      status: 'unclear',
+      errors: problems,
+      hint: "Nothing was written. Rewrite these lines in a PM's or designer's words, 20 words or fewer, and run it again.",
+    },
+  };
+}
+
 export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
   if (opts.request) return fail([`--request records a change made for an approved request, directly: drop --pending. Nothing is queued for a request.`]);
   const parsed = parse(rawJson, { pending: true });
   if (!parsed.ok) return parsed.result;
+  const unclear = plainWords(parsed.input);
+  if (unclear) return unclear;
   const paths = resolvePaths(findRoot(opts.cwd));
   const bad = againstError(paths, parsed.input);
   if (bad) return bad;

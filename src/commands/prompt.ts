@@ -8,12 +8,13 @@
 import readline from 'node:readline';
 
 export class Prompter {
-  private rl = readline.createInterface({ input: process.stdin, terminal: false });
+  private rl: readline.Interface;
   private lines: string[] = [];
-  private waiting: ((s: string) => void)[] = [];
+  private waiting: ((s: string | null) => void)[] = [];
   private closed = false;
 
-  constructor() {
+  constructor(input: NodeJS.ReadableStream = process.stdin) {
+    this.rl = readline.createInterface({ input, terminal: false });
     this.rl.on('line', (l) => {
       const w = this.waiting.shift();
       if (w) w(l);
@@ -21,15 +22,23 @@ export class Prompter {
     });
     this.rl.on('close', () => {
       this.closed = true;
-      for (const w of this.waiting.splice(0)) w('');
+      for (const w of this.waiting.splice(0)) w(null);
     });
   }
 
   question(q: string): Promise<string> {
+    return this.answer(q).then((a) => a ?? '');
+  }
+
+  /**
+   * Like question, but null when input ended with no line for it: nobody is there to answer.
+   * That's an agent running the command (its input is closed), not someone pressing Enter.
+   */
+  answer(q: string): Promise<string | null> {
     process.stdout.write(q);
     const l = this.lines.shift();
     if (l !== undefined) return Promise.resolve(l);
-    if (this.closed) return Promise.resolve('');
+    if (this.closed) return Promise.resolve(null);
     return new Promise((res) => this.waiting.push(res));
   }
 

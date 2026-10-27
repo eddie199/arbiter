@@ -17,7 +17,7 @@ import { execFileSync } from 'node:child_process';
 import { readCandidates, writeCandidate } from '../candidates';
 import { deliver, pagesUrl } from '../destination';
 import { findRoot, readArchive, readConfig, resolvePaths, writeConfig } from '../store';
-import { publishable, publishHosted, readToken, TOKEN_ENV } from '../hosted';
+import { newPassword, PASSWORD_MIN, publishable, publishHosted, readToken, TOKEN_ENV } from '../hosted';
 import { missingPictures } from '../pictures';
 import { selfVersion } from './init';
 
@@ -35,6 +35,11 @@ export interface PublishOptions {
   onPush?: boolean;
   /** Turn on (or off, with false) republishing whenever the record changes. Needs no git. */
   auto?: boolean;
+  /**
+   * The board asks for a password before showing anything. true makes one up; a string is the
+   * password; false takes it off. Left out, whatever the board has stays.
+   */
+  password?: boolean | string;
   cwd?: string;
 }
 
@@ -55,10 +60,25 @@ export async function publish(opts: PublishOptions = {}): Promise<PublishResult>
   // Hosted by default: the flag, then arbiter.json, then arbiter.design. `--to pages` is the git route.
   const chosen = opts.to ?? readConfig(paths)?.hosted?.url ?? DEFAULT_HOST;
   const to = chosen === 'pages' || chosen === 'git' ? null : chosen;
+  if (opts.password !== undefined && !to) {
+    fail('password', 'a GitHub Pages site is public; only a hosted board can ask for a password');
+    return { ok: false, steps, url: null };
+  }
+  // Checked before anything is created, so a short one never leaves a new board up without it.
+  if (typeof opts.password === 'string' && opts.password.length < PASSWORD_MIN) {
+    fail('password', `at least ${PASSWORD_MIN} characters — or leave it out and get one made up: npx arbiter publish --password`);
+    return { ok: false, steps, url: null };
+  }
   if (to) {
+    const password = opts.password === undefined ? undefined : opts.password === false ? null : opts.password === true ? newPassword() : opts.password;
     try {
-      const r = await publishHosted(paths, to, { admin: opts.admin });
+      const r = await publishHosted(paths, to, { admin: opts.admin, password });
       if (r.created) done('project', `created on ${to} — link in .arbiter/hosted.json (commit it); token in .arbiter/hosted.token (git-ignored — teammates set ARBITER_PUBLISH_TOKEN)`);
+      // A made-up password is printed once, here: the service keeps only a hash. One you chose isn't echoed.
+      if (password === null) done('password', 'off — anyone with the link can see the board');
+      else if (password !== undefined) done('password', opts.password === true
+        ? `${password} — send it with the link. It isn't saved anywhere it can be read back; to change it, run --password again`
+        : 'set — send it with the link');
       // No image count: a card without a picture shows an icon of its kind, and that's usually right.
       done('board', `${r.candidates} screen${r.candidates === 1 ? '' : 's'} published`);
       for (const s of r.skipped) skip('snapshot', s);
