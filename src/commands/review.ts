@@ -17,12 +17,12 @@ import { spawn } from 'node:child_process';
 import { judge, judgeAll, JudgeAction } from './record';
 import { updateCandidate } from './candidate';
 import { candidatesDir, decisionsFor, readCandidates } from '../candidates';
-import { readComments, readLinkOrNull } from '../hosted';
+import { buildManifest, readComments, readLinkOrNull } from '../hosted';
 import { findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, ACTIVE_CAP } from '../store';
 import { autoPublish } from '../autopublish';
 import { missingPictures } from '../pictures';
 import { describe, readRequests } from '../requests';
-import { workDir, workSnapshot } from '../work';
+import { workDir, workId, workSnapshot } from '../work';
 import { judgeRequest, RequestAction } from './request';
 import { Answer, clearHandoff, decidedAnything, Handoff, mergeHandoffs, readHandoff, saveHandoff, summarize } from '../handoff';
 
@@ -38,6 +38,9 @@ const PAGE = path.join(__dirname, '..', '..', 'templates', 'review.html');
 // Geist, as on arbiter.design. Shipped with the package: the page never loads anything from the network.
 const FONTS = path.join(__dirname, '..', '..', 'templates', 'fonts');
 const FONT_FILES = new Set(['Geist-Variable.woff2', 'GeistMono-Variable.woff2']);
+// The local board: the team board's pages, built in the site repo (hosted/local) and copied here.
+const BOARD = path.join(__dirname, '..', '..', 'templates', 'board');
+const BOARD_FILES: Record<string, string> = { 'index.html': 'text/html; charset=utf-8', 'board.js': 'text/javascript; charset=utf-8', 'board.css': 'text/css; charset=utf-8' };
 
 export function review(opts: ReviewOptions = {}): Promise<Handoff> {
   const root = findRoot(opts.cwd);
@@ -90,6 +93,21 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
 
   // Judging twenty items shouldn't mean twenty publishes, so the board is updated once, at the
   // end. The page writes the same files the CLI does, but doesn't go through its handlers.
+  // What the local board draws: the manifest `publish` uploads, its pictures as links served here,
+  // and what only this machine knows: what's waiting for review, and the team's pulled comments.
+  const boardData = () => {
+    const { manifest } = buildManifest(paths, { includeRules: true, pictures: 'link' });
+    const queued = readPending(paths);
+    const waiting: Record<string, number> = {};
+    for (const d of queued) {
+      if (d.level === 'polish') continue;
+      const card = d.candidate ?? workId(d.trigger);
+      waiting[card] = (waiting[card] ?? 0) + 1;
+    }
+    const link = readLinkOrNull(paths);
+    return { board: manifest, comments: readComments(paths), waiting, pending: queued.length, hosted: link?.shareUrl ?? null, version: link?.boardVersion ?? null, review: '/' };
+  };
+
   let changed = false;
   // Every answer that went through, in order, for the handoff.
   const answers: Answer[] = [];
@@ -139,6 +157,27 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
       }
       if (req.method === 'GET' && url.pathname === '/api/state') {
         json(res, 200, state());
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/api/board') {
+        json(res, 200, boardData());
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/board') {
+        res.writeHead(301, { location: '/board/' });
+        res.end();
+        return;
+      }
+      if (req.method === 'GET' && url.pathname.startsWith('/board/')) {
+        const file = url.pathname.slice('/board/'.length) || 'index.html';
+        const type = BOARD_FILES[file];
+        if (!type || !fs.existsSync(path.join(BOARD, file))) {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+        res.writeHead(200, { 'content-type': type, 'cache-control': 'no-cache' });
+        fs.createReadStream(path.join(BOARD, file)).pipe(res);
         return;
       }
       if (req.method === 'POST' && url.pathname === '/api/judge') {

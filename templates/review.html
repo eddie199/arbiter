@@ -71,6 +71,8 @@
   }
   nav button:hover:not(:disabled) { border-color: var(--line); color: var(--ink); }
   nav button.on, nav button.on:hover:not(:disabled) { color: var(--ink); border-bottom-color: var(--ink); font-weight: 500; }
+  nav a.board-link { padding: 8px 12px; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--muted); font-size: 14px; text-decoration: none; }
+  nav a.board-link:hover { color: var(--ink); border-bottom-color: var(--line); }
   /* Newest | Oldest, styled like the team board's Cards/List toggle: the chosen one tinted, no weight change. */
   .toolbar { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
   .toolbar + .group { margin-top: 20px; }
@@ -242,6 +244,8 @@ function render() {
   // The team board's words: candidates are options, rules are design rules.
   nav.appendChild(tabBtn('candidates', `Options · ${state.candidates.length}`));
   nav.appendChild(tabBtn('rules', `Design rules · ${state.active}`));
+  // The board: everything decided, by change, as the team board shows it. Its rail comes back here.
+  const board = el('a', 'board-link', 'Board'); board.href = '/board/'; nav.appendChild(board);
   const main = document.getElementById('main');
   main.innerHTML = '';
   ({ requests: renderRequests, decisions: renderDecisions, candidates: renderCandidates, rules: renderRules })[tab](main);

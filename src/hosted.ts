@@ -115,12 +115,16 @@ const wire = (d: Decision) => ({ id: d.id, change: d.change, decision: d.decisio
  * (`trigger`) and become a card each — no picture, state `recorded`. Most work is one direction,
  * iterated; the board shouldn't be empty for it.
  */
-export function buildManifest(paths: Paths, opts: { includeRules?: boolean } = {}): { manifest: Record<string, unknown>; skipped: string[] } {
+export function buildManifest(paths: Paths, opts: { includeRules?: boolean; pictures?: 'inline' | 'link' } = {}): { manifest: Record<string, unknown>; skipped: string[] } {
   const skipped: string[] = [];
   const known = readCandidates(paths);
+  // The local board draws from the same manifest; its pictures are links the review server serves.
+  const link = opts.pictures === 'link';
   const candidates: Record<string, unknown>[] = known.map((c) => {
-    let snapshot: { type: string; data: string } | null = null;
-    if (c.snapshot) {
+    let snapshot: { type: string; data: string } | string | null = null;
+    if (c.snapshot && link) {
+      if (fs.existsSync(path.join(candidatesDir(paths), c.snapshot))) snapshot = `/snapshots/${c.snapshot}`;
+    } else if (c.snapshot) {
       const ext = path.extname(c.snapshot).toLowerCase();
       const type = IMAGE_TYPES[ext];
       const file = path.join(candidatesDir(paths), c.snapshot);
@@ -152,9 +156,10 @@ export function buildManifest(paths: Paths, opts: { includeRules?: boolean } = {
   for (const [trigger, ds] of byWork) {
     const last = ds.reduce((a, b) => (a.date > b.date ? a : b));
     const id = workId(trigger);
-    let snapshot: { type: string; data: string } | null = null;
+    let snapshot: { type: string; data: string } | string | null = null;
     const shot = workSnapshot(paths, id);
-    if (shot) {
+    if (shot && link) snapshot = `/snapshots/${path.basename(shot)}`;
+    else if (shot) {
       const type = IMAGE_TYPES[path.extname(shot).toLowerCase()];
       if (type) snapshot = { type, data: fs.readFileSync(shot).toString('base64') };
       else skipped.push(`${id}: ${path.basename(shot)} (svg/unsupported — hosted takes png, jpg, webp, gif)`);
