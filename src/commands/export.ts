@@ -63,7 +63,7 @@ export function exportBoard(opts: ExportOptions = {}): ExportResult {
 
   // Read-only: `live: false` keeps the review pages, Done and the team board buttons out of it.
   const board = { ...manifest, candidates: cards, requests: [] };
-  const data = { board, comments: [], waiting: {}, pending: 0, hosted: null, version: null, live: false };
+  const data = { board, comments: [], waiting: {}, queued: {}, pending: 0, hosted: null, version: null, live: false };
   // In a <script>, so nothing in a name can close the tag or run.
   const json = JSON.stringify(data).replace(/</g, '\\u003c').split(LINE_SEP).join('\\u2028').split(PARA_SEP).join('\\u2029');
   // Functions, not strings: a `$&` in someone's decision would otherwise be read as a pattern.

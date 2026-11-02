@@ -21,8 +21,8 @@ import { buildManifest, readComments, readLinkOrNull } from '../hosted';
 import { findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, ACTIVE_CAP } from '../store';
 import { autoPublish } from '../autopublish';
 import { missingPictures } from '../pictures';
-import { describe, readRequests } from '../requests';
-import { workDir, workId, workSnapshot } from '../work';
+import { cardOf, describe, readRequests } from '../requests';
+import { workDir, workSnapshot } from '../work';
 import { judgeRequest, RequestAction } from './request';
 import { Answer, clearHandoff, decidedAnything, Handoff, mergeHandoffs, readHandoff, saveHandoff, summarize } from '../handoff';
 
@@ -65,10 +65,13 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
       return f ? `/snapshots/${path.basename(f)}` : null;
     };
     const active = readActive(paths);
+    const ids = new Set(byId.keys());
     return {
       project: path.basename(root),
       pending: readPending(paths).map((d) => ({
         ...d,
+        // The card it waits on, so a change marked Waiting can open To review at its work.
+        card: cardOf(paths, d, ids),
         // The rule a clash is with, while it's still in force: the page offers Follow / Replace / Keep as exception.
         againstRule: d.against ? active.filter((r) => r.id === d.against).map((r) => ({ id: r.id, decision: r.decision }))[0] ?? null : null,
         candidateName: d.candidate ? byId.get(d.candidate)?.name ?? null : null,
@@ -95,17 +98,22 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
   // end. The page writes the same files the CLI does, but doesn't go through its handlers.
   // What the local board draws: the manifest `publish` uploads, its pictures as links served here,
   // and what only this machine knows: what's waiting for review, and the team's pulled comments.
+  // Work that's only waiting gets a card too, so the board shows everything before it's judged.
   const boardData = () => {
-    const { manifest } = buildManifest(paths, { includeRules: true, pictures: 'link' });
     const queued = readPending(paths);
+    const { manifest } = buildManifest(paths, { includeRules: true, pictures: 'link', queued });
+    const ids = new Set(readCandidates(paths).map((c) => c.id));
     const waiting: Record<string, number> = {};
+    // Enough of each to draw a card and place it in its area before anything on it is judged.
+    const lines: Record<string, { id: string; change: string | null; decision: string; dimension: string; scope: string }[]> = {};
     for (const d of queued) {
       if (d.level === 'polish') continue;
-      const card = d.candidate ?? workId(d.trigger);
+      const card = cardOf(paths, d, ids);
       waiting[card] = (waiting[card] ?? 0) + 1;
+      (lines[card] ??= []).push({ id: d.id, change: d.change ?? null, decision: d.decision, dimension: d.dimension, scope: d.scope });
     }
     const link = readLinkOrNull(paths);
-    return { board: manifest, comments: readComments(paths), waiting, pending: queued.length, hosted: link?.shareUrl ?? null, version: link?.boardVersion ?? null, live: true };
+    return { board: manifest, comments: readComments(paths), waiting, queued: lines, pending: queued.length, hosted: link?.shareUrl ?? null, version: link?.boardVersion ?? null, live: true };
   };
 
   let changed = false;

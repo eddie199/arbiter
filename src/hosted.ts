@@ -114,8 +114,12 @@ const wire = (d: Decision) => ({ id: d.id, change: d.change, decision: d.decisio
  * candidate rides with that screen; the rest are grouped by the piece of work they came from
  * (`trigger`) and become a card each — no picture, state `recorded`. Most work is one direction,
  * iterated; the board shouldn't be empty for it.
+ *
+ * The local board passes the review queue as `queued`: work whose decisions are all still waiting
+ * gets a card too, with nothing decided on it yet, so it's on the board before it's judged.
+ * Publishing never passes it.
  */
-export function buildManifest(paths: Paths, opts: { includeRules?: boolean; pictures?: 'inline' | 'link'; linkBase?: string } = {}): { manifest: Record<string, unknown>; skipped: string[] } {
+export function buildManifest(paths: Paths, opts: { includeRules?: boolean; pictures?: 'inline' | 'link'; linkBase?: string; queued?: Decision[] } = {}): { manifest: Record<string, unknown>; skipped: string[] } {
   const skipped: string[] = [];
   const known = readCandidates(paths);
   // The local board draws from the same manifest; its pictures are links: where the review server
@@ -154,8 +158,13 @@ export function buildManifest(paths: Paths, opts: { includeRules?: boolean; pict
   const loose = archive.filter((d) => publishable(d) && (!d.candidate || !ids.has(d.candidate)));
   const byWork = new Map<string, Decision[]>();
   for (const d of loose) byWork.set(d.trigger, [...(byWork.get(d.trigger) ?? []), d]);
+  const waitingOnly = new Map<string, Decision[]>();
+  for (const d of opts.queued ?? []) {
+    if (d.level === 'polish' || (d.candidate && ids.has(d.candidate)) || byWork.has(d.trigger)) continue;
+    waitingOnly.set(d.trigger, [...(waitingOnly.get(d.trigger) ?? []), d]);
+  }
   const areas = new Map(known.filter((c) => c.feature).map((c) => [c.feature!.toLowerCase(), c.feature!]));
-  for (const [trigger, ds] of byWork) {
+  for (const [trigger, ds] of [...byWork, ...waitingOnly]) {
     const last = ds.reduce((a, b) => (a.date > b.date ? a : b));
     const id = workId(trigger);
     let snapshot: { type: string; data: string } | string | null = null;
@@ -170,7 +179,7 @@ export function buildManifest(paths: Paths, opts: { includeRules?: boolean; pict
       // Work has no product area of its own; it joins one only when the trigger names an existing one.
       id, name: trigger, feature: areas.get(trigger.toLowerCase()) ?? null, state: 'recorded', work: true,
       author: last.author, date: last.date, reason: null, notes: '', supersededBy: null, url: null, snapshot,
-      decisions: ds.map(wire),
+      decisions: ds.filter(publishable).map(wire),
     });
   }
   // The day each became a rule, for the board's Design rules page.
