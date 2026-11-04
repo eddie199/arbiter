@@ -67,7 +67,7 @@ test('review page serves candidates, snapshots, and candidate actions', async ()
   addCandidate('B', { ...o, feature: 'f' });
   queue(rule(), { ...o, candidate: 'C-0001' });
   const port = 48000 + Math.floor(Math.random() * 1000);
-  const done = review({ cwd, port, open: false });
+  const done = review({ cwd, port, open: false, grace: 0 });
   await new Promise((r) => setTimeout(r, 200));
 
   const state = await get(port, '/api/state');
@@ -82,7 +82,7 @@ test('review page serves candidates, snapshots, and candidate actions', async ()
   assert.deepEqual(up.superseded, ['C-0002']);
   assert.equal(readCandidates(resolvePaths(cwd))[1].reason, 'because');
 
-  await post(port, '/api/done', {});
+  await post(port, '/api/bye', { page: 't' });
   await done;
 });
 

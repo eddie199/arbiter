@@ -52,7 +52,7 @@ import { refreshCandidates } from './candidate';
 import { updateNotice } from './update';
 import { missingPictures, pictureHint } from '../pictures';
 import { markApplied, requestGate, withRequest } from './request';
-import type { ChangeRequest } from '../requests';
+import { readRequests, type ChangeRequest } from '../requests';
 import { unclearLines } from '../wording';
 
 export interface RecordOptions {
@@ -274,6 +274,27 @@ export function retire(ruleId: string, why: string | undefined, opts: RecordOpti
   return recordInput(input, opts);
 }
 
+/**
+ * Undo for a retire, for a misclick on the board: the rule is back in DECISIONS.md as it was, and
+ * the retire entry leaves the record. Only while DECISIONS.md has room and nothing has built on it since.
+ */
+export function unretire(r: { rule: Decision; id: string }, opts: { cwd?: string } = {}): RecordResult {
+  const paths = resolvePaths(findRoot(opts.cwd));
+  const archive = readArchive(paths);
+  if (!archive.some((d) => d.id === r.id)) return fail([`${r.id} is no longer in the record`]);
+  const active = readActive(paths);
+  if (active.some((d) => d.id === r.rule.id)) return fail([`${r.rule.id} is a rule already`]);
+  const later = archive.find((d) => (d.id !== r.id && d.supersedes === r.rule.id) || d.supersedes === r.id);
+  if (later) return fail([`${later.id} has changed ${r.rule.id} since, so it can't come back`]);
+  const cap = readConfig(paths)?.activeCap ?? ACTIVE_CAP;
+  if (active.length >= cap) return fail([`DECISIONS.md is full (${cap} rules), so ${r.rule.id} can't come back until one goes`]);
+
+  writeArchive(paths, archive.filter((d) => d.id !== r.id));
+  writeActive(paths, [...active, r.rule], cap);
+  if (r.rule.candidate) refreshCandidates(paths);
+  return { exitCode: 0, output: { status: 'restored', id: r.rule.id, removed: r.id, active: `${active.length + 1} of ${cap}` } };
+}
+
 // ── Reword a rule ──────────────────────────────────────────────────────────
 
 /**
@@ -389,6 +410,60 @@ export function judgeAll(opts: JudgeOptions & { level?: string; trigger?: string
       ...(failed.length && { failed }),
       pending: readPending(paths).length,
     },
+  };
+}
+
+// ── Take a judgement back ──────────────────────────────────────────────────
+
+/** What judging a queued item did, kept by whoever judged it so it can be taken back. */
+export interface Judgement {
+  /** The item as it was queued, and where it sat in the queue. */
+  item: Decision;
+  at: number;
+  /** The decision it was recorded as; none for a skip. */
+  id?: string;
+  /** The rule it replaced, and where that sat in DECISIONS.md. */
+  replaced?: { rule: Decision; at: number };
+}
+
+/**
+ * Undo, for a misclick: the decision leaves the record, a rule it replaced is a rule again, and the
+ * item waits where it was, with its id. Only while nothing has built on it since: a later rule
+ * replacing it, or a request answered by it.
+ */
+export function unjudge(j: Judgement, opts: { cwd?: string } = {}): RecordResult {
+  const paths = resolvePaths(findRoot(opts.cwd));
+  const pending = readPending(paths);
+  if (pending.some((d) => d.id === j.item.id)) return fail([`${j.item.id} is already waiting`]);
+
+  let reinstated: string | undefined;
+  const id = j.id;
+  if (id) {
+    const archive = readArchive(paths);
+    const entry = archive.find((d) => d.id === id);
+    if (!entry) return fail([`${id} is no longer in the record`]);
+    const later = archive.find((d) => d.supersedes === id);
+    if (later) return fail([`${later.id} has replaced ${id} since, so it can't be taken back`]);
+    const asked = readRequests(paths).find((r) => r.decision === id || r.decisions.includes(id));
+    if (asked) return fail([`${asked.id} is about ${id} now, so it can't be taken back`]);
+
+    writeArchive(paths, archive.filter((d) => d.id !== id));
+    const active = readActive(paths);
+    let next = active.filter((d) => d.id !== id);
+    const r = j.replaced;
+    // Back where it was, unless something else has made it a rule again or taken it out since.
+    if (r && !next.some((d) => d.id === r.rule.id) && archive.some((d) => d.id === r.rule.id) && !archive.some((d) => d.id !== id && d.supersedes === r.rule.id)) {
+      next = [...next.slice(0, r.at), r.rule, ...next.slice(r.at)];
+      reinstated = r.rule.id;
+    }
+    if (next.length !== active.length || reinstated) writeActive(paths, next, readConfig(paths)?.activeCap ?? ACTIVE_CAP);
+    if (entry.candidate) refreshCandidates(paths);
+  }
+
+  writePending(paths, [...pending.slice(0, j.at), j.item, ...pending.slice(j.at)]);
+  return {
+    exitCode: 0,
+    output: { status: 'undone', id: j.item.id, ...(id && { removed: id }), ...(reinstated && { reinstated }), pending: pending.length + 1 },
   };
 }
 

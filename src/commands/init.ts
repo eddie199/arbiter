@@ -14,6 +14,7 @@ import { Config, gitUserName, now, readConfig, resolvePaths, writeActive, writeC
 import { archiveHeader } from '../format';
 import { Prompter } from './prompt';
 import { CHECKINS, type Checkin } from './setup';
+import { installHook } from '../hook';
 
 export type Client = 'claude-code' | 'cursor';
 
@@ -167,6 +168,8 @@ export async function init(opts: InitOptions = {}): Promise<Step[]> {
     if (client === 'claude-code') {
       // Claude Code's own context file. Same line, same marker; created if missing so injection has a path that's certain to load.
       steps.push(mergeAgentsLine(root, 'CLAUDE.md', true));
+      // The hook that hands the agent what you judged on the board, with your next message.
+      steps.push(...installHook(root));
     } else {
       // Cursor has no skill-invoked slash commands; give it a command file that does what `/arbiter` does.
       steps.push(writeIfChanged(root, path.join('.cursor', 'commands', 'arbiter.md'), CURSOR_COMMAND));

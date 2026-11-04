@@ -230,7 +230,7 @@ With no line to merge into (small work under `feature`), use the `ask` text as i
 You have 5 changes waiting in Arbiter. Review them now? (yes, in the browser / yes, here / no)
 ```
 
-Plain text, never the widget. **yes, in the browser**: open the Review Board and wait for them (see **Reviewing in the browser**). **yes, here**, or a plain **yes**: start the review below, as if they'd typed `/arbiter`. **no**: say "Okay" and carry on; don't raise it again until another `ask` comes back. Anything else means they've moved on, so carry on.
+Plain text, never the widget. **yes, in the browser**: open their board and carry on (see **Reviewing in the browser**). **yes, here**, or a plain **yes**: start the review below, as if they'd typed `/arbiter`. **no**: say "Okay" and carry on; don't raise it again until another `ask` comes back. Anything else means they've moved on, so carry on.
 
 A count on every reply gets ignored; a sentence about what changed, only after something big, gets read; a question only when enough has piled up to be worth a sitting. Otherwise queue silently, since the user knows the queue exists. Under `feature`, if the work was only patterns and polish and no `ask` came back, say nothing. Do not list the decisions. The queue lives in `.arbiter/pending.md`, so it survives the session; the user can judge it here, in the review page, or never.
 
@@ -285,7 +285,7 @@ That also marks the project as onboarded. Then continue with the queue as below;
 
 If the project publishes to a hosted board (`.arbiter/hosted.json` exists), run `npx arbiter pull` first — it's how requests made on the board since last time arrive, and how ones taken back leave. Relay nothing from its output except a `withdrew` line, word for word: the queue shows the rest. If it fails (offline, or no publish token on this machine), say so in one line and carry on with the queue.
 
-The queue may carry `lastReview`: a sitting on the Review Board that nobody was waiting on. Its answers are recorded already, but the code side isn't done. Before anything else, make its `todo` exactly as **Reviewing in the browser** says, then delete the file it names (`lastReview.file`), so it isn't made twice.
+The queue may carry `lastReview`: what they judged on the board that needs the code changed, and you haven't made yet. Its answers are recorded already, but the code side isn't done. Before anything else, make its `todo` exactly as **Reviewing in the browser** says, then delete the file it names (`lastReview.file`), so it isn't made twice.
 
 The queue may carry `requests` — changes someone asked for on the board. Those come first, before any decision: make the `requests.approved` ones without asking again, then present the `requests.open` ones. See **Requests from the board**, below.
 
@@ -448,19 +448,26 @@ Never judge anything before the user answers.
 
 ## Reviewing in the browser
 
-When they answer **yes, in the browser**, or ask for it (*"review in the browser"*, *"open the review page"*), open the Review Board and wait for them:
+When they answer **yes, in the browser**, or ask for it (*"review in the browser"*, *"open the board"*), open their local board and carry on. Don't wait for them: the board stays open beside the work, and keeps itself current as you record.
 
 ```
-npx arbiter review --json
+npx arbiter review
 ```
 
-Run it in the background (in Claude Code, `run_in_background`). It runs until they press **Done**, however long they take, and a command in the foreground gets cut off. Say one line, then stop and wait. Don't carry on with other work in the meantime:
+Run it in the background (in Claude Code, `run_in_background`): it runs until they close its tab. Say one line, then carry on with whatever they ask:
 
 ```
-Opened your Review Board. I'll wait. Press Done when you're finished.
+Opened your board. Judge whenever you like: anything you ask me to change there comes to me with your next message.
 ```
 
-When it ends, its output is JSON: what they decided, and what's left for you. The page has recorded every answer already, so never judge or record those decisions again. Make each item in `todo`, in order:
+Outside Claude Code, end it with `comes to me at the next /arbiter` instead. If you can't run a command in the background, don't open it yourself: give them `npx arbiter review` to run in a terminal. Their answers reach you the same way.
+
+The page records each answer as they give it, so never judge or record those decisions again. What it can't do is change code: a fix waits for you in `.arbiter/last-review.json`. So does a rule they edit or remove on its Design rules page, since you may have read `DECISIONS.md` before they changed it.
+
+- **In Claude Code**, a hook tells you at their next message (`Arbiter: since your last turn, the user judged decisions on the local board`). Before you answer that message, make each change it lists, delete the file, and say in one line what you changed. Then answer them.
+- **Anywhere**, the next `/arbiter` brings the same file as `lastReview` (see **When they ask**).
+
+The file's `todo`, in order:
 
 | `kind` | What it means | What you do |
 |---|---|---|
@@ -468,15 +475,13 @@ When it ends, its output is JSON: what they decided, and what's left for you. Th
 | `follow` | They chose the rule `rule` over this change | Change the code back so it does `to` |
 | `request` | An approved request from the board | Make `do`, then record it with `--request <id>`, as **Requests from the board** says |
 
-`confirmed`, `rules`, `fixed`, `skipped`, `declined` and `options` are what they decided; they need nothing from you. Then one line, as **After recording**:
+`confirmed`, `fixed`, `skipped`, `declined` and `options` are what they decided; they need nothing from you. `rules` are new rules in `DECISIONS.md`: read them before your next UI change. `reworded` are rules they edited: each `id` now says `to`, so follow that, not the words you read before. `removed` are rules they took out, with `why`: stop following them. Neither needs the code changed unless they ask. The line, as **After recording**:
 
 ```
-Recorded D-0010 (accept), D-0011 (rule), D-0012 (fix, made) · DECISIONS.md: 6 of 40
+Made from your board: D-0012 (Save stays at the top), D-0014 (back to D-0009)
 ```
 
-- `finished` is `closed`: they stopped it without pressing Done. Say what got through, and that the rest is still queued.
-- Nothing decided: one line, `Nothing decided. 21 still waiting.`
-- If you can't run a command in the background, run it in the foreground. If it's cut off before they press Done, nothing is lost: the answers so far come back with the next queue read as `lastReview` (see **When they ask**).
+When the background command ends, they closed the board: there's nothing to do. Its last line only repeats what's waiting, which reaches you as above.
 
 ## The JSON shape
 

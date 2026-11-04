@@ -38,8 +38,8 @@ test('the local board: the publish manifest with pictures as links, what waits f
   const inline = buildManifest(paths).manifest.candidates as { snapshot: unknown }[];
   assert.equal(typeof inline[0].snapshot, 'object');
 
-  const p = 49000 + Math.floor(Math.random() * 900);
-  const done = review({ cwd, port: p, open: false });
+  const p = 45800 + Math.floor(Math.random() * 200); // below 49152, where Windows hands out its own ports
+  const done = review({ cwd, port: p, open: false, grace: 0 });
   await new Promise((r) => setTimeout(r, 200));
 
   const data = JSON.parse((await get(p, '/api/board')).body);
@@ -64,7 +64,7 @@ test('the local board: the publish manifest with pictures as links, what waits f
   assert.equal((await get(p, '/review.html')).status, 404, 'the old page is gone');
   assert.equal((await get(p, '/package.json')).status, 404, 'only the board’s own files');
 
-  await post(p, '/api/done', {});
+  await post(p, '/api/bye', { page: 't' });
   await done;
 });
 

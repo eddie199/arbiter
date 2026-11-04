@@ -110,7 +110,7 @@ test('the review page marks waiting work that needs a picture', async () => {
   queue(decision({ verdict: undefined }), o(cwd));
   queue(decision({ verdict: undefined, trigger: 'Drawer', dimension: 'motion', decision: 'The drawer slides in' }), o(cwd));
   const port = 48000 + Math.floor(Math.random() * 1000);
-  const done = review({ cwd, port, open: false });
+  const done = review({ cwd, port, open: false, grace: 0 });
   await new Promise((r) => setTimeout(r, 200));
 
   const state = await call(port, 'GET', '/api/state');
@@ -118,7 +118,23 @@ test('the review page marks waiting work that needs a picture', async () => {
   assert.match(byTrigger['Billing page'].command, /snapshot "Billing page"/);
   assert.equal(byTrigger.Drawer, null, 'motion is right as an icon');
 
-  await call(port, 'POST', '/api/done', {});
+  await call(port, 'POST', '/api/bye', { page: 't' });
+  await done;
+});
+
+test('waiting work shows its picture in the Review inbox, as its card does on the board', async () => {
+  const cwd = tmp();
+  queue(decision({ verdict: undefined }), o(cwd));
+  fs.writeFileSync(path.join(cwd, 'shot.png'), PNG);
+  snapshotWork('Billing page', { cwd, file: 'shot.png' });
+  const port = 48000 + Math.floor(Math.random() * 1000);
+  const done = review({ cwd, port, open: false, grace: 0 });
+  await new Promise((r) => setTimeout(r, 200));
+
+  const [d] = (await call(port, 'GET', '/api/state')).pending;
+  assert.equal(d.snapshotUrl, '/snapshots/W-billing-page.png', 'no screen, so the picture of its work');
+
+  await call(port, 'POST', '/api/bye', { page: 't' });
   await done;
 });
 

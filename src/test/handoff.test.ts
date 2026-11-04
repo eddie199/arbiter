@@ -21,10 +21,10 @@ const input = (over: Record<string, unknown> = {}) =>
     class: 'judgment',
     ...over,
   });
-const port = () => 49000 + Math.floor(Math.random() * 900);
+const port = () => 44000 + Math.floor(Math.random() * 900); // below 49152, where Windows hands out its own ports
 const wait = () => new Promise((r) => setTimeout(r, 200));
 
-test('an agent waiting on Done gets what was decided and the code left to change, and nothing is kept for later', async () => {
+test('an agent waiting on the page gets what was decided and the code left to change when the last tab closes, and nothing is kept for later', async () => {
   const cwd = tmp();
   const o = { cwd, author: 'test' };
   const rule = record(input({ verdict: 'rule', decision: 'Deleting a project undoes instead of confirming', scope: 'pattern:destructive-undo', dimension: 'interaction' }), o);
@@ -37,9 +37,9 @@ test('an agent waiting on Done gets what was decided and the code left to change
   const paths = resolvePaths(cwd);
 
   const p = port();
-  const done = review({ cwd, port: p, open: false, json: true });
+  const done = review({ cwd, port: p, open: false, grace: 0, json: true });
   await wait();
-  assert.equal((await get(p, '/api/state')).handoff, true, 'the page knows an agent is waiting');
+  assert.equal((await get(p, '/api/state')).agent, 'waiting', 'the page knows an agent is waiting');
 
   assert.equal((await post(p, '/api/judge', { id: 'P-0001', as: 'accept' })).exitCode, 0);
   assert.equal((await post(p, '/api/judge', { id: 'P-0002', as: 'rule' })).exitCode, 0);
@@ -49,7 +49,7 @@ test('an agent waiting on Done gets what was decided and the code left to change
   assert.equal(readHandoff(paths)?.todo.length, 1, 'kept after each answer');
   assert.equal((await post(p, '/api/judge', { id: 'P-0005', as: 'fix', to: 'Deleting a project undoes instead of confirming', follows: 'D-0001' })).exitCode, 0);
 
-  await post(p, '/api/done', {});
+  await post(p, '/api/bye', { page: 't' });
   const h = await done;
 
   assert.equal(h.finished, 'done');
@@ -75,11 +75,11 @@ test('nobody waiting: the sitting is saved for the next /arbiter, kept out of gi
   const paths = resolvePaths(cwd);
 
   let p = port();
-  let done = review({ cwd, port: p, open: false });
+  let done = review({ cwd, port: p, open: false, grace: 0 });
   await wait();
-  assert.equal((await get(p, '/api/state')).handoff, false);
+  assert.equal((await get(p, '/api/state')).agent, 'arbiter', 'nobody waiting, and no hook: the next /arbiter');
   await post(p, '/api/judge', { id: 'P-0001', as: 'fix', to: 'The delete button stays grey until hovered' });
-  await post(p, '/api/done', {});
+  await post(p, '/api/bye', { page: 't' });
   const first = await done;
   assert.equal(handoffLine(first), 'Recorded: 1 fixed. 1 change waits for your agent, which picks it up at the next /arbiter.');
 
@@ -92,10 +92,10 @@ test('nobody waiting: the sitting is saved for the next /arbiter, kept out of gi
 
   // The agent opens the next sitting before acting on the first: both come to it, then the file goes.
   p = port();
-  done = review({ cwd, port: p, open: false, json: true });
+  done = review({ cwd, port: p, open: false, grace: 0, json: true });
   await wait();
   await post(p, '/api/judge', { id: 'P-0002', as: 'fix', to: 'Save stays at the top' });
-  await post(p, '/api/done', {});
+  await post(p, '/api/bye', { page: 't' });
   const both = await done;
   assert.deepEqual(both.todo.map((t) => (t as { to: string }).to), ['The delete button stays grey until hovered', 'Save stays at the top']);
   assert.equal(readHandoff(paths), null);

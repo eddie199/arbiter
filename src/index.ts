@@ -22,7 +22,8 @@ import { update } from './commands/update';
 import { remove, removeSnapshot, unlink } from './commands/remove';
 import { autoPublish } from './autopublish';
 import { ADMIN_ENV } from './hosted';
-import { readConfig, resolvePaths } from './store';
+import { findRoot, readConfig, resolvePaths } from './store';
+import { hookInstalled } from './hook';
 
 const program = new Command();
 
@@ -267,15 +268,15 @@ program
 
 program
   .command('review')
-  .description('Open a local page to judge pending decisions. When you press Done, what you decided goes to your agent.')
-  .option('--port <n>', 'port (default: any free port)', (v) => Number(v))
+  .description('Open your local board: everything decided, and what waits for review. Keep it open while you work: it redraws as the agent records, and the fixes you ask for reach your agent with your next message (Claude Code) or at the next /arbiter. Stops when you close its tab.')
+  .option('--port <n>', "port (default: the same one each time for this project, or the next free one; if this project's board is already running, it opens that one)", (v) => Number(v))
   .option('--no-open', "print the URL, don't open a browser")
-  .option('--json', "for an agent waiting on Done: print what was decided, and what's left to change in the code, as JSON")
+  .option('--json', "for an agent waiting on the page: when the last tab closes, print what was decided, and what's left to change in the code, as JSON")
   .action(async (opts) => {
     const handoff = await review(opts);
     if (opts.json) process.stdout.write(JSON.stringify(handoff, null, 2) + '\n');
     else {
-      const line = handoffLine(handoff);
+      const line = handoffLine(handoff, hookInstalled(findRoot()) ? 'with your next message' : 'at the next /arbiter');
       if (line) process.stdout.write(line + '\n');
     }
   });

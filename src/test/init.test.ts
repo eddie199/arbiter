@@ -25,6 +25,8 @@ test('init is idempotent and merges AGENTS.md', async () => {
     ['.claude/skills/arbiter/SKILL.md', 'created'],
     ['AGENTS.md', 'updated'],
     ['CLAUDE.md', 'created'],
+    ['.claude/hooks/arbiter-board.cjs', 'created'],
+    ['.claude/settings.json', 'created'],
     ['package.json', 'skipped'],
   ]);
   assert.equal((fs.readFileSync(path.join(cwd, 'CLAUDE.md'), 'utf8').match(/<!-- arbiter -->/g) ?? []).length, 1);
