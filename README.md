@@ -458,23 +458,9 @@ Run `npx arbiterdesign init` in the folder your agent works in, or ask the agent
 </details>
 
 <details>
-<summary><b>Do I have to write anything?</b></summary>
+<summary><b>Will it interrupt me, or bury me in reviews?</b></summary>
 
-No. The agent records what it decided and what it chose over. You confirm, make it a rule, or skip, in chat or on the review page. Mid-session you can also just say *"make that a rule"* and it's recorded without a question.
-
-</details>
-
-<details>
-<summary><b>Does it interrupt me while I'm iterating?</b></summary>
-
-No. A screen you redesign six times is one piece of work, not six prompts. Decisions queue silently and surface in one line when you move on. You judge them when you want, or never.
-
-</details>
-
-<details>
-<summary><b>Will I be reviewing hundreds of tiny decisions?</b></summary>
-
-No. Every decision is sized as feature, pattern or polish. Feature and pattern items get a card each. Polish is one line per piece of work with a single **Confirm all**. A 7px height fix and a new settings architecture don't get the same treatment.
+No. Decisions queue silently while you iterate and surface in one line when you move on. Each is sized: feature and pattern get a card, polish is one line per piece of work with a single **Confirm all**. You judge them when you want, or never.
 
 </details>
 
@@ -507,23 +493,16 @@ Good. Arbiter records decisions, not tokens. Rules can name your components and 
 </details>
 
 <details>
-<summary><b>Which agents does it work with?</b></summary>
+<summary><b>Is this like ADRs?</b></summary>
 
-Claude Code and Cursor get the whole loop: the agent reads your rules before UI work and records what it decides. Other agents that read a project's instructions file, like Codex, Copilot and Gemini CLI, follow the rules but don't record.
-
-</details>
-
-<details>
-<summary><b>Who installs it, and what does the rest of the team need?</b></summary>
-
-Whoever has the repo runs one command. Everyone else gets a link to the board. To comment or say "looks good", they sign in with an email link. No account to create, nothing to install.
+Yes, same idea: a call, what it beat, and why. ADRs (architecture decision records) are for engineering: the stack, the data model, the API. Arbiter is for design: layout, flow, copy and states. And no one writes it up. The agent records each call as it works and you approve in seconds.
 
 </details>
 
 <details>
-<summary><b>Will it slow the agent down?</b></summary>
+<summary><b>Doesn't Claude have memory now?</b></summary>
 
-No. Active rules are capped at 40 and read once, before UI work, not on every turn. The archive of everything ever decided is never loaded.
+Yes, but memory is what the agent learned. Arbiter is what your team decided. Claude Code's auto memory is notes Claude keeps for itself: nobody approves them, and they stay on one machine. Arbiter's rules are ones you approved, kept in the repo for every teammate, and each one records what it beat and what it replaced.
 
 </details>
 
