@@ -133,22 +133,6 @@ export interface PendingDecision {
   picture: { command: string } | null;
 }
 
-/** A change someone asked for on the team board, as the Requests page shows it. */
-export interface ChangeRequest {
-  id: string;
-  author: string;
-  body: string;
-  screen: string;
-  screenName: string | null;
-  decision: string | null;
-  decisionText: string | null;
-  date: string;
-  earlierVersion: boolean;
-  status: 'open' | 'approved' | 'declined' | 'applied';
-  instead: string | null;
-  snapshotUrl: string | null;
-}
-
 /** How the agent hears of what you judge on the board: an agent waiting on the page, the Claude Code hook with your next message, or the next /arbiter. */
 export type Agent = 'waiting' | 'next-message' | 'arbiter';
 
@@ -156,7 +140,6 @@ export type Agent = 'waiting' | 'next-message' | 'arbiter';
 export interface ReviewState {
   project: string;
   pending: PendingDecision[];
-  requests: ChangeRequest[];
   active: number;
   cap: number;
   agent: Agent;

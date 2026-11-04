@@ -12,7 +12,6 @@ import { Overview } from './Overview';
 import { Change } from './Change';
 import { Rules } from './Rules';
 import { ReviewPage, type Results } from './Review';
-import { RequestsPage, type Declined } from './Requests';
 
 /**
  * The local board: the team board's shell (TopNav, Sidebar, SectionBar in components/) around its
@@ -28,7 +27,6 @@ export function App({ initial }: { initial: LocalBoard }) {
   const [state, setState] = useState<ReviewState | null>(null);
   // What was judged in this sitting stays on the page, collapsed, until the next visit.
   const [results, setResults] = useState<Results>({});
-  const [declined, setDeclined] = useState<Declined>({});
   const [stopped, setStopped] = useState(false);
   const [updated, setUpdated] = useState<Date | null>(null);
   const live = initial.live;
@@ -85,8 +83,6 @@ export function App({ initial }: { initial: LocalBoard }) {
   const rules = data.board.rules?.length ?? 0;
   const at = route.query.get('at');
   const waiting = state ? state.pending.length : data.pending;
-  const asks = state ? state.requests.filter((r) => r.status === 'open').length : 0;
-  const hasRequests = !!state && (state.requests.length > 0 || Object.keys(declined).length > 0);
 
   // The tab carries the inbox's count, so what arrives shows in the tab strip while you work elsewhere.
   // A stopped board can't count, so its tab drops it.
@@ -99,15 +95,13 @@ export function App({ initial }: { initial: LocalBoard }) {
   if (route.page === 'review') {
     const areaOfCard = (id: string) => { const c = cands.find((x) => x.id === id); return c ? areaOf(c) : null; };
     page = !live ? <NotHere /> : state ? <ReviewPage state={state} at={at} area={route.query.getAll('area')} areaOfCard={areaOfCard} results={results} onJudged={(r) => setResults((x) => ({ ...x, ...r }))} onUndone={(id) => setResults(({ [id]: _, ...x }) => x)} refresh={refresh} /> : <Loading />;
-  } else if (route.page === 'requests') {
-    page = !live ? <NotHere /> : state ? <RequestsPage state={state} declined={declined} onDeclined={(d) => setDeclined((x) => ({ ...x, ...d }))} refresh={refresh} /> : <Loading />;
   } else if (route.page === 'change') {
     const c = cands.find((x) => x.id === route.id);
     page = c ? <Change key={c.id} data={data} c={c} at={at} kinds={route.query.getAll('kind')} refresh={refresh} /> : <NotHere />;
   } else if (route.page === 'rules') page = <Rules data={data} at={at} cap={state?.cap} refresh={refresh} />;
   else page = <Overview data={data} query={route.query} />;
 
-  const nav = { route, data, sections, rules, waiting, asks, hasRequests };
+  const nav = { route, data, sections, rules, waiting };
   return (
     <>
       <TopBar data={data} waiting={waiting} onInbox={route.page === 'review'} updated={updated} stopped={stopped} onRefresh={async () => {
@@ -135,7 +129,6 @@ export function App({ initial }: { initial: LocalBoard }) {
 
 function titleOf(route: Route, data: LocalBoard): string {
   if (route.page === 'review') return 'Review inbox';
-  if (route.page === 'requests') return 'Requests';
   if (route.page === 'rules') return 'Design rules';
   if (route.page === 'change') return data.board.candidates.find((c) => c.id === route.id)?.name ?? 'Not here';
   const s = route.query.getAll('section');
@@ -276,14 +269,12 @@ const OverviewIcon = <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
 const RulesIcon = <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true" className="shrink-0"><path d="M4.5 3.5h7.5M4.5 7h7.5M4.5 10.5h7.5" /><circle cx="2" cy="3.5" r=".6" fill="currentColor" /><circle cx="2" cy="7" r=".6" fill="currentColor" /><circle cx="2" cy="10.5" r=".6" fill="currentColor" /></svg>;
 /** What's waiting for you: a tray. */
 const ReviewIcon = <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><path d="M1.5 8.5 3 2.5h8l1.5 6v3h-11z" /><path d="M1.5 8.5h3.25l.75 1.5h3l.75-1.5h3.25" /></svg>;
-/** What your team asked for: a pencil, as on the team board's Request change. */
-const RequestIcon = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><path d="M10.5 2.5l3 3-7.5 7.5H3v-3z" /></svg>;
 
 interface Item { href: string; label: string; hint?: string; icon?: React.ReactNode; on: boolean }
-interface Nav { route: Route; data: LocalBoard; sections: { name: string; count: number }[]; rules: number; waiting: number; asks: number; hasRequests: boolean }
+interface Nav { route: Route; data: LocalBoard; sections: { name: string; count: number }[]; rules: number; waiting: number }
 
 /** components/Sidebar.tsx, reading the hash instead of the router, with the review pages after Design rules. */
-function Rail({ route, data, sections, rules, waiting, asks, hasRequests }: Nav) {
+function Rail({ route, data, sections, rules, waiting }: Nav) {
   const picked = route.query.getAll('section');
   const section = picked.length === 1 ? picked[0] : '';
   const view = route.query.get('view') === 'list' ? 'list' : undefined;
@@ -298,12 +289,7 @@ function Rail({ route, data, sections, rules, waiting, asks, hasRequests }: Nav)
     { key: 'rules', items: rules ? [{ href: href('rules'), label: 'Design rules', hint: String(rules), icon: RulesIcon, on: route.page === 'rules' }] : [] },
     {
       key: 'review',
-      items: data.live
-        ? [
-            { href: href('review'), label: 'Review inbox', hint: waiting ? String(waiting) : undefined, icon: ReviewIcon, on: route.page === 'review' },
-            ...(hasRequests ? [{ href: href('requests'), label: 'Requests', hint: asks ? String(asks) : undefined, icon: RequestIcon, on: route.page === 'requests' }] : []),
-          ]
-        : [],
+      items: data.live ? [{ href: href('review'), label: 'Review inbox', hint: waiting ? String(waiting) : undefined, icon: ReviewIcon, on: route.page === 'review' }] : [],
     },
   ].filter((g) => g.items.length);
 
@@ -343,7 +329,7 @@ function Rail({ route, data, sections, rules, waiting, asks, hasRequests }: Nav)
 }
 
 /** components/SectionBar.tsx: below md the rail is hidden, and this row of chips stands in for it. */
-function Chips({ route, data, sections, rules, waiting, asks, hasRequests }: Nav) {
+function Chips({ route, data, sections, rules, waiting }: Nav) {
   const picked = route.query.getAll('section');
   const section = picked.length === 1 ? picked[0] : '';
   const onBoard = route.page === 'overview';
@@ -354,7 +340,6 @@ function Chips({ route, data, sections, rules, waiting, asks, hasRequests }: Nav
       {sections.map((s) => <a key={s.name} href={href('overview', { section: s.name })} className={chip(onBoard && section === s.name)}>{s.name} <span className="opacity-60">{s.count}</span></a>)}
       {rules ? <a href={href('rules')} className={chip(route.page === 'rules')}>Design rules</a> : null}
       {data.live ? <a href={href('review')} className={chip(route.page === 'review')}>Review inbox{waiting ? <span className="opacity-60"> {waiting}</span> : null}</a> : null}
-      {data.live && hasRequests ? <a href={href('requests')} className={chip(route.page === 'requests')}>Requests{asks ? <span className="opacity-60"> {asks}</span> : null}</a> : null}
     </div>
   );
 }

@@ -13,7 +13,6 @@ It started as the team board's pages, ported from the site repo (`hosted/local`,
 | `Overview.tsx`, `Toolbar.tsx` | Overview: every piece of work as a card or a row |
 | `Change.tsx`, `Comments.tsx` | One change. Comments are read-only: the team writes them on the team board |
 | `Review.tsx` | The Review inbox: List and Single, Undo |
-| `Requests.tsx` | Change requests from the team board |
 | `Rules.tsx` | Design rules, with Copy, Edit and Remove on each rule |
 | `route.ts` | Pages in the hash (`#/`, `#/c/C-0001`, `#/rules`), so it works from a file on disk too |
 | `api.ts` | The calls to the CLI's review server |

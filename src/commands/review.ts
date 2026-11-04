@@ -25,7 +25,6 @@ import { findRoot, readActive, readPending, resolvePaths } from '../store';
 import { autoPublish } from '../autopublish';
 import { workDir } from '../work';
 import { liveBoard, reviewState } from '../localboard';
-import { judgeRequest, RequestAction } from './request';
 import { Answer, clearHandoff, Handoff, HANDOFF_NAME, readHandoff, saveAnswer, summarize, withdrawAnswer, withdrawRemoval } from '../handoff';
 import { hookInstalled } from '../hook';
 import type { Decision } from '../schema';
@@ -295,25 +294,6 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
         json(res, 200, { exitCode: result.exitCode, ...result.output });
         return;
       }
-      if (req.method === 'POST' && url.pathname === '/api/request') {
-        const body = JSON.parse(await readBody(req)) as { id: string; as: RequestAction; to?: string; why?: string };
-        const result = judgeRequest(body.id, { as: body.as, to: body.to, why: body.why, cwd });
-        if (result.exitCode === 0) {
-          changed = true;
-          const o = result.output;
-          answer({
-            kind: 'request',
-            id: body.id,
-            status: o.status === 'declined' ? 'declined' : 'approved',
-            author: String(o.author),
-            screenName: (o.screenName as string | null) ?? null,
-            do: o.do as string | undefined,
-            reason: o.reason as string | undefined,
-          });
-        }
-        json(res, 200, { exitCode: result.exitCode, ...result.output });
-        return;
-      }
       if (req.method === 'GET' && url.pathname.startsWith('/snapshots/')) {
         const file = path.basename(url.pathname);
         const abs = path.join(file.startsWith('W-') ? workDir(paths) : candidatesDir(paths), file);
@@ -404,9 +384,8 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
         stop('closed');
         return;
       }
-      const asks = s.requests.filter((r) => r.status === 'open').length;
       // With --json, stdout is the handoff and nothing else; the agent reads it whole.
-      say(`Arbiter review — ${s.pending.length} pending${asks ? ` · ${asks} request${asks === 1 ? '' : 's'}` : ''} · ${candidates} candidate${candidates === 1 ? '' : 's'} · ${s.active} of ${s.cap} rules\n${url}#/review\nClose the tab, or press Ctrl-C here, to stop.\n`);
+      say(`Arbiter review — ${s.pending.length} pending · ${candidates} candidate${candidates === 1 ? '' : 's'} · ${s.active} of ${s.cap} rules\n${url}#/review\nClose the tab, or press Ctrl-C here, to stop.\n`);
       // Straight to what's waiting: that's what `review` is opened for.
       if (opts.open !== false) openBrowser(`${url}#/review`);
     };

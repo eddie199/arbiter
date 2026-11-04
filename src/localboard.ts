@@ -13,11 +13,11 @@ import { candidatesDir, decisionsFor, readCandidates } from './candidates';
 import { ACTIVE_CAP, Paths, readActive, readArchive, readConfig, readPending } from './store';
 import type { Decision } from './schema';
 import { workId, workSnapshot } from './work';
-import { cardOf, describe, readRequests } from './requests';
+import { cardOf, readRequests } from './requests';
 import { readComments } from './comments';
 import { readLinkOrNull } from './hosted';
 import { missingPictures } from './pictures';
-import type { Agent, Board, BoardCandidate, BoardDecision, BoardRequest, ChangeRequest as ShownRequest, LocalBoard, PendingDecision, QueuedLine, ReviewState } from './board-types';
+import type { Agent, Board, BoardCandidate, BoardDecision, BoardRequest, LocalBoard, PendingDecision, QueuedLine, ReviewState } from './board-types';
 
 /** On the board: judged, still in force, and not polish. */
 const shown = (d: Decision) => d.verdict !== 'pending' && d.verdict !== 'retire' && d.level !== 'polish';
@@ -118,15 +118,13 @@ export function liveBoard(paths: Paths): LocalBoard {
   return { board, comments: readComments(paths), waiting, queued: lines, pending: queued.length, hosted: link?.shareUrl ?? null, version: link?.boardVersion ?? null, live: true };
 }
 
-/** What `/api/state` sends: the review queue, and the team's change requests to answer. */
+/** What `/api/state` sends: the review queue. */
 export function reviewState(paths: Paths, agent: Agent): ReviewState {
   const candidates = readCandidates(paths);
   const byId = new Map(candidates.map((c) => [c.id, c]));
   const ids = new Set(byId.keys());
-  const version = readLinkOrNull(paths)?.boardVersion ?? null;
-  const archive = readArchive(paths);
   const active = readActive(paths);
-  // The card a request or a decision is on: its picture, a screen's or a piece of work's.
+  // The card a decision is on: its picture, a screen's or a piece of work's.
   const shotOf = (card: string) => {
     if (card.startsWith('C-')) {
       const c = byId.get(card);
@@ -149,9 +147,5 @@ export function reviewState(paths: Paths, agent: Agent): ReviewState {
       picture: missingPictures(paths, [d], candidates)[0] ?? null,
     };
   });
-  // Open ones to answer; approved ones waiting on the agent, shown so it's clear nothing is lost.
-  const requests: ShownRequest[] = readRequests(paths)
-    .filter((r) => r.status === 'open' || r.status === 'approved')
-    .map((r) => ({ ...describe(paths, r, version, archive), snapshotUrl: shotOf(r.screen) }));
-  return { project: path.basename(paths.root), pending, requests, active: active.length, cap: readConfig(paths)?.activeCap ?? ACTIVE_CAP, agent };
+  return { project: path.basename(paths.root), pending, active: active.length, cap: readConfig(paths)?.activeCap ?? ACTIVE_CAP, agent };
 }
