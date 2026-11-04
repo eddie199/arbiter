@@ -1,0 +1,360 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { areasOf } from './bits';
+import { Lockup } from '@/components/ui/mark';
+import { buttonClass } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { Tooltip, TooltipProvider } from '@/components/ui/tooltip';
+import type { LocalBoard, ReviewState } from './types';
+import { getBoard, getStamp, getState, sayBye } from './api';
+import { href, useRoute, type Route } from './route';
+import { Overview } from './Overview';
+import { Change } from './Change';
+import { Rules } from './Rules';
+import { ReviewPage, type Results } from './Review';
+import { RequestsPage, type Declined } from './Requests';
+
+/**
+ * The local board: the team board's shell (TopNav, Sidebar, SectionBar in components/) around its
+ * pages, drawn from this project's files, with the review queue as pages of its own beside them.
+ * The review pages come last in the rail, under Design rules: the board first, then what's waiting for you.
+ *
+ * It's meant to stay open beside the work, so it keeps itself current: what the agent records shows
+ * up within seconds, and there's nothing to finish. Close the tab when you're done with it.
+ */
+export function App({ initial }: { initial: LocalBoard }) {
+  const route = useRoute();
+  const [data, setData] = useState(initial);
+  const [state, setState] = useState<ReviewState | null>(null);
+  // What was judged in this sitting stays on the page, collapsed, until the next visit.
+  const [results, setResults] = useState<Results>({});
+  const [declined, setDeclined] = useState<Declined>({});
+  const [stopped, setStopped] = useState(false);
+  const [updated, setUpdated] = useState<Date | null>(null);
+  const live = initial.live;
+
+  // A judged decision joins the board, so both are read again after every answer.
+  const refresh = useCallback(async () => {
+    if (!live) return;
+    const [b, s] = await Promise.all([getBoard(), getState()]);
+    setData(b);
+    setState(s);
+    setUpdated(new Date());
+  }, [live]);
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  // Every few seconds while the tab is in view, and as soon as you come back to it: has anything the
+  // board is drawn from changed? Redraw only when it has. A server that stops answering has stopped.
+  useEffect(() => {
+    if (!live) return;
+    let last: string | null = null;
+    let misses = 0;
+    const check = async () => {
+      if (document.hidden) return;
+      const stamp = await getStamp();
+      if (stamp === null) {
+        if (++misses >= 2) setStopped(true);
+        return;
+      }
+      misses = 0;
+      setStopped(false);
+      if (last !== null && stamp !== last) void refresh();
+      last = stamp;
+    };
+    const now = () => void check();
+    now();
+    const timer = setInterval(now, 3000);
+    document.addEventListener('visibilitychange', now);
+    window.addEventListener('focus', now);
+    // Back from the browser's cache after a goodbye: checking says it's here again.
+    window.addEventListener('pageshow', now);
+    window.addEventListener('pagehide', sayBye);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', now);
+      window.removeEventListener('focus', now);
+      window.removeEventListener('pageshow', now);
+      window.removeEventListener('pagehide', sayBye);
+    };
+  }, [live, refresh]);
+
+  const cands = data.board.candidates;
+  const areaOf = areasOf(data);
+  const names = [...new Set(cands.map(areaOf))];
+  const sections = names.length === 1 ? [] : names.map((n) => ({ name: n, count: cands.filter((c) => areaOf(c) === n).length }));
+  const rules = data.board.rules?.length ?? 0;
+  const at = route.query.get('at');
+  const waiting = state ? state.pending.length : data.pending;
+  const asks = state ? state.requests.filter((r) => r.status === 'open').length : 0;
+  const hasRequests = !!state && (state.requests.length > 0 || Object.keys(declined).length > 0);
+
+  // The tab carries the inbox's count, so what arrives shows in the tab strip while you work elsewhere.
+  // A stopped board can't count, so its tab drops it.
+  useEffect(() => {
+    const count = live && waiting && !stopped ? `(${waiting}) ` : '';
+    document.title = `${count}${titleOf(route, data)} · ${data.board.project}`;
+  }, [route, data, live, waiting, stopped]);
+
+  let page: React.ReactNode;
+  if (route.page === 'review') {
+    const areaOfCard = (id: string) => { const c = cands.find((x) => x.id === id); return c ? areaOf(c) : null; };
+    page = !live ? <NotHere /> : state ? <ReviewPage state={state} at={at} area={route.query.getAll('area')} areaOfCard={areaOfCard} results={results} onJudged={(r) => setResults((x) => ({ ...x, ...r }))} onUndone={(id) => setResults(({ [id]: _, ...x }) => x)} refresh={refresh} /> : <Loading />;
+  } else if (route.page === 'requests') {
+    page = !live ? <NotHere /> : state ? <RequestsPage state={state} declined={declined} onDeclined={(d) => setDeclined((x) => ({ ...x, ...d }))} refresh={refresh} /> : <Loading />;
+  } else if (route.page === 'change') {
+    const c = cands.find((x) => x.id === route.id);
+    page = c ? <Change key={c.id} data={data} c={c} at={at} kinds={route.query.getAll('kind')} refresh={refresh} /> : <NotHere />;
+  } else if (route.page === 'rules') page = <Rules data={data} at={at} cap={state?.cap} refresh={refresh} />;
+  else page = <Overview data={data} query={route.query} />;
+
+  const nav = { route, data, sections, rules, waiting, asks, hasRequests };
+  return (
+    <>
+      <TopBar data={data} waiting={waiting} onInbox={route.page === 'review'} updated={updated} stopped={stopped} onRefresh={async () => {
+        try { await refresh(); setStopped(false); } catch { setStopped(true); }
+      }} />
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-5 pb-24 pt-8 md:grid-cols-[13rem_minmax(0,1fr)]">
+        <Rail {...nav} />
+        <div className="min-w-0">
+          <Chips {...nav} />
+          {stopped ? (
+            <div className="mb-5 rounded-lg border border-border bg-surface px-4 py-3 text-[13px]">
+              <span className="font-semibold tracking-tight">This board has stopped.</span>{' '}
+              <span className="text-muted">What’s on it may be out of date. Run <code className="font-mono text-[12px]">npx arbiter review</code> to start it again, and this page picks up by itself.</span>
+            </div>
+          ) : null}
+          {page}
+          <footer className="mt-20 text-[12px] text-faint">{live
+            ? 'Only you see this board. It’s drawn from this project’s files, and nothing here reaches your team until you publish. Made with Arbiter.'
+            : `A read-only copy of this project’s design decisions${data.board.exported ? `, as of ${data.board.exported}` : ''}. Feedback goes to whoever sent it. Made with Arbiter.`}</footer>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function titleOf(route: Route, data: LocalBoard): string {
+  if (route.page === 'review') return 'Review inbox';
+  if (route.page === 'requests') return 'Requests';
+  if (route.page === 'rules') return 'Design rules';
+  if (route.page === 'change') return data.board.candidates.find((c) => c.id === route.id)?.name ?? 'Not here';
+  const s = route.query.getAll('section');
+  return s.length === 1 ? s[0] : 'Overview';
+}
+
+function Loading() {
+  return <main className="py-16 text-center text-[13px] text-muted">Loading…</main>;
+}
+
+function NotHere() {
+  return (
+    <main className="px-6 py-16 text-center">
+      <p className="font-semibold tracking-tight">That isn’t here</p>
+      <p className="mt-1 text-[13px] text-muted">It may have been renamed or removed. <a href={href('overview')} className="underline hover:text-fg">Back to the overview</a></p>
+    </main>
+  );
+}
+
+const OUT = <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 17 17 7" /><path d="M7 7h10v10" /></svg>;
+
+/**
+ * The team board's top bar: the lockup and the project, tagged Local, since the two boards look alike
+ * on purpose and only one of them is shared; on the right the theme and the team board.
+ * On a phone, where the links to the pages scroll away with the page, it also keeps the Review inbox
+ * and its count in view. A live board says when it last read the files, beside a button to read them now.
+ */
+function TopBar({ data, waiting, onInbox, updated, stopped, onRefresh }: { data: LocalBoard; waiting: number; onInbox: boolean; updated: Date | null; stopped: boolean; onRefresh: () => Promise<void> }) {
+  return (
+    <div className="sticky top-0 z-30 border-b border-border bg-bg/90 backdrop-blur">
+      <div className="mx-auto flex h-12 max-w-6xl items-center justify-between px-5">
+        <div className="flex items-center gap-3">
+          <a href={href('overview')} className="flex items-center"><Lockup size={18} /></a>
+          <span className="hidden text-faint sm:inline">/</span>
+          <a href={href('overview')} className="hidden text-muted hover:text-fg sm:inline">{data.board.project}</a>
+          {data.live
+            ? <Badge className="cursor-default" title="Only you see this board. It runs on your computer, and nothing here reaches your team until you share it.">Local</Badge>
+            : <Badge className="cursor-default" title={`A copy of this project’s design decisions${data.board.exported ? `, as of ${data.board.exported}` : ''}. It doesn’t update, and feedback goes to whoever sent it.`}>Read-only Copy</Badge>}
+        </div>
+        <nav className="flex items-center gap-1 text-[13px]">
+          {data.live ? <Updated at={updated} stopped={stopped} onRefresh={onRefresh} /> : null}
+          {data.live && waiting ? (
+            <a href={href('review')} aria-label={`Review inbox: ${waiting} waiting`} title="Review inbox" aria-current={onInbox ? 'page' : undefined} className={`flex h-8 items-center gap-1.5 rounded-ui px-2 tabular-nums md:hidden ${onInbox ? 'bg-surface-2 text-fg' : 'text-muted hover:bg-surface-2 hover:text-fg'}`}>
+              {ReviewIcon}{waiting}
+            </a>
+          ) : null}
+          <ThemeToggle />
+          {/* An exported copy is someone else's to read: no team board to share from it. */}
+          {/* On a phone the bar also carries Local and the inbox count, so the team board's button is shorter there. */}
+          {data.live ? <>
+            <span className="mx-1 h-4 w-px bg-border" />
+            {data.hosted
+              ? <a href={data.hosted} target="_blank" rel="noreferrer" className={buttonClass('secondary', 'sm')}><span className="hidden sm:inline">Open team board</span><span className="sm:hidden">Team board</span> {OUT}</a>
+              : <ShareTeamBoard />}
+          </> : null}
+        </nav>
+      </div>
+    </div>
+  );
+}
+
+const RefreshIcon = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>;
+
+/** A time of day, with the day as well when it isn't today. */
+function timeOf(d: Date): string {
+  const t = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? t : `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })}, ${t}`;
+}
+
+/**
+ * When the board last read the files, and a button to read them now. It reads them by itself when
+ * they change, so the time is when something last changed, or when you last refreshed. The button
+ * turns for a moment, so a refresh that found nothing new still shows it ran. A narrow bar keeps
+ * only the button.
+ */
+function Updated({ at, stopped, onRefresh }: { at: Date | null; stopped: boolean; onRefresh: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const click = async () => {
+    setBusy(true);
+    await Promise.all([onRefresh(), new Promise((r) => setTimeout(r, 500))]);
+    setBusy(false);
+  };
+  return (
+    <div className="flex items-center">
+      {at || stopped ? (
+        <span className="hidden whitespace-nowrap pl-1 text-[12px] tabular-nums text-muted sm:inline" title="The board checks for changes every few seconds and redraws when something changes.">
+          {stopped ? 'Stopped' : `Updated ${timeOf(at!)}`}
+        </span>
+      ) : null}
+      <TooltipProvider>
+        <Tooltip label="Refresh">
+          <button type="button" onClick={click} disabled={busy} aria-label="Refresh" className="flex h-8 w-8 items-center justify-center rounded-ui text-muted hover:bg-surface-2 hover:text-fg">
+            <span className={`flex ${busy ? 'animate-spin motion-reduce:animate-none' : ''}`}>{RefreshIcon}</span>
+          </button>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+
+/** No team board yet: the command that makes one. The page doesn't publish by itself; the first publish is a step to take on purpose. */
+function ShareTeamBoard() {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState('Copy');
+  const box = useRef<HTMLDivElement>(null);
+  const code = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('click', away);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('click', away); document.removeEventListener('keydown', esc); };
+  }, [open]);
+  const copy = async () => {
+    const el = code.current;
+    if (el) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s?.removeAllRanges(); s?.addRange(r); }
+    try { await navigator.clipboard.writeText('npx arbiter publish'); setCopied('Copied'); } catch { setCopied(document.execCommand('copy') ? 'Copied' : 'Selected'); }
+  };
+  return (
+    <div ref={box} className="relative">
+      <button type="button" onClick={() => { setOpen((v) => !v); setCopied('Copy'); }} className={buttonClass('secondary', 'sm')} aria-expanded={open} aria-label="Share team board"><span className="hidden sm:inline">Share team board</span><span className="sm:hidden">Share</span></button>
+      {open ? (
+        <div className="absolute right-0 top-[calc(100%+8px)] z-40 w-[300px] rounded-lg border border-border bg-bg p-3 text-[13px] text-muted shadow-lg">
+          <p className="mb-2.5">Publish a team board: your team can see each change and why it is that way, comment, and request changes. Run this in the project:</p>
+          <div className="flex items-center gap-2">
+            <code ref={code} className="flex-1 rounded-ui bg-surface-2 px-2 py-1 font-mono text-[12px] text-fg">npx arbiter publish</code>
+            <button type="button" onClick={copy} className={buttonClass('ghost', 'sm')}>{copied}</button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const KEY = 'arbiter-rail';
+const OverviewIcon = <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true" className="shrink-0"><rect x="1" y="1" width="5" height="7" rx="1" /><rect x="8" y="1" width="5" height="4" rx="1" /><rect x="8" y="7" width="5" height="6" rx="1" /><rect x="1" y="10" width="5" height="3" rx="1" /></svg>;
+const RulesIcon = <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true" className="shrink-0"><path d="M4.5 3.5h7.5M4.5 7h7.5M4.5 10.5h7.5" /><circle cx="2" cy="3.5" r=".6" fill="currentColor" /><circle cx="2" cy="7" r=".6" fill="currentColor" /><circle cx="2" cy="10.5" r=".6" fill="currentColor" /></svg>;
+/** What's waiting for you: a tray. */
+const ReviewIcon = <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><path d="M1.5 8.5 3 2.5h8l1.5 6v3h-11z" /><path d="M1.5 8.5h3.25l.75 1.5h3l.75-1.5h3.25" /></svg>;
+/** What your team asked for: a pencil, as on the team board's Request change. */
+const RequestIcon = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><path d="M10.5 2.5l3 3-7.5 7.5H3v-3z" /></svg>;
+
+interface Item { href: string; label: string; hint?: string; icon?: React.ReactNode; on: boolean }
+interface Nav { route: Route; data: LocalBoard; sections: { name: string; count: number }[]; rules: number; waiting: number; asks: number; hasRequests: boolean }
+
+/** components/Sidebar.tsx, reading the hash instead of the router, with the review pages after Design rules. */
+function Rail({ route, data, sections, rules, waiting, asks, hasRequests }: Nav) {
+  const picked = route.query.getAll('section');
+  const section = picked.length === 1 ? picked[0] : '';
+  const view = route.query.get('view') === 'list' ? 'list' : undefined;
+  const onOverview = route.page === 'overview';
+  const [closed, setClosed] = useState<Record<string, boolean>>({});
+  useEffect(() => { try { setClosed(JSON.parse(localStorage.getItem(KEY) ?? '{}')); } catch {} }, []);
+  const toggle = (k: string) => setClosed((c) => { const n = { ...c, [k]: !c[k] }; try { localStorage.setItem(KEY, JSON.stringify(n)); } catch {} return n; });
+
+  const groups: { key: string; title?: string; items: Item[] }[] = [
+    { key: 'all', items: [{ href: href('overview', { view }), label: 'Overview', hint: String(data.board.candidates.length), icon: OverviewIcon, on: onOverview && !section }] },
+    { key: 'sections', title: 'Areas', items: sections.map((s) => ({ href: href('overview', { section: s.name, view }), label: s.name, hint: String(s.count), on: onOverview && section === s.name })) },
+    { key: 'rules', items: rules ? [{ href: href('rules'), label: 'Design rules', hint: String(rules), icon: RulesIcon, on: route.page === 'rules' }] : [] },
+    {
+      key: 'review',
+      items: data.live
+        ? [
+            { href: href('review'), label: 'Review inbox', hint: waiting ? String(waiting) : undefined, icon: ReviewIcon, on: route.page === 'review' },
+            ...(hasRequests ? [{ href: href('requests'), label: 'Requests', hint: asks ? String(asks) : undefined, icon: RequestIcon, on: route.page === 'requests' }] : []),
+          ]
+        : [],
+    },
+  ].filter((g) => g.items.length);
+
+  return (
+    <aside className="sticky top-16 hidden self-start md:block">
+      <nav className="w-52 text-[14px]">
+        {groups.map((g, i) => {
+          const folded = !!g.title && !!closed[g.key];
+          const activeInside = g.items.some((it) => it.on);
+          return (
+            <div key={g.key} className={!i ? '' : g.key === 'sections' ? 'mt-2' /* Areas belongs under Overview */ : 'mt-4'}>
+              {g.title ? (
+                <button type="button" onClick={() => toggle(g.key)} aria-expanded={!folded} className="group mb-1 flex h-7 w-full items-center gap-1 rounded-ui px-1.5 text-[12px] text-faint hover:bg-surface-2 hover:text-muted">
+                  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className={`transition-transform ${folded ? '' : 'rotate-90'}`}><path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  <span>{g.title}</span>
+                  {folded && activeInside ? <span className="ml-auto h-1.5 w-1.5 rounded-full bg-fg" title="Current page is in here" /> : null}
+                </button>
+              ) : null}
+              {folded ? null : (
+                <ul className={g.title ? 'ml-2 space-y-0.5 border-l border-border' : 'space-y-0.5'}>
+                  {g.items.map((it) => (
+                    <li key={it.href}>
+                      <a href={it.href} aria-current={it.on ? 'page' : undefined} className={`flex h-8 items-center justify-between px-2.5 transition-colors ${g.title ? '-ml-px rounded-r-ui border-l' : 'rounded-ui'} ${it.on ? 'border-fg bg-surface-2 text-fg' : 'border-transparent text-muted hover:bg-surface-2 hover:text-fg'}`}>
+                        <span className="flex min-w-0 items-center gap-2">{it.icon}<span className="truncate">{it.label}</span></span>
+                        {it.hint ? <span className={`text-[12px] tabular-nums ${it.on ? 'text-muted' : 'text-faint'}`}>{it.hint}</span> : null}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+    </aside>
+  );
+}
+
+/** components/SectionBar.tsx: below md the rail is hidden, and this row of chips stands in for it. */
+function Chips({ route, data, sections, rules, waiting, asks, hasRequests }: Nav) {
+  const picked = route.query.getAll('section');
+  const section = picked.length === 1 ? picked[0] : '';
+  const onBoard = route.page === 'overview';
+  const chip = (on: boolean) => `shrink-0 rounded-full border px-3 py-1 text-[13px] ${on ? 'border-fg bg-fg text-bg' : 'border-border text-muted hover:border-border-strong hover:text-fg'}`;
+  return (
+    <div className="-mx-5 mb-5 flex gap-2 overflow-x-auto px-5 pb-1 md:hidden [scrollbar-width:none]">
+      <a href={href('overview')} className={chip(onBoard && !section)}>Overview</a>
+      {sections.map((s) => <a key={s.name} href={href('overview', { section: s.name })} className={chip(onBoard && section === s.name)}>{s.name} <span className="opacity-60">{s.count}</span></a>)}
+      {rules ? <a href={href('rules')} className={chip(route.page === 'rules')}>Design rules</a> : null}
+      {data.live ? <a href={href('review')} className={chip(route.page === 'review')}>Review inbox{waiting ? <span className="opacity-60"> {waiting}</span> : null}</a> : null}
+      {data.live && hasRequests ? <a href={href('requests')} className={chip(route.page === 'requests')}>Requests{asks ? <span className="opacity-60"> {asks}</span> : null}</a> : null}
+    </div>
+  );
+}

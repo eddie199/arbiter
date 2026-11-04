@@ -1,8 +1,8 @@
 /**
  * `arbiter review` — the local board: what's waiting for review, and everything decided.
  *
- * Plain node:http on 127.0.0.1. The page is the team board's own, built in the site repo
- * (hosted/local) into templates/board; it reads and writes the same files the CLI does and has no
+ * Plain node:http on 127.0.0.1. The page is built from board/ into templates/board, and its data from
+ * the project's files (src/localboard.ts); it reads and writes the same files the CLI does and has no
  * state of its own. It's meant to stay open beside the work: the page redraws when the files
  * change, whoever changed them. Stops a few seconds after its last tab closes, or on Ctrl-C.
  * Each project gets the same address every time (steadyPort), so a tab you kept picks up again
@@ -20,13 +20,11 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { judge, judgeAll, JudgeAction, Judgement, retire, reword, unjudge, unretire } from './record';
 import { updateCandidate } from './candidate';
-import { candidatesDir, decisionsFor, readCandidates } from '../candidates';
-import { buildManifest, readComments, readLinkOrNull } from '../hosted';
-import { findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, ACTIVE_CAP } from '../store';
+import { candidatesDir, readCandidates } from '../candidates';
+import { findRoot, readActive, readPending, resolvePaths } from '../store';
 import { autoPublish } from '../autopublish';
-import { missingPictures } from '../pictures';
-import { cardOf, describe, readRequests } from '../requests';
-import { workDir, workSnapshot } from '../work';
+import { workDir } from '../work';
+import { liveBoard, reviewState } from '../localboard';
 import { judgeRequest, RequestAction } from './request';
 import { Answer, clearHandoff, Handoff, HANDOFF_NAME, readHandoff, saveAnswer, summarize, withdrawAnswer, withdrawRemoval } from '../handoff';
 import { hookInstalled } from '../hook';
@@ -61,7 +59,7 @@ export function steadyPort(root: string): number {
 // Geist, as on arbiter.design. Shipped with the package: the page never loads anything from the network.
 const FONTS = path.join(__dirname, '..', '..', 'templates', 'fonts');
 const FONT_FILES = new Set(['Geist-Variable.woff2', 'GeistMono-Variable.woff2']);
-// The local board: the team board's pages, built in the site repo (hosted/local) and copied here.
+// The local board's page, built from board/ by `npm run build`.
 const BOARD = path.join(__dirname, '..', '..', 'templates', 'board');
 const BOARD_FILES: Record<string, string> = { '/': 'index.html', '/board.js': 'board.js', '/board.css': 'board.css' };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
@@ -71,80 +69,14 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
   const paths = resolvePaths(root);
   const cwd = root;
 
-  const state = () => {
-    const comments = readComments(paths);
-    const candidates = readCandidates(paths).map((c) => ({
-      ...c,
-      snapshotUrl: c.snapshot ? `/snapshots/${c.snapshot}` : null,
-      decisions: decisionsFor(paths, c.id).map((d) => ({ id: d.id, decision: d.decision, verdict: d.verdict })),
-      comments: comments.filter((x) => x.candidate_id === c.id),
-    }));
-    const byId = new Map(candidates.map((c) => [c.id, c]));
-    const version = readLinkOrNull(paths)?.boardVersion ?? null;
-    const archive = readArchive(paths);
-    // The card a request was made on: its picture, a candidate's or a piece of work's.
-    const shotOf = (screen: string) => {
-      if (screen.startsWith('C-')) return byId.get(screen)?.snapshotUrl ?? null;
-      const f = workSnapshot(paths, screen);
-      return f ? `/snapshots/${path.basename(f)}` : null;
-    };
-    const active = readActive(paths);
-    const ids = new Set(byId.keys());
-    return {
-      project: path.basename(root),
-      pending: readPending(paths).map((d) => {
-        // The card it waits on, so a change marked Waiting can open the Review inbox at its work.
-        const card = cardOf(paths, d, ids);
-        return {
-          ...d,
-          card,
-          // The rule a clash is with, while it's still in force: the page offers Follow / Replace / Keep as exception.
-          againstRule: d.against ? active.filter((r) => r.id === d.against).map((r) => ({ id: r.id, decision: r.decision }))[0] ?? null : null,
-          candidateName: d.candidate ? byId.get(d.candidate)?.name ?? null : null,
-          // Its card's picture, a screen's or a piece of work's, so what changed is in view where it's judged.
-          snapshotUrl: shotOf(card),
-          picture: missingPictures(paths, [d], candidates)[0] ?? null,
-        };
-      }),
-      // Open ones to answer; approved ones waiting on the agent — shown so it's clear nothing is lost.
-      requests: readRequests(paths)
-        .filter((r) => r.status === 'open' || r.status === 'approved')
-        .map((r) => ({ ...describe(paths, r, version, archive), snapshotUrl: shotOf(r.screen) })),
-      candidates,
-      hosted: readLinkOrNull(paths)?.shareUrl ?? null,
-      boardVersion: readLinkOrNull(paths)?.boardVersion ?? null,
-      // The rules in force, for the Rules tab: what's already settled before you make another.
-      rules: active,
-      // An agent is waiting on Done: the page says so instead of "at the next /arbiter".
-      // When the agent makes a code change you ask for: when the last tab closes if it's waiting on
-      // the page, with your next message if the Claude Code hook is installed, else at the next /arbiter.
-      agent: opts.json ? 'waiting' : hookInstalled(root) ? 'next-message' : 'arbiter',
-      active: active.length,
-      cap: readConfig(paths)?.activeCap ?? ACTIVE_CAP,
-    };
-  };
+  // The review queue, and when the agent makes a code change you ask for: when the last tab closes if
+  // it's waiting on the page, with your next message if the Claude Code hook is installed, else at the
+  // next /arbiter.
+  const state = () => reviewState(paths, opts.json ? 'waiting' : hookInstalled(root) ? 'next-message' : 'arbiter');
 
   // Judging twenty items shouldn't mean twenty publishes, so the board is updated once, at the
   // end. The page writes the same files the CLI does, but doesn't go through its handlers.
-  // What the local board draws: the manifest `publish` uploads, its pictures as links served here,
-  // and what only this machine knows: what's waiting for review, and the team's pulled comments.
-  // Work that's only waiting gets a card too, so the board shows everything before it's judged.
-  const boardData = () => {
-    const queued = readPending(paths);
-    const { manifest } = buildManifest(paths, { includeRules: true, pictures: 'link', queued });
-    const ids = new Set(readCandidates(paths).map((c) => c.id));
-    const waiting: Record<string, number> = {};
-    // Enough of each to draw a card and place it in its area before anything on it is judged.
-    const lines: Record<string, { id: string; change: string | null; decision: string; dimension: string; scope: string }[]> = {};
-    for (const d of queued) {
-      if (d.level === 'polish') continue;
-      const card = cardOf(paths, d, ids);
-      waiting[card] = (waiting[card] ?? 0) + 1;
-      (lines[card] ??= []).push({ id: d.id, change: d.change ?? null, decision: d.decision, dimension: d.dimension, scope: d.scope });
-    }
-    const link = readLinkOrNull(paths);
-    return { board: manifest, comments: readComments(paths), waiting, queued: lines, pending: queued.length, hosted: link?.shareUrl ?? null, version: link?.boardVersion ?? null, live: true };
-  };
+  const boardData = () => liveBoard(paths);
 
   // What the board is drawn from, as one value that changes when any of it does: the page checks it
   // every few seconds and redraws only then, so work the agent records shows up without a reload.
@@ -462,8 +394,10 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
       const addr = server.address() as { port: number };
       const url = `http://127.0.0.1:${addr.port}/`;
       let s: ReturnType<typeof state>;
+      let candidates: number;
       try {
         s = state();
+        candidates = readCandidates(paths).length;
       } catch (e) {
         process.stderr.write(`arbiter: ${(e as Error).message}\n`);
         process.exitCode = 1;
@@ -472,7 +406,7 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
       }
       const asks = s.requests.filter((r) => r.status === 'open').length;
       // With --json, stdout is the handoff and nothing else; the agent reads it whole.
-      say(`Arbiter review — ${s.pending.length} pending${asks ? ` · ${asks} request${asks === 1 ? '' : 's'}` : ''} · ${s.candidates.length} candidate${s.candidates.length === 1 ? '' : 's'} · ${s.active} of ${s.cap} rules\n${url}#/review\nClose the tab, or press Ctrl-C here, to stop.\n`);
+      say(`Arbiter review — ${s.pending.length} pending${asks ? ` · ${asks} request${asks === 1 ? '' : 's'}` : ''} · ${candidates} candidate${candidates === 1 ? '' : 's'} · ${s.active} of ${s.cap} rules\n${url}#/review\nClose the tab, or press Ctrl-C here, to stop.\n`);
       // Straight to what's waiting: that's what `review` is opened for.
       if (opts.open !== false) openBrowser(`${url}#/review`);
     };

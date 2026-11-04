@@ -70,8 +70,10 @@ test('review page serves candidates, snapshots, and candidate actions', async ()
   const done = review({ cwd, port, open: false, grace: 0 });
   await new Promise((r) => setTimeout(r, 200));
 
+  // The screens are on the board; the review state carries only what's waiting.
+  const board = await get(port, '/api/board');
+  assert.equal(board.board.candidates.filter((c: { work?: boolean }) => !c.work).length, 2);
   const state = await get(port, '/api/state');
-  assert.equal(state.candidates.length, 2);
   assert.equal(state.pending[0].snapshotUrl, '/snapshots/C-0001.svg');
   assert.equal(state.pending[0].candidateName, 'A');
   assert.equal((await getRaw(port, '/snapshots/C-0001.svg')).status, 200);

@@ -7,7 +7,8 @@ import http from 'node:http';
 import { queue, record } from '../commands/record';
 import { review } from '../commands/review';
 import { buildManifest } from '../hosted';
-import { resolvePaths } from '../store';
+import { boardOf, liveBoard } from '../localboard';
+import { readPending, resolvePaths } from '../store';
 import { workDir } from '../work';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'arbiter-board-'));
@@ -24,7 +25,7 @@ const input = (over: Record<string, unknown> = {}) =>
     ...over,
   });
 
-test('the local board: the publish manifest with pictures as links, what waits for review, and its pages', async () => {
+test('the local board: its cards with pictures as links, what waits for review, and its pages', async () => {
   const cwd = tmp();
   const o = { cwd, author: 'test' };
   record(input({ verdict: 'rule' }), o);
@@ -66,6 +67,32 @@ test('the local board: the publish manifest with pictures as links, what waits f
 
   await post(p, '/api/bye', { page: 't' });
   await done;
+});
+
+test('the local board builds its own data, apart from what publish uploads', () => {
+  const cwd = tmp();
+  const o = { cwd, author: 'test' };
+  record(input({ verdict: 'accept' }), o);
+  // Work with nothing judged yet: only the local board shows it, as a card waiting for review.
+  queue(input({ trigger: 'Reports', decision: 'Reports filter by date', change: 'Reports have a date filter', scope: 'pattern:report-filters' }), o);
+  const paths = resolvePaths(cwd);
+  fs.mkdirSync(workDir(paths), { recursive: true });
+  fs.writeFileSync(path.join(workDir(paths), 'W-settings-build.png'), 'not really a png');
+
+  const local = boardOf(paths, { pictures: 'snapshots/', includeRules: false, queued: readPending(paths) });
+  assert.deepEqual(local.candidates.map((c) => c.id), ['W-settings-build', 'W-reports']);
+  assert.equal(local.candidates[0].snapshot, 'snapshots/W-settings-build.png', 'a link where the page finds it');
+  assert.deepEqual(local.candidates[1].decisions, [], 'waiting, nothing on it judged yet');
+  assert.equal(local.rules, null);
+
+  const live = liveBoard(paths);
+  assert.equal(live.board.candidates[0].snapshot, '/snapshots/W-settings-build.png', 'served by `arbiter review`');
+  assert.deepEqual(live.waiting, { 'W-reports': 1 });
+
+  // Publishing is untouched: the picture's bytes, and no card for work nobody has judged.
+  const up = buildManifest(paths).manifest.candidates as { id: string; snapshot: unknown }[];
+  assert.deepEqual(up.map((c) => c.id), ['W-settings-build']);
+  assert.equal(typeof up[0].snapshot, 'object');
 });
 
 function get(p: number, route: string): Promise<{ status: number; body: string }> {

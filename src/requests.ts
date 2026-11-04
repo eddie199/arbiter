@@ -19,7 +19,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Decision } from './schema';
-import type { PulledComment } from './hosted';
+import type { PulledComment } from './comments';
 import { readCandidates } from './candidates';
 import { now, Paths, readArchive } from './store';
 import { workId } from './work';

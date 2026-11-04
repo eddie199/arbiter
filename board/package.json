@@ -1,0 +1,19 @@
+{
+  "name": "arbiter-board",
+  "private": true,
+  "description": "The local board's source. `node board/build.mjs` (run by the CLI's `npm run build`) builds it into templates/board.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@base-ui-components/react": "1.0.0-rc.0",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "esbuild": "0.25.10",
+    "postcss": "8.5.28",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tailwindcss": "4.3.3"
+  }
+}

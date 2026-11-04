@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { findRoot, readActive, readArchive, readPending, resolvePaths, writeActive, writeArchive, writePending } from '../store';
 import { readCandidates } from '../candidates';
-import { readComments, writeComments } from '../hosted';
+import { readComments, writeComments } from '../comments';
 import { oneLine, readRequests, writeRequests } from '../requests';
 import type { Decision } from '../schema';
 import { addRename, workDir, workId, workSnapshot } from '../work';

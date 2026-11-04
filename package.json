@@ -28,7 +28,8 @@
     "templates"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node board/build.mjs",
+    "board:install": "npm install --prefix board",
     "prepare": "npm run build",
     "test": "node --test \"dist/test/**/*.test.js\""
   },

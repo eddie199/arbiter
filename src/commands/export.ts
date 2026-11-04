@@ -10,7 +10,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { buildManifest } from '../hosted';
+import { boardOf } from '../localboard';
+import type { LocalBoard } from '../board-types';
 import { candidatesDir } from '../candidates';
 import { workDir } from '../work';
 import { findRoot, resolvePaths } from '../store';
@@ -46,8 +47,8 @@ export function exportBoard(opts: ExportOptions = {}): ExportResult {
   fs.rmSync(snapDir, { recursive: true, force: true });
   fs.mkdirSync(snapDir, { recursive: true });
 
-  const { manifest } = buildManifest(paths, { includeRules: opts.includeRules, pictures: 'link', linkBase: PICTURES });
-  let cards = manifest.candidates as { id: string; feature: string | null; snapshot: string | null }[];
+  const manifest = boardOf(paths, { pictures: PICTURES, includeRules: !!opts.includeRules, queued: [] });
+  let cards = manifest.candidates;
   if (opts.feature) cards = cards.filter((c) => c.feature === opts.feature);
 
   let snapshots = 0;
@@ -63,7 +64,7 @@ export function exportBoard(opts: ExportOptions = {}): ExportResult {
 
   // Read-only: `live: false` keeps the review pages, Done and the team board buttons out of it.
   const board = { ...manifest, candidates: cards, requests: [] };
-  const data = { board, comments: [], waiting: {}, queued: {}, pending: 0, hosted: null, version: null, live: false };
+  const data: LocalBoard = { board, comments: [], waiting: {}, queued: {}, pending: 0, hosted: null, version: null, live: false };
   // In a <script>, so nothing in a name can close the tag or run.
   const json = JSON.stringify(data).replace(/</g, '\\u003c').split(LINE_SEP).join('\\u2028').split(PARA_SEP).join('\\u2029');
   // Functions, not strings: a `$&` in someone's decision would otherwise be read as a pattern.

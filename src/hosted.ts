@@ -16,6 +16,7 @@ import { Paths, readActive, readArchive, readConfig } from './store';
 import type { Decision } from './schema';
 import { readRenames, workId, workSnapshot } from './work';
 import { cardOf, readRequests } from './requests';
+import { readComments, writeComments, type PulledComment } from './comments';
 
 export interface HostedLink {
   url: string;        // service base url
@@ -37,24 +38,11 @@ export function readLinkOrNull(paths: Paths): HostedLink | null {
   }
 }
 
-export interface PulledComment {
-  id: string;
-  candidate_id: string;
-  decision_id: string | null;
-  /** `request` — "Request change" on the board: it becomes a request (R-0001) the owner answers. */
-  kind: 'comment' | 'approve' | 'request';
-  author_name: string;
-  /** The board sends it; it's never kept. comments.json is committed, and a public repo would publish it. */
-  author_email?: string;
-  body: string;
-  created_at: string;
-  /** The board's published_at when this was written. Differs from the current one after a republish. */
-  board_version?: string | null;
-}
+// Pulled comments live in their own module; pull writes them, and these names stay here for it.
+export { readComments, writeComments, type PulledComment } from './comments';
 
 const LINK_FILE = 'hosted.json';
 const TOKEN_FILE = 'hosted.token';
-const COMMENTS_FILE = 'comments.json';
 export const TOKEN_ENV = 'ARBITER_PUBLISH_TOKEN';
 export const ADMIN_ENV = 'ARBITER_ADMIN_TOKEN';
 const IMAGE_TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
@@ -95,17 +83,6 @@ export function writeToken(paths: Paths, token: string): void {
   fs.writeFileSync(gi, lines.join('\n') + '\n');
 }
 
-export function readComments(paths: Paths): PulledComment[] {
-  const f = path.join(paths.archiveDir, COMMENTS_FILE);
-  return fs.existsSync(f) ? (JSON.parse(fs.readFileSync(f, 'utf8')) as PulledComment[]) : [];
-}
-
-/** Every comment on file, minus email addresses: nothing here needs them, and the file is committed. */
-export function writeComments(paths: Paths, comments: PulledComment[]): void {
-  const kept = comments.map(({ author_email: _email, ...c }) => c);
-  fs.writeFileSync(path.join(paths.archiveDir, COMMENTS_FILE), JSON.stringify(kept, null, 2) + '\n');
-}
-
 export const publishable = (d: Decision) => d.verdict !== 'pending' && d.verdict !== 'retire' && d.level !== 'polish';
 const wire = (d: Decision) => ({ id: d.id, change: d.change, decision: d.decision, rejected: d.rejected, verdict: d.verdict, dimension: d.dimension, scope: d.scope, ref: d.ref });
 
@@ -115,22 +92,14 @@ const wire = (d: Decision) => ({ id: d.id, change: d.change, decision: d.decisio
  * (`trigger`) and become a card each — no picture, state `recorded`. Most work is one direction,
  * iterated; the board shouldn't be empty for it.
  *
- * The local board passes the review queue as `queued`: work whose decisions are all still waiting
- * gets a card too, with nothing decided on it yet, so it's on the board before it's judged.
- * Publishing never passes it.
+ * Only for the team board. The local board builds its own from the same files (src/localboard.ts).
  */
-export function buildManifest(paths: Paths, opts: { includeRules?: boolean; pictures?: 'inline' | 'link'; linkBase?: string; queued?: Decision[] } = {}): { manifest: Record<string, unknown>; skipped: string[] } {
+export function buildManifest(paths: Paths, opts: { includeRules?: boolean } = {}): { manifest: Record<string, unknown>; skipped: string[] } {
   const skipped: string[] = [];
   const known = readCandidates(paths);
-  // The local board draws from the same manifest; its pictures are links: where the review server
-  // serves them, or where an export copies them (`linkBase`).
-  const link = opts.pictures === 'link';
-  const base = opts.linkBase ?? '/snapshots/';
   const candidates: Record<string, unknown>[] = known.map((c) => {
-    let snapshot: { type: string; data: string } | string | null = null;
-    if (c.snapshot && link) {
-      if (fs.existsSync(path.join(candidatesDir(paths), c.snapshot))) snapshot = `${base}${c.snapshot}`;
-    } else if (c.snapshot) {
+    let snapshot: { type: string; data: string } | null = null;
+    if (c.snapshot) {
       const ext = path.extname(c.snapshot).toLowerCase();
       const type = IMAGE_TYPES[ext];
       const file = path.join(candidatesDir(paths), c.snapshot);
@@ -158,19 +127,13 @@ export function buildManifest(paths: Paths, opts: { includeRules?: boolean; pict
   const loose = archive.filter((d) => publishable(d) && (!d.candidate || !ids.has(d.candidate)));
   const byWork = new Map<string, Decision[]>();
   for (const d of loose) byWork.set(d.trigger, [...(byWork.get(d.trigger) ?? []), d]);
-  const waitingOnly = new Map<string, Decision[]>();
-  for (const d of opts.queued ?? []) {
-    if (d.level === 'polish' || (d.candidate && ids.has(d.candidate)) || byWork.has(d.trigger)) continue;
-    waitingOnly.set(d.trigger, [...(waitingOnly.get(d.trigger) ?? []), d]);
-  }
   const areas = new Map(known.filter((c) => c.feature).map((c) => [c.feature!.toLowerCase(), c.feature!]));
-  for (const [trigger, ds] of [...byWork, ...waitingOnly]) {
+  for (const [trigger, ds] of byWork) {
     const last = ds.reduce((a, b) => (a.date > b.date ? a : b));
     const id = workId(trigger);
-    let snapshot: { type: string; data: string } | string | null = null;
+    let snapshot: { type: string; data: string } | null = null;
     const shot = workSnapshot(paths, id);
-    if (shot && link) snapshot = `${base}${path.basename(shot)}`;
-    else if (shot) {
+    if (shot) {
       const type = IMAGE_TYPES[path.extname(shot).toLowerCase()];
       if (type) snapshot = { type, data: fs.readFileSync(shot).toString('base64') };
       else skipped.push(`${id}: ${path.basename(shot)} (svg/unsupported — hosted takes png, jpg, webp, gif)`);
