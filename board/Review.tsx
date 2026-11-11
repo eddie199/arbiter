@@ -11,6 +11,7 @@ import { Select } from '@/components/ui/select';
 import { ActionItem, ActionMenu, ActionSeparator, barDots, DOTS, dotsTrigger } from '@/components/ui/menu';
 import { Icon } from '@/components/ui/icons';
 import { When } from '@/components/When';
+import { BeforeNow } from './Versions';
 import { CompactIcon, ListIcon, SingleIcon, ViewToggle } from './Toolbar';
 import type { Agent, PendingDecision, ReviewState } from './types';
 import { errorsOf, post, whenAgent, type Reply } from './api';
@@ -524,15 +525,15 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudge
       {open ? (
         <>
           <KeyValues className="mt-3 max-w-2xl">{rest}</KeyValues>
-          {shot ? <div className="mt-4"><Screenshot src={shot} alt={d.candidateName ?? d.trigger} height={240} /></div> : null}
+          {shot ? <div className="mt-4">{d.before ? <BeforeNow before={d.before} now={shot} alt={d.candidateName ?? d.trigger} height={200} /> : <Screenshot src={shot} alt={d.candidateName ?? d.trigger} height={240} />}</div> : null}
           {after}
         </>
       ) : null}
     </div>
   ) : (
     <div id={d.id} className="scroll-mt-20 rounded-lg border border-border bg-surface p-4">
-      {/* The picture of its screen or its work across the top, as on a change's own page. */}
-      {shot ? <div className="mb-4"><Screenshot src={shot} alt={d.candidateName ?? d.trigger} height={wide ? 360 : 240} /></div> : null}
+      {/* The picture of its screen or its work across the top; with the one from before, when it was retaken since. */}
+      {shot ? <div className="mb-4">{d.before ? <BeforeNow before={d.before} now={shot} alt={d.candidateName ?? d.trigger} height={wide ? 280 : 200} /> : <Screenshot src={shot} alt={d.candidateName ?? d.trigger} height={wide ? 360 : 240} />}</div> : null}
       <div className="mb-3">{head}</div>
       <KeyValues className="max-w-2xl">
         <Label>Change</Label>

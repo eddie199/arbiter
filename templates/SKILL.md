@@ -655,6 +655,8 @@ npx arbiter snapshot "Settings — billing" --file /abs/path/shot.png
 
 Delete the temporary file afterwards. Never attach a picture of a blank page, a spinner, or an error screen — no picture is better than a wrong one.
 
+**Each new picture keeps the one before it.** A piece of work that already has a picture keeps the old one as an earlier version, and the board shows them in order, with the decisions made between them and a before and after to compare. That is what makes one picture per settled piece of work matter: a picture per iteration would fill the history with in-between states. The same picture attached twice adds nothing.
+
 ### When you can't
 
 Say so **once per session**, on its own line, whatever the check-in setting and whatever the size of the work — this is the one message that doesn't wait for a summary line. Name the reason, because each one has a different fix:

@@ -17,7 +17,7 @@ import { readCandidates } from '../candidates';
 import { readComments, writeComments } from '../comments';
 import { oneLine, readRequests, writeRequests } from '../requests';
 import type { Decision } from '../schema';
-import { addRename, workDir, workId, workSnapshot } from '../work';
+import { addRename, moveHistory, workDir, workId, workSnapshot } from '../work';
 
 export interface RenameResult { exitCode: 0 | 1; output: Record<string, unknown> }
 
@@ -68,6 +68,8 @@ export function renameWork(from: string, to: string, opts: { cwd?: string } = {}
       fs.renameSync(shot, next);
       wrote.push(`.arbiter/work/${path.basename(next)}`);
     }
+    // Its earlier pictures go with it.
+    if (moveHistory(paths, oldId, newId)) wrote.push(`.arbiter/work/history/${newId}/`);
     const requests = readRequests(paths);
     if (requests.some((r) => r.screen === oldId)) {
       writeRequests(paths, requests.map((r) => (r.screen === oldId ? { ...r, screen: newId } : r)));

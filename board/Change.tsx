@@ -13,6 +13,7 @@ import { go, href } from './route';
 import { areasOf, cap, PLANS, StateBadge, undecided, WaitingBadge } from './bits';
 import { CommentLine, DecisionThread } from './Comments';
 import { ChangeMenu } from './ChangeMenu';
+import { byVersion, VersionGroups, VersionRow } from './Versions';
 
 /**
  * One change, as the team board shows it (components/ScreenView.tsx): what it is, the picture,
@@ -34,10 +35,11 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
   const said = conversation(notes, requests).length;
   const onDecisions = conversation(comments.filter((x) => talk(x) && x.decision_id), requests).length;
   const by = c.supersededBy ? cands.find((x) => x.id === c.supersededBy) : null;
-  const label = c.state === 'superseded' && by ? `Replaced by ${by.name}` : STATE_LABEL[c.state];
   const areaOf = areasOf(data);
   const area = areaOf(c);
   const short = nameIn(area, c.name);
+  // What replaced it, by the name its own card shows: without the area when that's the area it's in.
+  const label = c.state === 'superseded' && by ? `Replaced by ${nameIn(areaOf(by), by.name)}` : STATE_LABEL[c.state];
   const siblings = c.work ? [] : cands.filter((x) => x.id !== c.id && !x.work && areaOf(x) === area).sort((a, b) => STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state));
   const approvedBy = liveApprovals.map((a) => a.author_name).join(', ');
   const earlierBy = staleApprovals.map((a) => a.author_name).join(', ');
@@ -47,8 +49,40 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
   const picked = kinds.filter((k) => kindOpts.some((o) => o.value === k));
   const listed = picked.length ? c.decisions.filter((d) => picked.includes(d.dimension ?? '')) : c.decisions;
   const fresh = undecided(c);
+  // Its pictures, oldest first, when it has had more than one. The picture shows the latest unless you pick another.
+  const versions = c.versions ?? [];
+  const [chosen, setChosen] = useState<number | null>(null);
+  const showing = chosen !== null && chosen < versions.length ? chosen : versions.length - 1;
+  const pick = (i: number) => setChosen(i === versions.length - 1 ? null : i);
+  // With versions, decisions count in the order they were made, so the numbers follow the timeline.
+  const ordered = versions.length > 1 ? [...listed].sort((a, b) => Date.parse(a.date ?? '') - Date.parse(b.date ?? '')) : listed;
   // Applies to names a screen, never a file: a decision about one file is about this change.
   const applies = (scope?: string) => (scope?.startsWith('file:') ? short : scopeWords(scope));
+
+  // One decision in Decided here: its id and kind, then Change, Rule or Pattern, Rejected, Applies to.
+  const item = (d: (typeof listed)[number]) => {
+    const i = ordered.indexOf(d);
+    const dim = d.dimension ? DIMENSION_LABEL[d.dimension] ?? d.dimension : null;
+    const where = applies(d.scope);
+    return (
+      <li key={d.id} id={d.id} className="scroll-mt-20 py-5">
+        <div className="mb-3 flex items-center gap-2">
+          <Id className={at === d.id ? 'text-fg' : undefined}>{d.id}</Id>
+          {dim ? <Badge>{dim}</Badge> : null}
+          {d.verdict === 'rule' ? <a href={href('rules', { at: d.id })} title="See it under Design rules" className="inline-flex rounded-full hover:opacity-75"><Badge tone="ok">Rule</Badge></a> : d.verdict === 'fix' ? <Badge tone="warn">Corrected</Badge> : null}
+          <Faint className="ml-auto">{i + 1} of {ordered.length}</Faint>
+        </div>
+        <KeyValues>
+          <Label>Change</Label>
+          <dd className="font-medium">{sentence(d.change ?? d.decision)}</dd>
+          {d.change && d.change !== d.decision ? <><Label>{d.verdict === 'rule' ? 'Rule' : 'Pattern'}</Label><dd className="text-muted">{sentence(d.decision)}</dd></> : null}
+          {d.rejected.length ? <><Label>Rejected</Label><dd className="text-muted">{d.rejected.map((r) => <div key={r}>{sentence(r)}</div>)}</dd></> : null}
+          {where ? <><Label>Applies to</Label><dd className="text-muted">{where}</dd></> : null}
+        </KeyValues>
+        <div className="pl-[calc(6rem+0.75rem)]"><DecisionThread decision={d.id} comments={comments} requests={requests} cards={ids} candidate={c.id} version={version} /></div>
+      </li>
+    );
+  };
 
   // A link to a decision lands on it, the way the team board's #D-0014 does.
   useEffect(() => {
@@ -81,7 +115,8 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
       </header>
 
       <div className="mt-6 min-w-0">
-        {!c.snapshot ? null : <Screenshot src={c.snapshot} alt={c.name} height={440} />}
+        {!c.snapshot ? null : <div id="picture" className="scroll-mt-20"><Screenshot src={versions.length > 1 ? versions[showing].src : c.snapshot} alt={c.name} height={440} tag={versions.length > 1 ? `Version ${showing + 1}` : undefined} /></div>}
+        {versions.length > 1 ? <VersionRow versions={versions} shown={showing} onShow={pick} /> : null}
 
         {siblings.length ? (
           <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px]">
@@ -112,30 +147,8 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
               <a href={href('review', { at: c.id })} className={buttonClass('secondary', 'md')}>Review {waiting === 1 ? 'it' : 'them'}</a>
             </div>
           ) : !c.decisions.length ? <p className="text-[13px] text-muted">{fresh && waiting ? 'Nothing decided yet. What the agent decided here is waiting for your review.' : 'No decisions recorded here yet.'}</p> : (
-            <ol className="divide-y divide-border border-t border-border">
-              {listed.map((d, i) => {
-                const dim = d.dimension ? DIMENSION_LABEL[d.dimension] ?? d.dimension : null;
-                const where = applies(d.scope);
-                return (
-                  <li key={d.id} id={d.id} className="scroll-mt-20 py-5">
-                    <div className="mb-3 flex items-center gap-2">
-                      <Id className={at === d.id ? 'text-fg' : undefined}>{d.id}</Id>
-                      {dim ? <Badge>{dim}</Badge> : null}
-                      {d.verdict === 'rule' ? <a href={href('rules', { at: d.id })} title="See it under Design rules" className="inline-flex rounded-full hover:opacity-75"><Badge tone="ok">Rule</Badge></a> : d.verdict === 'fix' ? <Badge tone="warn">Corrected</Badge> : null}
-                      <Faint className="ml-auto">{i + 1} of {listed.length}</Faint>
-                    </div>
-                    <KeyValues>
-                      <Label>Change</Label>
-                      <dd className="font-medium">{sentence(d.change ?? d.decision)}</dd>
-                      {d.change && d.change !== d.decision ? <><Label>{d.verdict === 'rule' ? 'Rule' : 'Pattern'}</Label><dd className="text-muted">{sentence(d.decision)}</dd></> : null}
-                      {d.rejected.length ? <><Label>Rejected</Label><dd className="text-muted">{d.rejected.map((r) => <div key={r}>{sentence(r)}</div>)}</dd></> : null}
-                      {where ? <><Label>Applies to</Label><dd className="text-muted">{where}</dd></> : null}
-                    </KeyValues>
-                    <div className="pl-[calc(6rem+0.75rem)]"><DecisionThread decision={d.id} comments={comments} requests={requests} cards={ids} candidate={c.id} version={version} /></div>
-                  </li>
-                );
-              })}
-            </ol>
+            versions.length > 1 ? <VersionGroups groups={byVersion(ordered, versions)} versions={versions} onShow={(i) => { pick(i); document.getElementById('picture')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }} item={item} />
+              : <ol className="divide-y divide-border border-t border-border">{listed.map(item)}</ol>
           )}
         </section>
 

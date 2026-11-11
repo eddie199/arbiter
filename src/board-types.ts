@@ -18,7 +18,12 @@ export interface BoardDecision {
   dimension?: string;
   scope?: string;
   ref?: string | null;
+  /** When it was recorded: what places it among a card's pictures. */
+  date?: string;
 }
+
+/** One picture of a card, when it was taken. A card's versions run oldest first, the current picture last. */
+export interface BoardVersion { src: string; date: string }
 
 /** A card: a screen (C-0001) with its options, or a piece of work (W-…) whose decisions had no screen. */
 export interface BoardCandidate {
@@ -37,6 +42,8 @@ export interface BoardCandidate {
   decisions: BoardDecision[];
   /** A card made from a piece of work, not a registered direction. Id `W-…`. */
   work?: boolean;
+  /** Every picture it has had, oldest first, the current one last: only when it has had more than one. */
+  versions?: BoardVersion[];
 }
 
 export interface BoardRule {
@@ -161,6 +168,8 @@ export interface PendingDecision {
   againstRule: { id: string; decision: string } | null;
   candidateName: string | null;
   snapshotUrl: string | null;
+  /** The picture from before this decision, when the card's picture was retaken after it: Before beside Now. */
+  before: BoardVersion | null;
   /** The screen this changed has no picture yet: the command that takes one. */
   picture: { command: string } | null;
 }

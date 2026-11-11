@@ -12,7 +12,7 @@ import path from 'node:path';
 import { candidatesDir, decisionsFor, readCandidates } from './candidates';
 import { ACTIVE_CAP, Paths, readActive, readArchive, readConfig, readPending } from './store';
 import type { Decision } from './schema';
-import { workId, workSnapshot } from './work';
+import { workId, workSnapshot, workVersions } from './work';
 import { cardOf, readRequests } from './requests';
 import { readComments } from './comments';
 import { readLinkOrNull } from './hosted';
@@ -23,7 +23,7 @@ import type { Agent, Board, BoardCandidate, BoardDecision, BoardRequest, LocalBo
 
 /** On the board: judged, still in force, and not polish. */
 const shown = (d: Decision) => d.verdict !== 'pending' && d.verdict !== 'retire' && d.level !== 'polish';
-const toDecision = (d: Decision): BoardDecision => ({ id: d.id, change: d.change, decision: d.decision, rejected: d.rejected, verdict: d.verdict, dimension: d.dimension, scope: d.scope, ref: d.ref });
+const toDecision = (d: Decision): BoardDecision => ({ id: d.id, change: d.change, decision: d.decision, rejected: d.rejected, verdict: d.verdict, dimension: d.dimension, scope: d.scope, ref: d.ref, date: d.date });
 
 export interface BoardOptions {
   /** Where the page finds pictures: the review server's `/snapshots/`, or an export's `snapshots/` folder. */
@@ -76,6 +76,7 @@ export function boardOf(paths: Paths, opts: BoardOptions): Board {
       author: last.author, date: last.date, reason: null, notes: '', supersededBy: null, url: null,
       snapshot: shot ? `${opts.pictures}${path.basename(shot)}` : null,
       decisions: ds.filter(shown).map(toDecision),
+      ...versionsOf(paths, id, opts.pictures),
     });
   }
   // The day each became a rule, for the Design rules page.
@@ -97,6 +98,12 @@ export function boardOf(paths: Paths, opts: BoardOptions): Board {
       }),
     }));
   return { project: path.basename(paths.root), exported: new Date().toISOString().slice(0, 10), candidates, rules, requests };
+}
+
+/** A piece of work's pictures, oldest first, when it has had more than one. */
+function versionsOf(paths: Paths, id: string, pictures: string): { versions?: { src: string; date: string }[] } {
+  const all = workVersions(paths, id);
+  return all.length > 1 ? { versions: all.map((v) => ({ src: `${pictures}${v.file}`, date: v.date })) } : {};
 }
 
 /**
@@ -121,6 +128,15 @@ export function liveBoard(paths: Paths): LocalBoard {
 }
 
 /** What `/api/state` sends: the review queue. */
+/** The last picture taken before `date`, when a newer one was taken since: the before to this decision's now. */
+function beforeOf(all: { file: string; date: string }[], date: string): { src: string; date: string } | null {
+  const at = (s: string) => Date.parse(s);
+  if (all.length < 2 || at(all[all.length - 1].date) < at(date)) return null;
+  const earlier = all.filter((v) => at(v.date) < at(date));
+  const v = earlier[earlier.length - 1];
+  return v ? { src: `/snapshots/${v.file}`, date: v.date } : null;
+}
+
 export function reviewState(paths: Paths, agent: Agent): ReviewState {
   const candidates = readCandidates(paths);
   const byId = new Map(candidates.map((c) => [c.id, c]));
@@ -146,6 +162,8 @@ export function reviewState(paths: Paths, agent: Agent): ReviewState {
       candidateName: d.candidate ? byId.get(d.candidate)?.name ?? null : null,
       // Its card's picture, so what changed is in view where it's judged.
       snapshotUrl: shotOf(card),
+      // The picture from before this decision, when the work's picture was retaken after it was queued.
+      before: card.startsWith('W-') ? beforeOf(workVersions(paths, card), d.date) : null,
       picture: missingPictures(paths, [d], candidates)[0] ?? null,
     };
   });

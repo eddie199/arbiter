@@ -13,7 +13,7 @@ import { spawn } from 'node:child_process';
 import { boardOf } from '../localboard';
 import type { LocalBoard } from '../board-types';
 import { candidatesDir } from '../candidates';
-import { workDir } from '../work';
+import { historyFile, workDir } from '../work';
 import { findRoot, resolvePaths } from '../store';
 import { readArrangement } from '../areas';
 
@@ -61,6 +61,19 @@ export function exportBoard(opts: ExportOptions = {}): ExportResult {
       fs.copyFileSync(src, path.join(snapDir, file));
       snapshots++;
     } else c.snapshot = null;
+    // Its earlier pictures too, so the copy shows how it got here.
+    if (c.versions) {
+      c.versions = c.versions.filter((v) => {
+        const rel = v.src.slice(PICTURES.length);
+        if (rel === file) return true;
+        const abs = historyFile(paths, rel);
+        if (!abs) return false;
+        fs.mkdirSync(path.dirname(path.join(snapDir, rel)), { recursive: true });
+        fs.copyFileSync(abs, path.join(snapDir, rel));
+        return true;
+      });
+      if (c.versions.length < 2) delete c.versions;
+    }
   }
 
   // Read-only: `live: false` keeps the review pages, Done and the team board buttons out of it.

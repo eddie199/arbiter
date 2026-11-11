@@ -4,11 +4,12 @@
  * don't matter. Publish carries it to the board's card for that work.
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { findRoot, readArchive, readPending, resolvePaths } from '../store';
 import { publishable } from '../hosted';
 import type { Decision } from '../schema';
-import { captureImage, copyImage, workDir, workId } from '../work';
+import { captureImage, copyImage, keepEarlier, restoreEarlier, workDir, workId, workSnapshot } from '../work';
 
 export interface SnapshotResult { exitCode: 0 | 1; output: Record<string, unknown> }
 
@@ -27,8 +28,19 @@ export function snapshotWork(name: string, opts: { file?: string; capture?: bool
   const judged = archive.some((d) => mine(d) && publishable(d));
   const queued = pending.filter((d) => mine(d) && d.level !== 'polish').length;
   const polish = [...archive, ...pending].some((d) => mine(d) && d.level === 'polish' && d.verdict !== 'retire');
+  // The picture it had becomes an earlier version, so the board can show how the work got here. The same
+  // picture attached again isn't a new version.
+  const cur = workSnapshot(paths, id);
+  const same = !opts.capture && !!cur && sameFile(cur, path.resolve(root, opts.file!));
+  const moved = same ? null : keepEarlier(paths, id);
   const r = opts.capture ? captureImage(workDir(paths), id) : copyImage(root, workDir(paths), id, opts.file!);
-  if (!r.ok) return { exitCode: 1, output: { status: 'failed', error: r.error } };
+  if (!r.ok) {
+    restoreEarlier(moved);
+    return { exitCode: 1, output: { status: 'failed', error: r.error } };
+  }
+  // Dated when it was attached: a copy keeps the source file's own time on some systems.
+  const now = new Date();
+  fs.utimesSync(path.join(workDir(paths), r.file), now, now);
   const note = judged
     ? null
     : queued
@@ -38,6 +50,16 @@ export function snapshotWork(name: string, opts: { file?: string; capture?: bool
         : `no decisions mention "${trigger}" yet — the picture shows once some do`;
   return {
     exitCode: 0,
-    output: { status: 'saved', work: trigger, id, file: path.relative(root, path.join(workDir(paths), r.file)), ...(note ? { note } : {}) },
+    output: { status: 'saved', work: trigger, id, file: path.relative(root, path.join(workDir(paths), r.file)), ...(moved ? { earlier: path.relative(root, moved.to) } : {}), ...(note ? { note } : {}) },
   };
+}
+
+/** Byte for byte the same image. */
+function sameFile(a: string, b: string): boolean {
+  try {
+    if (fs.statSync(a).size !== fs.statSync(b).size) return false;
+    return fs.readFileSync(a).equals(fs.readFileSync(b));
+  } catch {
+    return false;
+  }
 }

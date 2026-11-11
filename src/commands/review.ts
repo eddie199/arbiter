@@ -23,7 +23,7 @@ import { updateCandidate } from './candidate';
 import { candidatesDir, readCandidates } from '../candidates';
 import { findRoot, readActive, readPending, resolvePaths } from '../store';
 import { autoPublish } from '../autopublish';
-import { workDir } from '../work';
+import { historyFile, workDir } from '../work';
 import { liveBoard, reviewState } from '../localboard';
 import { cleanArrangement, writeArrangement } from '../areas';
 import { saveSettings } from '../settings';
@@ -295,6 +295,19 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
           else answer({ kind: 'restore', id: body.id });
         }
         json(res, 200, { exitCode: result.exitCode, ...result.output });
+        return;
+      }
+      // An earlier picture of a piece of work, by its place under .arbiter/work/history/.
+      if (req.method === 'GET' && url.pathname.startsWith('/snapshots/history/')) {
+        const abs = historyFile(paths, decodeURIComponent(url.pathname.slice('/snapshots/'.length)));
+        if (!abs) {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+        const type = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }[path.extname(abs)] ?? 'application/octet-stream';
+        res.writeHead(200, { 'content-type': type, 'cache-control': 'max-age=86400' });
+        fs.createReadStream(abs).pipe(res);
         return;
       }
       if (req.method === 'GET' && url.pathname.startsWith('/snapshots/')) {

@@ -36,7 +36,8 @@ function useNaturalSize(): [Size | null, (img: HTMLImageElement | null) => void]
  * so the whole screen shows and the toggle is hidden. A tall (phone) screen sits
  * centred at phone width rather than stretched across the frame.
  */
-export function Screenshot({ src, alt, height = 400 }: { src: string | null; alt: string; height?: number }) {
+/** `tag`: a small label in the frame's bottom-left corner, like "Version 2". */
+export function Screenshot({ src, alt, height = 400, tag }: { src: string | null; alt: string; height?: number; tag?: string }) {
   const [full, setFull] = useState(false);
   const [size, measure] = useNaturalSize();
   // No picture, no frame: the page goes straight to what was decided.
@@ -51,6 +52,7 @@ export function Screenshot({ src, alt, height = 400 }: { src: string | null; alt
             <img key={src} ref={measure} src={src} alt={alt} className={full ? 'block h-auto w-full' : 'block h-auto w-full sm:h-full sm:object-cover sm:object-top'} />
           </DialogTrigger>
           {full ? null : <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-20 bg-gradient-to-t from-surface-2 to-transparent sm:block" />}
+          {tag ? <span className="pointer-events-none absolute bottom-6 left-6 rounded-full border border-border bg-bg/90 px-2 py-0.5 text-[12px] text-muted shadow-sm">{tag}</span> : null}
           <Tooltip label={label}>
             <button type="button" onClick={() => setFull((v) => !v)} aria-pressed={full} aria-label={label} className="absolute right-6 top-6 hidden h-7 w-7 items-center justify-center rounded-ui border border-border bg-bg text-muted shadow-sm hover:border-border-strong hover:text-fg sm:flex">
               {full ? (

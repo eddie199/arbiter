@@ -15,6 +15,7 @@ It started as the team board's pages, ported from the site repo (`hosted/local`,
 | `Change.tsx`, `Comments.tsx` | One change. Comments are read-only: the team writes them on the team board |
 | `Review.tsx` | The Review inbox: List and Single, Undo |
 | `Rules.tsx` | Design rules, with Copy, Edit and Remove on each rule |
+| `Versions.tsx` | A change's earlier pictures: the version row, Compare (before and after), Before and Now in the inbox, and decisions grouped by version |
 | `Preferences.tsx` | Preferences, live board only: check-ins, what gets recorded, rules and pictures; saved in `arbiter.json` (`src/settings.ts`) |
 | `route.ts` | Pages in the hash (`#/`, `#/c/C-0001`, `#/rules`, `#/preferences`), so it works from a file on disk too |
 | `api.ts` | The calls to the CLI's review server |
