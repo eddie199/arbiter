@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { record, queue, queueFindings, judge, judgeAll, retire, reword, interactiveInput, JudgeAction } from './commands/record';
+import { record, queue, queueFindings, judge, judgeAll, retire, reword, interactiveInput, JudgeAction, oneOffGate } from './commands/record';
 import { judgeRequest, RequestAction } from './commands/request';
 import { verifyCommand } from './commands/verify';
 import { sweepCommand } from './commands/sweep';
@@ -11,6 +11,7 @@ import { exportBoard } from './commands/export';
 import { publish } from './commands/publish';
 import { unpublish } from './commands/unpublish';
 import { renameWork } from './commands/rename';
+import { areasCommand } from './commands/areas';
 import { pull } from './commands/pull';
 import { snapshotWork } from './commands/snapshot';
 import { setup } from './commands/setup';
@@ -46,7 +47,7 @@ program
   .option('--as <action>', 'judge a pending id: accept | rule | skip | fix; answer a request id: apply | decline')
   .option('--request <id>', 'the approved request (R-0001) this change was made for — recording it applies the request')
   .option('--all', 'with --as: judge every pending item the same way')
-  .option('--level <level>', 'with --all: only this level (feature | pattern | polish)')
+  .option('--level <level>', 'with --all: only this level (feature | pattern)')
   .option('--trigger <text>', 'with --all: only items queued for this piece of work')
   .option('--to <decision>', 'with --as fix: what it should be instead; with --reword: the new wording; with a request and --as apply: what to do instead of what was asked')
   .option('--supersedes <id>', 'the active rule this one replaces')
@@ -91,7 +92,7 @@ program
         process.stdout.write(JSON.stringify({ status: 'invalid', errors: ['no input — pass JSON as an argument or on stdin'] }, null, 2) + '\n');
         process.exit(1);
       }
-      result = opts.pending ? queue(input, opts) : record(input, opts);
+      result = oneOffGate(input) ?? (opts.pending ? queue(input, opts) : record(input, opts));
     }
     process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
     // Queueing never reaches the board — work cards are built from judged decisions.
@@ -247,6 +248,17 @@ program
     const r = await unpublish({ yes: !!opts.yes, board: boardLink, admin: !!opts.admin });
     printSteps(r.steps);
     process.exit(r.ok ? 0 : 1);
+  });
+
+program
+  .command('areas')
+  .description('Where everything sits on the board: folders, the areas in them, and the changes in each. Read it before naming new work, so it joins an area that is already there. --save writes folders, once the person has said yes to them.')
+  .option('--json', 'print it as JSON')
+  .option('--save <json>', 'replace the folders: {"folders":[{"name":"Local board","areas":["Review inbox","Change page"]}]}')
+  .action((opts: { json?: boolean; save?: string }) => {
+    const result = areasCommand({ json: opts.json, save: opts.save });
+    process.stdout.write(result.exitCode !== 0 || opts.json ? JSON.stringify(result.output, null, 2) + '\n' : `${result.text}\n`);
+    process.exit(result.exitCode);
   });
 
 program

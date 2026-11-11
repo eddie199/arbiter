@@ -12,10 +12,11 @@ const PILL: Record<Tone, string> = { ok: 'bg-ok-bg text-ok', warn: 'bg-warn-bg t
 
 /**
  * A filter that takes several values: label and what's chosen on the trigger, a checklist in the
- * menu that stays open while you tick. `primary` is the filter people reach for first — it gets
- * the stronger outline and a filter mark, so it reads as the way into the board.
+ * menu that stays open while you tick. Every filter looks the same as Sort beside it: the label in
+ * grey, what's chosen after it. `icon` puts a filter mark in front, for a page whose one filter is it
+ * (Design rules' Type).
  */
-export function MultiSelect({ label, values, options, onChange, primary }: { label: string; values: string[]; options: MultiOption[]; onChange: (v: string[]) => void; primary?: boolean }) {
+export function MultiSelect({ label, values, options, onChange, icon }: { label: string; values: string[]; options: MultiOption[]; onChange: (v: string[]) => void; icon?: boolean }) {
   const chosen = options.filter((o) => values.includes(o.value));
   const summary = !chosen.length ? 'All' : chosen.length === 1 ? chosen[0].label : `${chosen.length} selected`;
   const toggle = (v: string, on: boolean) => onChange(on ? [...values, v] : values.filter((x) => x !== v));
@@ -23,13 +24,12 @@ export function MultiSelect({ label, values, options, onChange, primary }: { lab
     <BaseMenu.Root>
       <BaseMenu.Trigger
         className={cn(
-          'inline-flex h-8 items-center gap-1.5 rounded-ui border bg-bg px-2.5 text-[13px] text-fg hover:border-fg data-[popup-open]:border-fg',
-          primary ? (chosen.length ? 'border-fg' : 'border-border-strong') : 'border-border hover:border-border-strong',
+          'inline-flex h-8 items-center gap-1.5 rounded-ui border border-border bg-bg px-2.5 text-[13px] text-fg hover:border-border-strong data-[popup-open]:border-fg',
         )}
       >
-        {primary ? <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-muted"><path d="M1.5 2.5h11l-4.25 5v4l-2.5 1.25V7.5z" /></svg> : null}
-        <span className={primary ? 'font-medium' : 'text-muted'}>{label}</span>
-        <span className={primary ? 'text-muted' : 'font-medium'}>{summary}</span>
+        {icon ? <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-muted"><path d="M1.5 2.5h11l-4.25 5v4l-2.5 1.25V7.5z" /></svg> : null}
+        <span className="text-muted">{label}</span>
+        <span className="font-medium">{summary}</span>
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className="text-faint"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </BaseMenu.Trigger>
       <BaseMenu.Portal>

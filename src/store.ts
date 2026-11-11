@@ -33,6 +33,16 @@ export interface Config {
   onboarded?: string;
   /** Where the app runs, so the agent has an address to open for screenshots. Set by `arbiter setup --app`. */
   app?: { url: string };
+  /**
+   * What `record --pending` queues, from Preferences on the board. `level`: the smallest call queued,
+   * "pattern" (features and patterns, the default) or "feature" (features only). `agent: false`: only
+   * what the person asked for or corrected; the agent's own calls aren't queued. A clash always is.
+   */
+  record?: { level?: 'pattern' | 'feature'; agent?: boolean };
+  /** False: no pictures. Nothing asks for one, and replies to `record` say `pictures: false`. */
+  pictures?: boolean;
+  /** False: the agent doesn't offer to group areas into folders. `arbiter areas` says so. */
+  suggestFolders?: boolean;
   /** Project words too common to signal overlap: ["audit", "journey"]. */
   overlap?: { ignore?: string[] };
   /** Globs never swept: ["app/globals.css", "design-reference/**", "docs/**"]. */

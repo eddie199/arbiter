@@ -17,6 +17,8 @@ import { cardOf, readRequests } from './requests';
 import { readComments } from './comments';
 import { readLinkOrNull } from './hosted';
 import { missingPictures } from './pictures';
+import { readArrangement } from './areas';
+import { settingsOf } from './settings';
 import type { Agent, Board, BoardCandidate, BoardDecision, BoardRequest, LocalBoard, PendingDecision, QueuedLine, ReviewState } from './board-types';
 
 /** On the board: judged, still in force, and not polish. */
@@ -112,10 +114,10 @@ export function liveBoard(paths: Paths): LocalBoard {
     if (d.level === 'polish') continue;
     const card = cardOf(paths, d, ids);
     waiting[card] = (waiting[card] ?? 0) + 1;
-    (lines[card] ??= []).push({ id: d.id, change: d.change ?? null, decision: d.decision, dimension: d.dimension, scope: d.scope });
+    (lines[card] ??= []).push({ id: d.id, change: d.change ?? null, decision: d.decision, dimension: d.dimension, scope: d.scope, date: d.date });
   }
   const link = readLinkOrNull(paths);
-  return { board, comments: readComments(paths), waiting, queued: lines, pending: queued.length, hosted: link?.shareUrl ?? null, version: link?.boardVersion ?? null, live: true };
+  return { board, comments: readComments(paths), waiting, queued: lines, pending: queued.filter((d) => d.level !== 'polish').length, hosted: link?.shareUrl ?? null, version: link?.boardVersion ?? null, live: true, arrangement: readArrangement(paths), settings: settingsOf(paths) };
 }
 
 /** What `/api/state` sends: the review queue. */

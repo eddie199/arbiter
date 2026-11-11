@@ -2,12 +2,16 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { DIMENSION_LABEL, scopeWords, sentence } from '@/lib/board';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/input';
 import { Screenshot } from '@/components/Screenshot';
 import { Faint, Id, KeyValues, Label, Meta, PageTitle } from '@/components/ui/type';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Select } from '@/components/ui/select';
-import { ListIcon, SingleIcon, ViewToggle } from './Toolbar';
+import { ActionItem, ActionMenu, ActionSeparator, barDots, DOTS, dotsTrigger } from '@/components/ui/menu';
+import { Icon } from '@/components/ui/icons';
+import { When } from '@/components/When';
+import { CompactIcon, ListIcon, SingleIcon, ViewToggle } from './Toolbar';
 import type { Agent, PendingDecision, ReviewState } from './types';
 import { errorsOf, post, whenAgent, type Reply } from './api';
 import { go, href } from './route';
@@ -24,8 +28,9 @@ const SORTS: { value: Sort; label: string; hint?: string }[] = [
   { value: 'big', label: 'Biggest', hint: 'Clashes, then features' },
 ];
 const VIEW_KEY = 'arbiter-review-view';
-type View = 'list' | 'single';
+type View = 'list' | 'compact' | 'single';
 const VIEWS = [
+  { value: 'compact' as const, label: 'Compact', icon: CompactIcon },
   { value: 'list' as const, label: 'List', icon: ListIcon },
   { value: 'single' as const, label: 'Single', icon: SingleIcon },
 ];
@@ -36,7 +41,6 @@ const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isConte
 const weight = (d: PendingDecision) => (d.againstRule ? 0 : d.level === 'feature' ? 1 : d.level === 'pattern' ? 2 : 3);
 /** How near the cap on rules has to be before a card says so, beside Make it a rule. */
 const RULES_NEAR = 5;
-const day = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 /**
@@ -50,9 +54,8 @@ const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
  */
 export function ReviewPage({ state, at, area, areaOfCard, results, onJudged, onUndone, refresh }: { state: ReviewState; at: string | null; area: string[]; areaOfCard: (card: string) => string | null; results: Results; onJudged: (r: Results) => void; onUndone: (id: string) => void; refresh: () => Promise<void> }) {
   const [sort, setSort] = useState<Sort>(() => { try { const s = localStorage.getItem(SORT_KEY); return s === 'old' || s === 'big' ? s : 'new'; } catch { return 'new'; } });
-  const [promoted, setPromoted] = useState<Record<string, boolean>>({});
   const pickSort = (s: Sort) => { setSort(s); try { localStorage.setItem(SORT_KEY, s); } catch {} };
-  const [view, setView] = useState<View>(() => { try { return localStorage.getItem(VIEW_KEY) === 'single' ? 'single' : 'list'; } catch { return 'list'; } });
+  const [view, setView] = useState<View>(() => { try { const v = localStorage.getItem(VIEW_KEY); return v === 'single' || v === 'compact' ? v : 'list'; } catch { return 'list'; } });
   const pickView = (v: View) => { setView(v); try { localStorage.setItem(VIEW_KEY, v); } catch {} };
   // The decision Single shows, kept by id so one arriving while you read doesn't move you.
   const [cur, setCur] = useState<string | null>(null);
@@ -69,21 +72,25 @@ export function ReviewPage({ state, at, area, areaOfCard, results, onJudged, onU
     return null;
   };
 
+  // One-off fixes aren't asked about: an old one left in a queue from before stays out of the inbox.
+  const asked = state.pending.filter((d) => d.level !== 'polish');
   // Judged ones stay where they were until the next visit, so the page doesn't jump under you.
   const done = Object.values(results).filter((r) => !state.pending.some((p) => p.id === r.item.id)).map((r) => r.item);
   const when = (d: PendingDecision) => d.date + d.id;
   const newest = (a: PendingDecision, b: PendingDecision) => (when(a) < when(b) ? 1 : when(a) > when(b) ? -1 : 0);
-  // Polish has no card on the board, so its area is the piece of work it came from.
+  // A piece of work with no card on the board yet is placed by its own name.
   const areaOf = (d: PendingDecision) => areaOfCard(d.card) ?? d.trigger;
   const areaCounts = new Map<string, number>();
-  for (const d of state.pending) areaCounts.set(areaOf(d), (areaCounts.get(areaOf(d)) ?? 0) + 1);
+  for (const d of asked) areaCounts.set(areaOf(d), (areaCounts.get(areaOf(d)) ?? 0) + 1);
   const areas = [...areaCounts].map(([a, n]) => ({ value: a, label: a, hint: String(n) }));
   const picked = area.filter((a) => areaCounts.has(a) || done.some((d) => areaOf(d) === a));
-  const all = [...state.pending, ...done]
+  const all = [...asked, ...done]
     .filter((d) => !picked.length || picked.includes(areaOf(d)))
     .sort((a, b) => (sort === 'big' ? weight(a) - weight(b) || newest(a, b) : sort === 'old' ? -newest(a, b) : newest(a, b)));
-  const polishTotal = state.pending.filter((d) => d.level === 'polish').length;
   const clashes = all.filter((d) => d.againstRule && !results[d.id]);
+  // What Confirm all and Skip all at the top take: everything shown and still waiting, but not a clash,
+  // which needs its own answer.
+  const bulk = all.filter((d) => !results[d.id] && !d.againstRule);
   const rules = { active: state.active, cap: state.cap };
   const landing = useRef<HTMLElement>(null);
   const target = at ? all.find((d) => d.card === at)?.trigger : undefined;
@@ -92,22 +99,15 @@ export function ReviewPage({ state, at, area, areaOfCard, results, onJudged, onU
     else window.scrollTo(0, 0);
   }, [at]);
 
-  // A group's decisions, confirmed one by one. One that overlaps a rule stays, for you to answer on its card.
-  const confirmGroup = async (list: PendingDecision[]) => {
+  const judged = (d: PendingDecision, as: 'accept' | 'skip'): Result => (as === 'accept' ? { item: d, kind: 'ok', text: 'Confirmed' } : { item: d, kind: 'skip', text: 'Skipped' });
+
+  // A group's decisions, confirmed or skipped one by one. One that overlaps a rule stays, for you to answer on its card.
+  const judgeGroup = async (list: PendingDecision[], as: 'accept' | 'skip') => {
     const next: Results = {};
     for (const d of list) {
-      const res = await post('/api/judge', { id: d.id, as: 'accept' });
-      if (res.exitCode === 0) next[d.id] = { item: d, kind: 'ok', text: 'Confirmed' };
+      const res = await post('/api/judge', { id: d.id, as });
+      if (res.exitCode === 0) next[d.id] = judged(d, as);
     }
-    onJudged(next);
-    await refresh();
-  };
-
-  const confirmAll = async (body: { level: string; trigger?: string }) => {
-    const res = await post('/api/judge-all', { as: 'accept', ...body });
-    const failed = new Set(((res.failed as { id: string }[] | undefined) ?? []).map((f) => f.id));
-    const next: Results = {};
-    for (const d of state.pending) if (d.level === body.level && (!body.trigger || d.trigger === body.trigger) && !failed.has(d.id)) next[d.id] = { item: d, kind: 'ok', text: 'Confirmed' };
     onJudged(next);
     await refresh();
   };
@@ -116,6 +116,7 @@ export function ReviewPage({ state, at, area, areaOfCard, results, onJudged, onU
     return (
       <main className="max-w-4xl">
         <PageTitle>Review inbox</PageTitle>
+        <Meta className="mt-0.5 block">Nothing waiting for you.</Meta>
         <div className="mt-6 rounded-lg border border-dashed border-border-strong px-6 py-16 text-center">
           <p className="font-semibold tracking-tight">All caught up</p>
           <p className="mx-auto mt-1 max-w-md text-[13px] text-muted">Nothing waiting. The agent queues its decisions here when a piece of work settles.</p>
@@ -128,8 +129,8 @@ export function ReviewPage({ state, at, area, areaOfCard, results, onJudged, onU
     <main className="max-w-4xl">
       <div className="mb-4">
         <PageTitle>Review inbox</PageTitle>
-        <Meta className="mt-0.5 block">{state.pending.length
-          ? `${state.pending.length} waiting. Confirm what’s right, make what should always hold a rule, and fix the rest in your own words.`
+        <Meta className="mt-0.5 block">{asked.length
+          ? `${asked.length} waiting. Confirm what’s right, make what should always hold a rule, and fix the rest in your own words.`
           : 'Nothing left waiting. What you decided is on the board now.'}</Meta>
       </div>
       <div className="flex flex-wrap items-center gap-2 border-y border-border py-3">
@@ -141,7 +142,7 @@ export function ReviewPage({ state, at, area, areaOfCard, results, onJudged, onU
               {clashes.length} {clashes.length === 1 ? 'goes' : 'go'} against a rule
             </button>
           ) : null}
-          {polishTotal > 1 ? <Button size="sm" onClick={() => confirmAll({ level: 'polish' })}>Confirm all {polishTotal} polish</Button> : null}
+          {bulk.length > 1 ? <BulkMenu list={bulk} clashes={clashes.length} filtered={picked.length > 0} onGo={(as) => judgeGroup(bulk, as)} /> : null}
           <ViewToggle value={view} options={VIEWS} onChange={pickView} />
         </div>
       </div>
@@ -152,30 +153,78 @@ export function ReviewPage({ state, at, area, areaOfCard, results, onJudged, onU
         const items = g.items;
         const waiting = items.filter((d) => !results[d.id]).length;
         const pics = [...new Map(items.filter((d) => !results[d.id] && d.picture).map((d) => [d.picture!.command, d.picture!])).values()];
-        const rest = g.polish.filter((d) => !promoted[d.id]);
-        // What Confirm all takes: the group's decisions still waiting, but not a clash, which needs its own call.
+        // What Confirm all and Skip all take: the group's decisions still waiting, but not a clash, which needs its own call.
         const plain = items.filter((d) => !results[d.id] && !d.againstRule);
+        // Its card on the board, when it has one.
+        const onBoard = items.map((d) => d.card).find((card) => areaOfCard(card) !== null) ?? null;
+        const command = pics.map((p) => p.command).join('\n');
         return (
           <section key={g.trigger} ref={g.trigger === target ? landing : undefined} className="mt-8 scroll-mt-20">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              {/* SectionTitle's shape, with the missing picture last and in amber: the board shows an icon where
-                  one is missing, so this is the place to notice. */}
+              {/* SectionTitle's shape: the work and how many wait, the number alone. Its actions sit behind
+                  "⋯": Confirm all, Skip all, open it on the board, and, when it has no picture, the command
+                  that takes one. */}
               <h2 className="text-[15px] font-semibold tracking-tight">
                 {g.trigger}
-                <span className="font-normal text-muted"> · {waiting} decision{waiting === 1 ? '' : 's'}{rest.filter((d) => !results[d.id]).length ? ` · +${rest.filter((d) => !results[d.id]).length} polish` : ''}</span>
-                {pics.length ? <span className="cursor-help font-normal text-warn" title={`Take one while the screen is open:\n${pics.map((p) => p.command).join('\n')}`}> · No picture</span> : null}
+                {waiting ? <span className="font-normal text-muted"> · {waiting}</span> : null}
               </h2>
-              {plain.length > 1 ? <Button size="sm" variant="ghost" onClick={() => confirmGroup(plain)}>Confirm all {plain.length}</Button> : null}
+              {plain.length || onBoard || pics.length ? (
+                <ActionMenu label={`Decisions on ${g.trigger}: options`} className={dotsTrigger} trigger={DOTS}>
+                  {plain.length ? <ActionItem icon={Icon.check} onClick={() => void judgeGroup(plain, 'accept')} hint={String(plain.length)}>Confirm all</ActionItem> : null}
+                  {plain.length ? <ActionItem icon={Icon.skip} onClick={() => void judgeGroup(plain, 'skip')} hint={String(plain.length)}>Skip all</ActionItem> : null}
+                  {plain.length && (onBoard || pics.length) ? <ActionSeparator /> : null}
+                  {onBoard ? <ActionItem icon={Icon.open} onClick={() => go(href(onBoard))}>Open on the board</ActionItem> : null}
+                  {pics.length ? <ActionItem icon={Icon.camera} onClick={() => { void navigator.clipboard?.writeText(command).catch(() => {}); }}>Copy the picture command</ActionItem> : null}
+                </ActionMenu>
+              ) : null}
             </div>
-            <div className="grid gap-3">
-              {items.map((d, i) => (results[d.id] ? <Judged key={d.id} r={results[d.id]} onUndo={undo} /> : <DecisionCard key={d.id} d={d} i={i} n={items.length} agent={state.agent} rules={rules} onJudged={(r) => { onJudged({ [d.id]: r }); void refresh(); }} />))}
-              {g.polish.filter((d) => promoted[d.id]).map((d) => (results[d.id] ? <Judged key={d.id} r={results[d.id]} onUndo={undo} /> : <DecisionCard key={d.id} d={d} agent={state.agent} rules={rules} onJudged={(r) => { onJudged({ [d.id]: r }); void refresh(); }} />))}
-              {rest.length ? <PolishRow list={rest} results={results} onUndo={undo} onJudged={(r) => { onJudged(r); void refresh(); }} onConfirmAll={() => confirmAll({ level: 'polish', trigger: g.trigger })} onMore={(id) => setPromoted((p) => ({ ...p, [id]: true }))} /> : null}
+            <div className={`grid ${view === 'compact' ? 'gap-2' : 'gap-3'}`}>
+              {items.map((d, i) => (results[d.id] ? <Judged key={d.id} r={results[d.id]} onUndo={undo} /> : <DecisionCard key={d.id} d={d} i={i} n={items.length} agent={state.agent} rules={rules} compact={view === 'compact'} onJudged={(r) => { onJudged({ [d.id]: r }); void refresh(); }} />))}
             </div>
           </section>
         );
       })}
     </main>
+  );
+}
+
+/**
+ * Confirm all and Skip all for everything the inbox is showing (in the areas picked, if any), behind a
+ * "⋯" the toolbar's height, as each group has its own. It's every decision at once, so each asks first,
+ * in a small dialog that says what happens. A clash with a rule is left for its own answer either way,
+ * and each one can still be taken back with Undo while the page is open.
+ */
+function BulkMenu({ list, clashes, filtered, onGo }: { list: PendingDecision[]; clashes: number; filtered: boolean; onGo: (as: 'accept' | 'skip') => Promise<void> }) {
+  const [asking, setAsking] = useState<'accept' | 'skip' | null>(null);
+  const [busy, setBusy] = useState(false);
+  const n = list.length;
+  const verb = asking === 'skip' ? 'Skip' : 'Confirm';
+  const go = async () => {
+    if (!asking) return;
+    setBusy(true);
+    try { await onGo(asking); } finally { setBusy(false); setAsking(null); }
+  };
+  return (
+    <>
+      <ActionMenu label={`All ${n} decisions${filtered ? ' shown' : ''}: confirm or skip them`} tip="Confirm or skip all" className={barDots} trigger={DOTS}>
+        <ActionItem icon={Icon.check} onClick={() => setAsking('accept')} hint={String(n)}>Confirm all</ActionItem>
+        <ActionItem icon={Icon.skip} onClick={() => setAsking('skip')} hint={String(n)}>Skip all</ActionItem>
+      </ActionMenu>
+      <Dialog open={asking !== null} onOpenChange={(o) => { if (!o && !busy) setAsking(null); }}>
+        <DialogContent>
+          <DialogTitle className="font-semibold tracking-tight">{verb} all {n} decisions{filtered ? ' shown' : ''}?</DialogTitle>
+          <DialogDescription className="mt-1.5 text-[13px] text-muted">
+            {asking === 'skip' ? 'Each one leaves the queue and isn’t recorded anywhere.' : 'Each one joins the board as decided.'}
+            {clashes ? ` ${clashes} that ${clashes === 1 ? 'goes' : 'go'} against a rule ${clashes === 1 ? 'stays' : 'stay'} for you to answer.` : ''}
+            {' '}You can undo any of them while this page is open.
+          </DialogDescription>
+          <div className="mt-5 flex justify-end gap-2">
+            <Button size="md" variant="ghost" onClick={() => setAsking(null)} disabled={busy}>Cancel</Button>
+            <Button size="md" variant="primary" onClick={() => void go()} disabled={busy}>{busy ? `${asking === 'skip' ? 'Skipping' : 'Confirming'}…` : `${verb} all ${n}`}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -233,9 +282,9 @@ function Single({ all, results, at, cur, setCur, agent, rules, onJudged, onUndo,
     <Button className="w-8 px-0!" disabled={i === queue.length - 1} onClick={() => move(1)} aria-label="Next" title="Next (→)">{ArrowRight}</Button>
   </>;
   return (
-    <div className="mt-6">
+    <div className="mt-8">
       {last ? <div className="mb-4"><Judged key={last.item.id} r={last} onUndo={undo} keys /></div> : null}
-      <div className="mb-3 flex items-center gap-3">
+      <div className="mb-3 flex min-h-7 items-center gap-3">
         <h2 className="min-w-0 truncate text-[15px] font-semibold tracking-tight">{d.trigger}</h2>
         <span className="ml-auto shrink-0 text-[13px] tabular-nums text-muted" aria-live="polite">{i + 1} of {queue.length}</span>
       </div>
@@ -309,8 +358,10 @@ type Panel =
   | { kind: 'message'; text: string; bad?: boolean };
 
 /** One decision waiting for you, in the board's decision shape: its picture if it's visual, id and badges, then the lines. */
-function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, onJudged }: { d: PendingDecision; i?: number; n?: number; agent: Agent; rules: { active: number; cap: number }; keys?: boolean; wide?: boolean; nav?: React.ReactNode; onJudged: (r: Result) => void }) {
+function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudged }: { d: PendingDecision; i?: number; n?: number; agent: Agent; rules: { active: number; cap: number }; keys?: boolean; wide?: boolean; nav?: React.ReactNode; compact?: boolean; onJudged: (r: Result) => void }) {
   const [panel, setPanel] = useState<Panel | null>(null);
+  // Compact: closed to its top line and its Change until opened.
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [fix, setFix] = useState('');
   const dim = DIMENSION_LABEL[d.dimension] ?? cap(d.dimension);
@@ -378,28 +429,32 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, onJudged }: { d:
     </Fragment>
   ));
 
-  const card = (
-    <div id={d.id} className="scroll-mt-20 rounded-lg border border-border bg-surface p-4">
-      {/* The picture of its screen or its work across the top, as on a change's own page. */}
-      {shot ? <div className="mb-4"><Screenshot src={shot} alt={d.candidateName ?? d.trigger} height={wide ? 360 : 240} /></div> : null}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Id>{d.id}</Id>
-        <Badge tone="info">{cap(d.level)}</Badge>
-        <Badge>{dim}</Badge>
-        {d.verified === false ? <span title="The files did not match this claim when it was queued"><Badge tone="bad">Unverified</Badge></span> : null}
-        <Faint className="ml-auto">{sentence(d.author)}, {day(d.date)}{n ? ` · ${(i ?? 0) + 1} of ${n}` : ''}</Faint>
-      </div>
-      <KeyValues>
-        <Label>Change</Label>
-        <dd className="font-medium">{sentence(d.change ?? d.decision)}</dd>
-        {d.change && d.change !== d.decision ? <><Label>Pattern</Label><dd className="text-muted">{sentence(d.decision)}</dd></> : null}
-        {d.rejected.length ? <><Label>Rejected</Label><dd className="text-muted">{d.rejected.map((x) => <div key={x}>{sentence(x)}</div>)}</dd></> : null}
-        {d.rationale ? <><Label>Why</Label><dd className="text-muted">{sentence(d.rationale)}</dd></> : null}
-        {r ? <><Label>Clashes</Label><dd><Id>{r.id}</Id> {sentence(r.decision)}</dd></> : null}
-        {applies ? <><Label>Applies to</Label><dd className="text-muted">{applies}</dd></> : null}
-        {d.ref ? <><Label>Ticket</Label><dd className="text-muted">{/^https?:\/\//i.test(d.ref) ? <a href={d.ref} target="_blank" rel="noreferrer" className="underline hover:text-fg">{d.ref}</a> : d.ref}</dd></> : null}
-      </KeyValues>
+  // Its top line: id, size, type, and when. No name: on the local board it's always you.
+  const head = (
+    <span className="flex flex-wrap items-center gap-2">
+      <Id>{d.id}</Id>
+      <Badge tone="info">{cap(d.level)}</Badge>
+      <Badge>{dim}</Badge>
+      {d.verified === false ? <span title="The files did not match this claim when it was queued"><Badge tone="bad">Unverified</Badge></span> : null}
+      <Faint className="ml-auto"><When iso={d.date} />{n ? ` · ${(i ?? 0) + 1} of ${n}` : ''}</Faint>
+    </span>
+  );
+  const change = sentence(d.change ?? d.decision);
+  // Everything under the Change line.
+  const rest = (
+    <>
+      {d.change && d.change !== d.decision ? <><Label>Pattern</Label><dd className="text-muted">{sentence(d.decision)}</dd></> : null}
+      {d.rejected.length ? <><Label>Rejected</Label><dd className="text-muted">{d.rejected.map((x) => <div key={x}>{sentence(x)}</div>)}</dd></> : null}
+      {d.rationale ? <><Label>Why</Label><dd className="text-muted">{sentence(d.rationale)}</dd></> : null}
+      {r ? <><Label>Clashes</Label><dd><Id>{r.id}</Id> {sentence(r.decision)}</dd></> : null}
+      {applies ? <><Label>Applies to</Label><dd className="text-muted">{applies}</dd></> : null}
+      {d.ref ? <><Label>Ticket</Label><dd className="text-muted">{/^https?:\/\//i.test(d.ref) ? <a href={d.ref} target="_blank" rel="noreferrer" className="underline hover:text-fg">{d.ref}</a> : d.ref}</dd></> : null}
+    </>
+  );
 
+  // Its buttons and whatever it's asking (the fix, an overlap), under the rows, in every view.
+  const after = (
+    <>
       {panel || nav ? null : <div className="mt-3 flex flex-wrap items-center gap-1.5">{buttons}</div>}
 
       {panel?.kind === 'fix' ? (
@@ -451,6 +506,40 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, onJudged }: { d:
           <Button size="sm" variant="ghost" onClick={() => setPanel(null)}>OK</Button>
         </div>
       ) : null}
+    </>
+  );
+  const arrow = <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className={`shrink-0 text-faint transition-transform ${open ? 'rotate-180' : ''}`}><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  const toggle = () => setOpen((o) => !o);
+
+  // Compact is this card folded to its top line and its change, the top line where List and Single have it.
+  // The change sits under it, without its label. Clicking the row opens the rest beneath it; the arrow sits
+  // on the line with the date, down while closed and up while open.
+  const card = compact ? (
+    <div id={d.id} className="scroll-mt-20 rounded-lg border border-border bg-surface p-4">
+      <div role="button" tabIndex={0} aria-expanded={open} onClick={toggle} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+        className="-m-2 cursor-pointer rounded-ui p-2 outline-none hover:bg-surface-2 focus-visible:ring-1 focus-visible:ring-border-strong">
+        <div className="flex items-center gap-3"><span className="min-w-0 flex-1">{head}</span>{arrow}</div>
+        <p className="mt-1.5 max-w-2xl text-[14px] font-medium">{change}</p>
+      </div>
+      {open ? (
+        <>
+          <KeyValues className="mt-3 max-w-2xl">{rest}</KeyValues>
+          {shot ? <div className="mt-4"><Screenshot src={shot} alt={d.candidateName ?? d.trigger} height={240} /></div> : null}
+          {after}
+        </>
+      ) : null}
+    </div>
+  ) : (
+    <div id={d.id} className="scroll-mt-20 rounded-lg border border-border bg-surface p-4">
+      {/* The picture of its screen or its work across the top, as on a change's own page. */}
+      {shot ? <div className="mb-4"><Screenshot src={shot} alt={d.candidateName ?? d.trigger} height={wide ? 360 : 240} /></div> : null}
+      <div className="mb-3">{head}</div>
+      <KeyValues className="max-w-2xl">
+        <Label>Change</Label>
+        <dd className="font-medium">{change}</dd>
+        {rest}
+      </KeyValues>
+      {after}
     </div>
   );
   if (!nav) return card;
@@ -468,40 +557,3 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, onJudged }: { d:
   );
 }
 
-/** Polish: one-off fixes no rule comes from. One row per piece of work, confirmed together; More opens one as a card. */
-function PolishRow({ list, results, onJudged, onUndo, onConfirmAll, onMore }: { list: PendingDecision[]; results: Results; onJudged: (r: Results) => void; onUndo: (id: string) => Promise<string | null>; onConfirmAll: () => void; onMore: (id: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const waiting = list.filter((d) => !results[d.id]);
-  const one = async (d: PendingDecision, as: 'accept' | 'skip') => {
-    const res = await post('/api/judge', { id: d.id, as });
-    if (res.exitCode === 0) onJudged({ [d.id]: { item: d, kind: as === 'skip' ? 'skip' : 'ok', text: as === 'skip' ? 'Skipped' : 'Confirmed' } });
-  };
-  return (
-    <div className="rounded-lg border border-dashed border-border bg-surface px-4 py-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="flex-1 text-[13px] text-muted">{waiting.length ? `${waiting.length} polish: one-off fixes, no rules come from these` : 'Polish confirmed'}</span>
-        {waiting.length ? <>
-          <Button size="sm" variant="primary" onClick={onConfirmAll}>Confirm all</Button>
-          <Button size="sm" variant="ghost" onClick={() => setOpen((v) => !v)}>{open ? 'Hide' : 'Show'}</Button>
-        </> : null}
-      </div>
-      {open || !waiting.length ? (
-        <ul className="mt-3 divide-y divide-border border-t border-border">
-          {list.map((d) => {
-            const r = results[d.id];
-            return (
-              <li key={d.id} className="flex flex-wrap items-center gap-2 py-2 text-[14px]">
-                <span className={`flex-1 ${r ? 'text-muted' : ''}`}>{r ? (r.kind === 'ok' ? '✓ ' : '— ') : ''}{sentence(d.change ?? d.decision)}</span>
-                {r ? <span className="text-[13px]"><Undo id={d.id} onUndo={onUndo} /></span> : <>
-                  <Button size="sm" variant="ghost" onClick={() => one(d, 'accept')}>Confirm</Button>
-                  <Button size="sm" variant="ghost" onClick={() => one(d, 'skip')}>Skip</Button>
-                  <Button size="sm" variant="ghost" onClick={() => onMore(d.id)}>More</Button>
-                </>}
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
-    </div>
-  );
-}

@@ -11,10 +11,12 @@ It started as the team board's pages, ported from the site repo (`hosted/local`,
 | `main.tsx` | Loads the board from the CLI (`/api/board`), or from `window.__ARBITER_BOARD__` in an exported copy |
 | `App.tsx` | The shell: top bar, rail, the phone chip row, the footer |
 | `Overview.tsx`, `Toolbar.tsx` | Overview: every piece of work as a card or a row |
+| `Areas.tsx` | Areas in the rail, with the folders you make: name, drag, reorder; saved in `.arbiter/areas.json` |
 | `Change.tsx`, `Comments.tsx` | One change. Comments are read-only: the team writes them on the team board |
 | `Review.tsx` | The Review inbox: List and Single, Undo |
 | `Rules.tsx` | Design rules, with Copy, Edit and Remove on each rule |
-| `route.ts` | Pages in the hash (`#/`, `#/c/C-0001`, `#/rules`), so it works from a file on disk too |
+| `Preferences.tsx` | Preferences, live board only: check-ins, what gets recorded, rules and pictures; saved in `arbiter.json` (`src/settings.ts`) |
+| `route.ts` | Pages in the hash (`#/`, `#/c/C-0001`, `#/rules`, `#/preferences`), so it works from a file on disk too |
 | `api.ts` | The calls to the CLI's review server |
 | `types.ts` | What the CLI sends. The shapes themselves are in `src/board-types.ts`, shared with the CLI |
 | `components/`, `lib/board.ts` | The board's own copies of the parts it started with: type, buttons, badges, dropdowns, tooltips, the screenshot viewer, the area and state words |

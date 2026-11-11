@@ -40,7 +40,7 @@ export function setup(opts: { checkin?: string; app?: string; cwd?: string }): {
  * An http(s) address a route can go on the end of: no query or fragment, no trailing slash.
  * One with a username or password is refused rather than written to a committed file.
  */
-function appUrl(raw: string): string | 'credentials' | null {
+export function appUrl(raw: string): string | 'credentials' | null {
   try {
     const u = new URL(raw.trim());
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;

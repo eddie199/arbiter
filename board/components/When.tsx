@@ -1,26 +1,55 @@
-// Copied from the site's hosted/components/When.tsx (site bff92c0, 4 Nov 2026). The local board owns it now.
-'use client';
-
-import { useEffect, useState } from 'react';
-
 /**
- * A moment from the record, as `dd/mm/yy · hh:mm` — `dd/mm/yy` alone when the record
- * has only a day. The server renders UTC; after mount it becomes the viewer's own
- * zone. The full ISO sits in the title.
+ * Dates, one way across the whole board. A day reads the way people say it: Today, Yesterday, 3 days ago,
+ * then the date ("4 Nov", with the year only when it isn't this one). A time of day is in the viewer's own
+ * clock. The exact date and time show on hover.
+ *
+ * A record that has only a day ("2026-09-18", a rule's date) is that calendar day wherever you are, so it's
+ * read as a local date, not as midnight in London.
  */
-export function When({ iso, className }: { iso: string; className?: string }) {
-  const [text, setText] = useState(() => format(iso, true));
-  useEffect(() => { setText(format(iso)); }, [iso]);
-  return <time dateTime={iso} title={iso} className={className}>{text}</time>;
+
+const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+function parse(iso: string): Date | null {
+  const m = DAY_ONLY.exec(iso) ? iso.split('-').map(Number) : null;
+  const d = m ? new Date(m[0], m[1] - 1, m[2]) : new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function format(iso: string, utc = false): string {
-  const dayOnly = /^\d{4}-\d{2}-\d{2}$/.test(iso);
-  const d = new Date(dayOnly ? `${iso}T00:00:00Z` : iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const zone = dayOnly || utc ? { timeZone: 'UTC' } : {};
-  const day = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', ...zone }).format(d);
-  if (dayOnly) return day;
-  const time = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', ...zone }).format(d);
-  return `${day} · ${time}`;
+/** Today, Yesterday, 3 days ago, then "4 Nov" ("4 Nov 2025" in another year). */
+export function dayWords(iso: string, now = new Date()): string {
+  const d = parse(iso);
+  if (!d) return '';
+  const days = Math.round((new Date(now.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 864e5);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days > 1 && days < 7) return `${days} days ago`;
+  return fullDate(iso, d.getFullYear() !== now.getFullYear());
+}
+
+/** "4 Nov", or "4 Nov 2026" with `year`. */
+export function fullDate(iso: string, year = true): string {
+  const d = parse(iso);
+  return d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(year ? { year: 'numeric' } : {}) }) : iso;
+}
+
+/** The time of day, in the viewer's own clock: "5:39 pm" or "17:39". */
+export const clock = (d: Date): string => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+/** For the hover: the whole date, and the time when the record has one. */
+function exact(iso: string): string {
+  const d = parse(iso);
+  if (!d) return iso;
+  const day = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  return DAY_ONLY.test(iso) ? day : `${day}, ${clock(d)}`;
+}
+
+/**
+ * When something happened, in the board's one way. `time` adds the time of day, for a page about one
+ * thing (a change's own page); lists show the day alone.
+ */
+export function When({ iso, time = false, className }: { iso: string; time?: boolean; className?: string }) {
+  const d = parse(iso);
+  if (!d) return <span className={className}>{iso}</span>;
+  const text = time && !DAY_ONLY.test(iso) ? `${dayWords(iso)}, ${clock(d)}` : dayWords(iso);
+  return <time dateTime={iso} title={exact(iso)} className={className}>{text}</time>;
 }

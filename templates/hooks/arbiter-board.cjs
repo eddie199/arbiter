@@ -18,8 +18,9 @@ const todo = Array.isArray(h.todo) ? h.todo : [];
 const rules = Array.isArray(h.rules) ? h.rules : [];
 const reworded = Array.isArray(h.reworded) ? h.reworded : [];
 const removed = Array.isArray(h.removed) ? h.removed : [];
+const renamed = Array.isArray(h.renamed) ? h.renamed : [];
 // Told already, and nothing new since: the board rewrites the file without `told` on every answer.
-if (h.told || (!todo.length && !rules.length && !reworded.length && !removed.length)) process.exit(0);
+if (h.told || (!todo.length && !rules.length && !reworded.length && !removed.length && !renamed.length)) process.exit(0);
 
 const line = (t) =>
   t.kind === 'fix' ? `- ${t.id}: they corrected it. The code still does "${t.change}"; make it do "${t.to}".`
@@ -33,6 +34,7 @@ if (todo.length) {
 }
 if (rules.length) said.push(`New rules in DECISIONS.md, in force from now: ${rules.join(', ')}. Read them before your next UI change.`);
 if (reworded.length) said.push('Rules they edited in DECISIONS.md. Follow them as they read now, not as you last read them:', ...reworded.map((r) => `- ${r.id} now says "${r.to}"`));
+if (renamed.length) said.push('Work they renamed on the board. Use the new name as the trigger from now on:', ...renamed.map((r) => `- "${r.from}" is now "${r.to}"`));
 if (removed.length) said.push('Rules they removed from DECISIONS.md. Stop following them; the code needs no change unless they ask:', ...removed.map((r) => `- ${r.id} ("${r.rule}"): ${r.why}`));
 said.push(todo.length
   ? 'Then delete .arbiter/last-review.json, say in one line what you changed, and answer their message.'

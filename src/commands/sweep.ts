@@ -39,7 +39,7 @@ export function sweepCommand(id: string, opts: SweepOptions = {}): { text: strin
         author: opts.author ?? rule.author,
         class: 'mechanical',
         change: null,
-        level: 'polish',
+        level: 'pattern',
         dimension: rule.dimension,
         decision: rule.decision,
         rejected: [],

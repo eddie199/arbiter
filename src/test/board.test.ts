@@ -49,7 +49,7 @@ test('the local board: its cards with pictures as links, what waits for review, 
   assert.equal(data.board.candidates[0].snapshot, '/snapshots/W-settings-build.png');
   assert.equal(data.board.rules.length, 1, 'rules always, here');
   assert.deepEqual(data.waiting, { 'W-settings-build': 1 }, 'polish is never waited on');
-  assert.equal(data.pending, 2, 'but the queue counts it');
+  assert.equal(data.pending, 1, 'an old one-off fix left in a queue is not counted as waiting');
   assert.equal(data.hosted, null);
   assert.equal(data.live, true, 'served, so the queue can be judged');
   assert.equal((await get(p, data.board.candidates[0].snapshot)).status, 200);

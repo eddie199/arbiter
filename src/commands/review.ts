@@ -25,6 +25,9 @@ import { findRoot, readActive, readPending, resolvePaths } from '../store';
 import { autoPublish } from '../autopublish';
 import { workDir } from '../work';
 import { liveBoard, reviewState } from '../localboard';
+import { cleanArrangement, writeArrangement } from '../areas';
+import { saveSettings } from '../settings';
+import { renameWork } from './rename';
 import { Answer, clearHandoff, Handoff, HANDOFF_NAME, readHandoff, saveAnswer, summarize, withdrawAnswer, withdrawRemoval } from '../handoff';
 import { hookInstalled } from '../hook';
 import type { Decision } from '../schema';
@@ -327,6 +330,37 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
           answer({ kind: 'option', id: body.id, name: c?.name ?? body.id, state: body.state });
         }
         json(res, 200, { exitCode: result.exitCode, ...result.output });
+        return;
+      }
+      // Folders in the side nav's Areas. They only arrange the board, so the agent isn't told and the
+      // team board isn't republished: the file is saved, and every open tab redraws from it.
+      if (req.method === 'POST' && url.pathname === '/api/areas') {
+        const r = cleanArrangement(JSON.parse(await readBody(req)));
+        if (!r.ok) {
+          json(res, 200, { exitCode: 1, status: 'invalid', errors: r.errors });
+          return;
+        }
+        writeArrangement(paths, r.value);
+        json(res, 200, { exitCode: 0, arrangement: r.value });
+        return;
+      }
+      // Rename on a change's page: the work and everything filed under it move to the new name, as
+      // `arbiter rename` does. The agent hears the new name, so its next decisions don't start a second card.
+      if (req.method === 'POST' && url.pathname === '/api/rename') {
+        const body = JSON.parse(await readBody(req)) as { from: string; to: string };
+        const result = renameWork(String(body.from ?? ''), String(body.to ?? ''), { cwd });
+        if (result.exitCode === 0) {
+          changed = true;
+          answer({ kind: 'rename', from: String(result.output.from), to: String(result.output.to) });
+        }
+        json(res, 200, { exitCode: result.exitCode, ...result.output });
+        return;
+      }
+      // Preferences: written to arbiter.json, which the CLI reads each time it acts, so nothing needs
+      // telling. Every open tab redraws from the file.
+      if (req.method === 'POST' && url.pathname === '/api/settings') {
+        const r = saveSettings(paths, JSON.parse(await readBody(req)));
+        json(res, 200, r.ok ? { exitCode: 0, settings: r.settings } : { exitCode: 1, status: 'invalid', errors: r.errors });
         return;
       }
       if (req.method === 'GET' && url.pathname === '/api/stamp') {

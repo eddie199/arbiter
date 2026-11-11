@@ -10,14 +10,15 @@ import { MultiSelect } from '@/components/ui/multi-select';
 import { Faint, Id, KeyValues, Label, Lede, Meta, PageTitle, Property, PropertyRow, SectionTitle } from '@/components/ui/type';
 import type { LocalBoard } from './types';
 import { go, href } from './route';
-import { areasOf, cap, StateBadge, undecided, WaitingBadge } from './bits';
+import { areasOf, cap, PLANS, StateBadge, undecided, WaitingBadge } from './bits';
 import { CommentLine, DecisionThread } from './Comments';
+import { ChangeMenu } from './ChangeMenu';
 
 /**
  * One change, as the team board shows it (components/ScreenView.tsx): what it is, the picture,
  * the other options, what was decided on it, and what people said. Local: whether anything on it
  * is waiting for your review, which you judge in the Review inbox, and comments read, not written.
- * The Kind filter rides in the hash, like the Overview's: `#/c/W-review-page?kind=visual`.
+ * The Type filter rides in the hash, like the Overview's: `#/c/W-review-page?type=visual`.
  */
 export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: BoardCandidate; at: string | null; kinds: string[]; refresh: () => Promise<void> }) {
   const cands = data.board.candidates;
@@ -60,7 +61,10 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
       <p className="mb-3 text-[13px] text-muted"><a href={href('overview', { section: area })} className="hover:text-fg">{area}</a>{short === area ? null : <> <span className="text-faint">/</span> {short}</>}</p>
 
       <header>
-        <PageTitle>{short}</PageTitle>
+        <div className="flex items-start justify-between gap-4">
+          <PageTitle className="min-w-0">{short}</PageTitle>
+          {data.live ? <ChangeMenu c={c} area={area} short={short} areas={[...new Set(cands.map(areaOf))].sort((x, y) => x.localeCompare(y))} waiting={waiting} refresh={refresh} /> : null}
+        </div>
         {c.reason && <Lede className="max-w-3xl">“{sentence(c.reason)}”</Lede>}
         {c.notes && <p className="mt-2 max-w-3xl">{c.notes}</p>}
         <PropertyRow>
@@ -70,7 +74,7 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
           {fresh && !waiting ? null : <Property label="Status">{waiting ? <WaitingBadge /> : null}{fresh || (waiting && c.work) ? null : <StateBadge state={c.state} label={label} />}{approvedBy && c.state === 'approved' ? <span className="text-muted">by {cap(approvedBy)}</span> : null}{waiting && data.live ? <a href={href('review', { at: c.id })} className="text-muted underline hover:text-fg">{waiting} to review</a> : null}</Property>}
           <Property label="Area"><a href={href('overview', { section: area })} className="hover:underline">{area}</a></Property>
           {fresh ? null : <Property label="Decided by">{cap(c.author)}</Property>}
-          <Property label="Date"><When iso={c.date} /></Property>
+          <Property label="Date"><When iso={c.date} time /></Property>
           {c.url ? <Property label="Live"><a href={c.url} target="_blank" rel="noreferrer" className="underline hover:text-fg">Open →</a></Property> : null}
         </PropertyRow>
         {data.live && !c.work && (c.state === 'generated' || c.state === 'in_review') ? <OptionActions c={c} refresh={refresh} /> : null}
@@ -94,10 +98,20 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
 
         <section className={!c.snapshot && !siblings.length ? 'mt-2' : 'mt-10'}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <SectionTitle className="mb-0" count={picked.length ? `${listed.length} of ${c.decisions.length}` : c.decisions.length || null}>Decided here</SectionTitle>
-            {kindOpts.length ? <MultiSelect label="Kind" values={picked} options={kindOpts} onChange={(v) => go(href(c.id, { kind: v }))} /> : null}
+            <SectionTitle className="mb-0!" count={picked.length ? `${listed.length} of ${c.decisions.length}` : c.decisions.length || null}>Decided here</SectionTitle>
+            {kindOpts.length ? <MultiSelect label="Type" values={picked} options={kindOpts} onChange={(v) => go(href(c.id, { type: v }))} /> : null}
           </div>
-          {!c.decisions.length ? <p className="text-[13px] text-muted">{fresh && waiting ? 'Nothing decided yet. What the agent decided here is waiting for your review.' : 'No decisions recorded here yet.'}</p> : (
+          {/* Nothing judged yet, everything waiting: the way on is the Review inbox, opened at this change. The
+              same shape as the Overview's banner, so it reads as the same call to act. */}
+          {!c.decisions.length && fresh && waiting && data.live ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
+              <div>
+                <div className="font-semibold tracking-tight">{waiting} waiting for your review</div>
+                <div className="mt-0.5 text-[13px] text-muted">Nothing is decided here yet. Each decision shows here once you’ve judged it.</div>
+              </div>
+              <a href={href('review', { at: c.id })} className={buttonClass('secondary', 'md')}>Review {waiting === 1 ? 'it' : 'them'}</a>
+            </div>
+          ) : !c.decisions.length ? <p className="text-[13px] text-muted">{fresh && waiting ? 'Nothing decided yet. What the agent decided here is waiting for your review.' : 'No decisions recorded here yet.'}</p> : (
             <ol className="divide-y divide-border border-t border-border">
               {listed.map((d, i) => {
                 const dim = d.dimension ? DIMENSION_LABEL[d.dimension] ?? d.dimension : null;
@@ -107,7 +121,7 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
                     <div className="mb-3 flex items-center gap-2">
                       <Id className={at === d.id ? 'text-fg' : undefined}>{d.id}</Id>
                       {dim ? <Badge>{dim}</Badge> : null}
-                      {d.verdict === 'rule' ? <a href={href('rules', { at: d.id })} title="See it under Design rules" className="rounded-full hover:opacity-75"><Badge tone="ok">Rule</Badge></a> : d.verdict === 'fix' ? <Badge tone="warn">Corrected</Badge> : null}
+                      {d.verdict === 'rule' ? <a href={href('rules', { at: d.id })} title="See it under Design rules" className="inline-flex rounded-full hover:opacity-75"><Badge tone="ok">Rule</Badge></a> : d.verdict === 'fix' ? <Badge tone="warn">Corrected</Badge> : null}
                       <Faint className="ml-auto">{i + 1} of {listed.length}</Faint>
                     </div>
                     <KeyValues>
@@ -125,9 +139,14 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
           )}
         </section>
 
-        {/* An exported copy carries no comments, so it has no section for them. */}
+        {/* An exported copy carries no comments, so it has no section for them. Comments come from a
+            team board; without one, the title says so in a few faint words, and nothing more. */}
         {data.live || comments.length ? <section className="mt-10 border-t border-border pt-6">
-          <SectionTitle count={said || null} aside={onDecisions ? `${onDecisions} on decisions above` : null}>Comments</SectionTitle>
+          <SectionTitle count={said || null} aside={onDecisions ? `${onDecisions} on decisions above` : null}>
+            Comments
+            {/* Smaller than the title, so it reads as a note, not part of the heading. */}
+            {!onDecisions && data.live && !data.hosted ? <>{' '}<a href={PLANS} target="_blank" rel="noreferrer" className="ml-1 text-[13px] font-normal text-faint hover:underline">Available with Arbiter Team</a></> : null}
+          </SectionTitle>
           {liveApprovals.length ? <p className="mb-1 text-[13px] text-ok">✓ Looks good to {cap(approvedBy)}</p> : null}
           {staleApprovals.length ? <p className="mb-3 text-[13px] text-faint">Looked good to {cap(earlierBy)} on an earlier version</p> : null}
           {notes.length ? (
@@ -135,9 +154,7 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
               {notes.map((n) => <CommentLine key={n.id} n={n} stale={!current(n)} requests={requests} cards={ids} candidate={c.id} />)}
             </ul>
           ) : <p className="text-[13px] text-muted">No comments yet.</p>}
-          {data.live ? <p className="mt-4 max-w-2xl text-[13px] text-faint">{data.hosted
-            ? <>Your team comments on the team board. <code className="font-mono text-[12px]">npx arbiter pull</code> brings what they said here.</>
-            : 'Share a team board, and your team can comment, ask for a change, or say it looks good.'}</p> : null}
+          {data.live && data.hosted ? <p className="mt-4 max-w-2xl text-[13px] text-faint">Your team comments on the team board. <code className="font-mono text-[12px]">npx arbiter pull</code> brings what they said here.</p> : null}
         </section> : null}
       </div>
     </main>

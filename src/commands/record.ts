@@ -26,6 +26,7 @@ import { Decision, DecisionInput, DECISION_ID, DIMENSIONS, PENDING_ID, validateI
 import {
   ACTIVE_CAP,
   appendArchive,
+  type Config,
   currentAuthor,
   currentCommit,
   findRoot,
@@ -54,6 +55,7 @@ import { missingPictures, pictureHint } from '../pictures';
 import { markApplied, requestGate, withRequest } from './request';
 import { readRequests, type ChangeRequest } from '../requests';
 import { unclearLines } from '../wording';
+import { placement } from './areas';
 
 export interface RecordOptions {
   supersedes?: string;
@@ -124,13 +126,34 @@ function plainWords(input: DecisionInput): RecordResult | null {
   };
 }
 
+/**
+ * One-off fixes to a single screen aren't recorded, for now: nobody needs to judge matching two heights,
+ * and they made the review long. `record` and `record --pending` turn `level: polish` away and write
+ * nothing; the agent is told so, and carries on. Old polish already in a queue is still judged as before.
+ */
+export function oneOffGate(rawJson: string): RecordResult | null {
+  let level: unknown;
+  try { level = (JSON.parse(rawJson) as { level?: unknown })?.level; } catch { return null; }
+  if (level !== 'polish') return null;
+  return {
+    exitCode: 0,
+    output: {
+      status: 'not-recorded',
+      reason: "One-off fixes to a single screen aren't recorded. Nothing was written. Record it as a pattern only if it would apply to other screens too.",
+    },
+  };
+}
+
 export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
   if (opts.request) return fail([`--request records a change made for an approved request, directly: drop --pending. Nothing is queued for a request.`]);
   const parsed = parse(rawJson, { pending: true });
   if (!parsed.ok) return parsed.result;
+  const paths = resolvePaths(findRoot(opts.cwd));
+  // Before the wording check: there's no point rewording a line Preferences keep out anyway.
+  const off = notRecorded(readConfig(paths), parsed.input);
+  if (off) return { exitCode: 0, output: { status: 'not-recorded', reason: off } };
   const unclear = plainWords(parsed.input);
   if (unclear) return unclear;
-  const paths = resolvePaths(findRoot(opts.cwd));
   const bad = againstError(paths, parsed.input);
   if (bad) return bad;
   const pending = readPending(paths);
@@ -167,10 +190,30 @@ export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
       ...(opts.dryRun ? {} : askToReview(before, waiting, checkin)),
       review: 'npx arbiter review',
       ...picture(paths, entry),
+      // Pictures off in Preferences: the agent takes none, and says nothing about them.
+      ...(readConfig(paths)?.pictures === false ? { pictures: false } : {}),
+      // Where the work sits on the board, and whether it started an area of its own.
+      ...(opts.dryRun ? {} : placement(paths, entry, pending)),
       // Present only when the project's skill file is from an older Arbiter than this one.
       ...updateNotice(paths),
     },
   };
+}
+
+/**
+ * What Preferences on the board keep out of the queue: patterns, when only features are recorded, and the
+ * agent's own calls, when only what the person asked for or corrected is. A clash is always queued:
+ * someone has to say which one wins. "Record that" records directly, so it's never stopped here.
+ */
+function notRecorded(config: Config | null, input: DecisionInput): string | null {
+  if (input.against) return null;
+  if (config?.record?.level === 'feature' && (input.level ?? 'pattern') !== 'feature') {
+    return 'This project records features only (Preferences, on the board). Nothing was written.';
+  }
+  if (config?.record?.agent === false && input.call === 'agent') {
+    return "This project records only what the person asked for or corrected, not the agent's own calls (Preferences, on the board). Nothing was written.";
+  }
+  return null;
 }
 
 /** Ask once each time the waiting count reaches another multiple of this. */

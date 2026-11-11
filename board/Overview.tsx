@@ -1,5 +1,6 @@
-import { BoardCandidate, STATE_LABEL, STATE_ORDER, sentence } from '@/lib/board';
-import { When } from '@/components/When';
+import { useState } from 'react';
+import { BoardCandidate, nameIn, STATE_LABEL, STATE_ORDER, sentence } from '@/lib/board';
+import { fullDate, When } from '@/components/When';
 import { Thumb } from '@/components/Thumb';
 import { KindCover, KindThumb } from '@/components/KindCover';
 import { Meta, PageTitle, SectionTitle } from '@/components/ui/type';
@@ -7,17 +8,33 @@ import { stateTone } from '@/components/ui/badge';
 import { buttonClass } from '@/components/ui/button';
 import type { LocalBoard, QueuedLine } from './types';
 import { href } from './route';
-import { areasOf, StateBadge, undecided, WaitingBadge } from './bits';
+import { areasOf, Counts, ReviewCount, StateBadge, undecided } from './bits';
 import { Toolbar } from './Toolbar';
+
+/**
+ * How the Overview orders its changes: by area (each area under its heading, what's waiting first), or
+ * newest or oldest first as one list across areas. Kept in this browser, like the Review inbox's sort.
+ */
+const SORT_KEY = 'arbiter-overview-sort';
+type Sort = 'area' | 'new' | 'old';
+const SORTS: { value: Sort; label: string; hint?: string }[] = [
+  { value: 'area', label: 'By area', hint: 'Waiting first' },
+  { value: 'new', label: 'Newest' },
+  { value: 'old', label: 'Oldest' },
+];
+const readSort = (): Sort => { try { const s = localStorage.getItem(SORT_KEY); return s === 'new' || s === 'old' ? s : 'area'; } catch { return 'area'; } };
 
 /**
  * The team board's Overview (app/p/[slug]/page.tsx), drawn from the repo: every change as a card,
  * by area, with Status and Area filters and search. What's only local: work still waiting for your
  * review has a card too, marked Waiting and shown first, before anything on it is judged.
  */
-export function Overview({ data, query }: { data: LocalBoard; query: URLSearchParams }) {
+export function Overview({ data, query, folder }: { data: LocalBoard; query: URLSearchParams; folder?: { id: string; name: string; areas: string[] } | null }) {
   const q = query.get('q') ?? '';
-  const section = query.getAll('section').filter(Boolean);
+  const [sort, setSort] = useState<Sort>(readSort);
+  const pickSort = (s: string) => { const v = SORTS.some((o) => o.value === s) ? (s as Sort) : 'area'; setSort(v); try { localStorage.setItem(SORT_KEY, v); } catch {} };
+  // A folder from the side nav shows its areas, each under its own heading, in the folder's order.
+  const section = folder ? folder.areas : query.getAll('section').filter(Boolean);
   const status = query.getAll('status').filter(Boolean);
   const view: 'cards' | 'list' = query.get('view') === 'list' ? 'list' : 'cards';
   const { board, comments } = data;
@@ -36,17 +53,24 @@ export function Overview({ data, query }: { data: LocalBoard; query: URLSearchPa
   const matches = (c: BoardCandidate) => !needle || [c.name, c.reason ?? '', c.notes, ...c.decisions.map((d) => `${d.change ?? ''} ${d.decision}`), ...queuedOn(c).map((d) => `${d.change ?? ''} ${d.decision}`)].join(' ').toLowerCase().includes(needle);
   const hasStatus = (c: BoardCandidate) => status.some((s) => (s === 'waiting' ? wait(c) > 0 : s === c.state && !undecided(c)));
   const cands = all.filter((c) => (!section.length || section.includes(areaOf(c))) && (!status.length || hasStatus(c)) && matches(c));
-  const features = allFeatures.filter((f) => cands.some((c) => areaOf(c) === f));
-  const filtered = status.length > 0 || section.length > 1 || !!needle;
+  const features = (folder ? folder.areas : allFeatures).filter((f) => cands.some((c) => areaOf(c) === f));
+  const filtered = status.length > 0 || (!folder && section.length > 1) || !!needle;
+  // Newest or Oldest is one list in that order, across areas, each card saying its area.
+  const flatOut = filtered || sort !== 'area';
+  // A card's last change: its latest decision, judged or still waiting.
+  const lastOf = (c: BoardCandidate) => queuedOn(c).reduce((a, d) => (d.date > a ? d.date : a), c.date);
+  const byDate = (a: BoardCandidate, b: BoardCandidate) => (sort === 'old' ? lastOf(a).localeCompare(lastOf(b)) : lastOf(b).localeCompare(lastOf(a))) || a.id.localeCompare(b.id);
   // What's waiting for you comes first.
   const byState = (a: BoardCandidate, b: BoardCandidate) => Number(wait(b) > 0) - Number(wait(a) > 0) || STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state) || allFeatures.indexOf(areaOf(a)) - allFeatures.indexOf(areaOf(b)) || a.id.localeCompare(b.id);
-  const flat = [...cands].sort(byState);
+  const flat = [...cands].sort(sort === 'area' ? byState : byDate);
   const groups = features.map((f) => ({ f, group: cands.filter((c) => areaOf(c) === f).sort(byState) }));
   const loose = groups.filter((g) => g.group.length === 1);
   const singles = loose.length > 1 ? loose.map((g) => g.group[0]).sort(byState) : [];
   const sections = singles.length ? groups.filter((g) => g.group.length > 1) : groups;
   const areaLabel = (c: BoardCandidate) => (areaOf(c).toLowerCase() === c.name.toLowerCase() ? undefined : areaOf(c));
-  const talk = (c: BoardCandidate) => ({ n: comments.filter((x) => x.candidate_id === c.id && x.kind === 'comment').length, asks: asks(c.id), waiting: wait(c), queued: queuedOn(c) });
+  // A card under its area's heading, or with its area in its meta line, needn't say the area again:
+  // "Change page — Comments" reads as Comments. The full name stays in its tooltip and on its page.
+  const talk = (c: BoardCandidate) => ({ n: comments.filter((x) => x.candidate_id === c.id && x.kind === 'comment').length, asks: asks(c.id), waiting: wait(c), queued: queuedOn(c), label: nameIn(areaOf(c), c.name), last: lastOf(c) });
   const layout = (list: BoardCandidate[], showArea: boolean) => view === 'list' ? (
     <div className="overflow-hidden rounded-lg border border-border">
       {list.map((c, i) => <Row key={c.id} c={c} first={i === 0} area={showArea ? areaLabel(c) : undefined} {...talk(c)} />)}
@@ -59,7 +83,8 @@ export function Overview({ data, query }: { data: LocalBoard; query: URLSearchPa
 
   return (
     <main>
-      {data.pending && data.live ? (
+      {/* Only on the Overview itself (Overview picked in the side nav), not inside an area or a folder. */}
+      {data.pending && data.live && !folder && !query.getAll('section').length ? (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
           <div>
             <div className="font-semibold tracking-tight">{data.pending} waiting for your review</div>
@@ -69,12 +94,13 @@ export function Overview({ data, query }: { data: LocalBoard; query: URLSearchPa
         </div>
       ) : null}
       <div className="mb-4">
-        <PageTitle>{section.length === 1 ? section[0] : 'Overview'}</PageTitle>
-        <Meta className="mt-0.5 block">{all.length} change{all.length === 1 ? '' : 's'}{board.exported ? <> · as of <When iso={board.exported} /></> : null}</Meta>
+        <PageTitle>{folder ? folder.name : section.length === 1 ? section[0] : 'Overview'}</PageTitle>
+        <Meta className="mt-0.5 block">{all.length} change{all.length === 1 ? '' : 's'}{!data.live && board.exported ? <> · as of {fullDate(board.exported)}</> : null}</Meta>
       </div>
       {all.length ? (
         <Toolbar
-          q={q} section={section} status={status} view={view} total={all.length}
+          q={q} section={folder ? [] : section} folder={folder?.id} status={status} view={view} total={all.length}
+          sort={{ value: sort, options: SORTS, onChange: pickSort }}
           sections={allFeatures.map((f) => ({ value: f, label: f, hint: String(all.filter((c) => areaOf(c) === f).length) }))}
           statuses={[
             ...(waitingCards ? [{ value: 'waiting', label: 'Waiting', hint: String(waitingCards), tone: 'info' as const }] : []),
@@ -88,16 +114,21 @@ export function Overview({ data, query }: { data: LocalBoard; query: URLSearchPa
           <p className="mx-auto mt-1 max-w-md text-[13px] text-muted">Changes appear here as the agent records what it decided.</p>
         </div>
       ) : null}
-      {all.length && !cands.length ? (
+      {folder && !folder.areas.length ? (
+        <div className="px-6 py-16 text-center">
+          <p className="font-semibold tracking-tight">This folder is empty</p>
+          <p className="mt-1 text-[13px] text-muted">{data.live ? 'Drag areas into it in the side nav, or use Move to in an area’s menu.' : 'Nothing has been put in it yet.'}</p>
+        </div>
+      ) : all.length && !cands.length ? (
         <div className="px-6 py-16 text-center">
           <p className="font-semibold tracking-tight">Nothing matches</p>
           <p className="mt-1 text-[13px] text-muted">{needle ? `Nothing mentions “${q.trim()}”` : 'Nothing in that area with that status'}. <a href={href('overview')} className="underline hover:text-fg">Clear filters</a></p>
         </div>
       ) : null}
-      {filtered ? (
+      {flatOut ? (
         cands.length ? (
           <section className="mt-6">
-            <Meta className="mb-3 block">{cands.length} of {all.length} change{all.length === 1 ? '' : 's'}</Meta>
+            {filtered ? <Meta className="mb-3 block">{cands.length} of {all.length} change{all.length === 1 ? '' : 's'}</Meta> : null}
             {layout(flat, section.length !== 1)}
           </section>
         ) : null
@@ -117,32 +148,25 @@ export function Overview({ data, query }: { data: LocalBoard; query: URLSearchPa
   );
 }
 
-const talkMeta = (n: number, asks: number, waiting: number) => [
-  n ? `${n} comment${n === 1 ? '' : 's'}` : '',
-  asks ? `${asks} open request${asks === 1 ? '' : 's'}` : '',
-  waiting ? `${waiting} waiting for you` : '',
-].filter(Boolean);
-
-interface Talk { n: number; asks: number; waiting: number; queued: QueuedLine[] }
-
-const decisionCount = (c: BoardCandidate) => (c.decisions.length ? `${c.decisions.length} decision${c.decisions.length === 1 ? '' : 's'}` : '');
+interface Talk { n: number; asks: number; waiting: number; queued: QueuedLine[]; label: string; last: string }
 
 /**
- * Waiting, when there's something to judge. An option keeps its state beside it (Approved, Draft say
- * something); a piece of work's Decided doesn't, and would only crowd the name out of a card.
+ * A pill only when it tells you something: what's waiting for you, as the inbox's tray and a count, and
+ * an option's state (Approved, Draft, Replaced). A piece of work is Decided once judged, the usual case
+ * on a board, so it has no pill: a board of Decided pills hides the few that matter.
  */
 function Badges({ c, waiting }: { c: BoardCandidate; waiting: number }) {
+  if (!waiting && c.work) return null;
   return (
     <span className="flex shrink-0 items-center gap-1">
-      {waiting ? <WaitingBadge /> : null}
-      {waiting && c.work ? null : <StateBadge state={c.state} label={STATE_LABEL[c.state]} />}
+      {waiting ? <ReviewCount n={waiting} /> : null}
+      {c.work ? null : <StateBadge state={c.state} label={STATE_LABEL[c.state]} />}
     </span>
   );
 }
 
-function Card({ c, area, n, asks, waiting, queued }: { c: BoardCandidate; area?: string } & Talk) {
+function Card({ c, area, n, asks, waiting, queued, label, last }: { c: BoardCandidate; area?: string } & Talk) {
   const lesser = c.state === 'rejected' || c.state === 'superseded';
-  const meta = [area, decisionCount(c), ...talkMeta(n, asks, waiting)].filter(Boolean).join(' · ');
   // Work with nothing judged yet reads from what's waiting on it.
   const lines = c.decisions.length ? c.decisions : queued;
   return (
@@ -151,40 +175,64 @@ function Card({ c, area, n, asks, waiting, queued }: { c: BoardCandidate; area?:
         {c.snapshot ? <img src={c.snapshot} alt={c.name} loading="lazy" decoding="async" className="h-full w-full object-cover object-top" />
           : <KindCover decisions={lines} option={!c.work} />}
       </div>
+      {/* The title gets the card's width and up to two lines. Under the description, one line: the pill
+          (what's waiting for you, or an option's state), then the counts as icons and numbers. */}
       <div className="flex flex-1 flex-col p-4">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="min-w-0 truncate font-semibold leading-snug tracking-tight group-hover:underline" title={c.name}>{c.name}</h3>
+        {area ? <p className="mb-0.5 truncate text-[12px] text-faint">{area}</p> : null}
+        <h3 className="line-clamp-2 break-words font-semibold leading-snug tracking-tight group-hover:underline" title={c.name}>{label}</h3>
+        {/* One description under the title, up to two lines, the same one a row shows: the reason, else what changed first, else the notes.
+            The first line runs the card's width; the last stops about two words short of the edge. Two floats do it: an
+            empty one a line tall, then a 64px one cleared under it, on the second line. They sit in a block inside the
+            clamped box, so the clamp still cuts the text at two lines with its "…". */}
+        <div className="mt-1.5 h-10 line-clamp-2 text-sm text-muted">
+          <p>
+            <span aria-hidden="true" className="float-right h-5 w-0" />
+            <span aria-hidden="true" className="clear-right float-right h-5 w-16" />
+            {c.reason ? `“${sentence(c.reason)}”` : lines.length ? sentence(lines[0].change ?? lines[0].decision) : c.notes ? sentence(c.notes) : null}
+          </p>
+        </div>
+        {/* When it last changed sits at the far right, in the same corner on every card, so a column scans by date. */}
+        <div className="mt-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 pt-3">
           <Badges c={c} waiting={waiting} />
+          <Counts decisions={c.decisions.length} comments={n} requests={asks} />
+          <When iso={last} className="ml-auto text-[12px] text-faint" />
         </div>
-        <div className="mt-1.5 h-10 text-sm text-muted">
-          {c.reason ? <p className="line-clamp-2">“{sentence(c.reason)}”</p>
-            : lines.length ? <ul>{lines.slice(0, 2).map((d) => <li key={d.id} className="line-clamp-1">{sentence(d.change ?? d.decision)}</li>)}</ul>
-            : c.notes ? <p className="line-clamp-2">{sentence(c.notes)}</p>
-            : null}
-        </div>
-        <p className="mt-auto pt-2 text-[13px] text-muted">{meta}</p>
       </div>
     </a>
   );
 }
 
-function Row({ c, first, area, n, asks, waiting, queued }: { c: BoardCandidate; first: boolean; area?: string } & Talk) {
+/**
+ * A row in list view, the card's facts in one line: the name with a line of what changed under it; on
+ * the right, in one line, where it sits and when it last changed, then what's waiting and the counts. No author or time of day: on the local board it's always you, and the day is what tells.
+ * On a phone the right-hand side moves under the description.
+ */
+function Row({ c, first, area, n, asks, waiting, queued, label, last }: { c: BoardCandidate; first: boolean; area?: string } & Talk) {
   const lesser = c.state === 'rejected' || c.state === 'superseded';
+  const lines = c.decisions.length ? c.decisions : queued;
+  const what = c.reason ? `“${sentence(c.reason)}”` : lines.length ? sentence(lines[0].change ?? lines[0].decision) : c.notes ? sentence(c.notes) : '';
+  const when = <When iso={last} />;
+  const facts = <><Badges c={c} waiting={waiting} /><Counts decisions={c.decisions.length} comments={n} requests={asks} /></>;
   return (
     <a href={href(c.id)} className={`group grid grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-4 bg-surface px-3 py-2.5 hover:bg-surface-2 ${first ? '' : 'border-t border-border'} ${lesser ? 'opacity-60 hover:opacity-100' : ''}`}>
       {!c.snapshot
-        ? <KindThumb decisions={c.decisions.length ? c.decisions : queued} className="aspect-[3/2] w-16 overflow-hidden rounded-[4px] border border-border bg-bg" />
+        ? <KindThumb decisions={lines} className="aspect-[3/2] w-16 overflow-hidden rounded-[4px] border border-border bg-bg" />
         : <Thumb src={c.snapshot} alt={c.name} className="aspect-[3/2] w-16 overflow-hidden rounded-[4px] border border-border bg-surface-2" />}
       <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="min-w-0 font-semibold tracking-tight group-hover:underline sm:truncate">{c.name}</span>
-          <Badges c={c} waiting={waiting} />
+        {/* The area, when it isn't the heading above, sits just after the name, quieter. */}
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate font-semibold tracking-tight group-hover:underline" title={c.name}>{label}</span>
+          {area ? <span className="shrink-0 text-[12px] text-faint">{area}</span> : null}
         </div>
-        {c.reason ? <div className="mt-0.5 truncate text-[13px] text-muted">“{sentence(c.reason)}”</div> : null}
+        {/* Cut off well before the right-hand side, so a row reads as a name and a glance, not a paragraph. */}
+        {what ? <div className="mt-0.5 max-w-md truncate text-[13px] text-muted" title={what}>{what}</div> : null}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-faint sm:hidden">{facts}<span>{when}</span></div>
       </div>
-      <div className="hidden text-right text-[13px] text-muted sm:block">
-        <div>{[area, decisionCount(c), ...talkMeta(n, asks, waiting)].filter(Boolean).join(' · ')}</div>
-        <div className="text-faint">{sentence(c.author)} · <When iso={c.date} /></div>
+      {/* Area and date first, then what's waiting and the counts, side by side. Whatever a row hasn't got
+          takes no room: the rest closes up to the right edge, with no empty slot left for it. */}
+      <div className="hidden items-center gap-3 sm:flex">
+        <span className="whitespace-nowrap text-[12px] text-faint">{when}</span>
+        {facts}
       </div>
     </a>
   );

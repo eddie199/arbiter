@@ -25,53 +25,8 @@ export function nameIn(area: string, name: string): string {
   return m ? sentence(m[1].trim()) : n;
 }
 
-/** A change to the whole product — type, colour, spacing, voice — rather than to a place in it. */
-export const FOUNDATIONS = 'Foundations';
-
-type Areable = { feature: string | null; work?: boolean; name: string; decisions: { scope?: string }[] };
-/**
- * "Settings — billing", "Settings—billing", "Settings: billing", "Settings - billing" → "Settings". The way
- * the agent is asked to name work. A dash needs no spaces; a hyphen does, or "Sign-in page" would split.
- */
-const headOf = (name: string): string | null => {
-  const head = name.split(/\s*[—–]\s*|\s+-\s+|:\s+/)[0].trim();
-  return head && head !== name.trim() ? head : null;
-};
-const everywhere = (c: Areable) => c.decisions.length > 0 && c.decisions.every((d) => d.scope === 'global');
-/** `name` starts with the area `k` at a word boundary: "reports filters", "reports—x", "reports: x" — not "reportsx". */
-const under = (name: string, k: string) => name === k || (name.startsWith(k) && /^[\s:—–]/.test(name.slice(k.length)));
-
-/**
- * The product area each card belongs to — what the board groups by, and what the rail lists.
- * A set of options has one: the feature it was explored for. A change that was simply made
- * (a piece of work) takes one from its name: "Settings — billing" is Settings, and "Reports
- * filters" is Reports when Reports is an area on this board. A change where every decision
- * applies everywhere is Foundations. Anything else is an area of its own, by its name.
- *
- * Needs the whole board: which areas exist decides where a name like "Reports filters" goes.
- */
-export function areasFor(cards: Areable[]): (c: Areable) => string {
-  const known = new Map<string, string>();
-  const learn = (name: string) => { if (!known.has(name.toLowerCase())) known.set(name.toLowerCase(), name); };
-  for (const c of cards) if (c.feature) learn(c.feature);
-  for (const c of cards) {
-    if (!c.work || c.feature) continue;
-    // A named head is an area; so is a plain change's whole name ("Reports"), unless it's a foundation.
-    const head = headOf(c.name);
-    if (head) learn(head);
-    else if (!everywhere(c)) learn(c.name.trim());
-  }
-  // Longest first, so "Settings billing" isn't taken by an area called "Set".
-  const byLength = [...known.entries()].sort((a, b) => b[0].length - a[0].length);
-  return (c) => {
-    if (c.feature) return c.feature;
-    const lower = c.name.trim().toLowerCase();
-    // An area it sits under — never itself: its own name is an area for others, not a match for it.
-    for (const [k, v] of byLength) if (k !== lower && under(lower, k)) return v;
-    if (everywhere(c)) return FOUNDATIONS;
-    return known.get(lower) ?? c.name.trim();
-  };
-}
+/** How a change finds its area: shared with the CLI, so `arbiter areas` and the board agree. */
+export { FOUNDATIONS, areasFor } from '../../src/area-names';
 
 /** `pattern:compact-card-actions` → "Compact card actions, anywhere"; `file:app/x.tsx` → "x.tsx"; `global` → "Everywhere". */
 export function scopeWords(scope?: string): string | null {

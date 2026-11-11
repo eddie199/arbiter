@@ -21,7 +21,9 @@ export type Answer =
   /** On Design rules: a rule's new words, a rule removed and why, and a removed one put back. */
   | { kind: 'reword'; id: string; to: string }
   | { kind: 'retire'; id: string; rule: string; why: string }
-  | { kind: 'restore'; id: string };
+  | { kind: 'restore'; id: string }
+  /** On a change's page: a piece of work renamed, so the agent's next decisions use the new name. */
+  | { kind: 'rename'; from: string; to: string };
 
 /** What's left for the agent: the code side of an answer. */
 export type Todo =
@@ -48,6 +50,8 @@ export interface Handoff {
   reworded?: { id: string; to: string }[];
   /** Rules removed there, with what each said and why: no longer in force. `edited`: new words the agent hadn't heard of yet, for Undo to bring back. */
   removed?: { id: string; rule: string; why: string; edited?: string }[];
+  /** Work renamed on a change's page: the agent uses `to` as the trigger from now on. */
+  renamed?: { from: string; to: string }[];
   todo: Todo[];
   next: string;
   /** The Claude Code hook has told the agent about this. A new answer rewrites the file without it, so the hook speaks again. */
@@ -57,9 +61,10 @@ export interface Handoff {
 const FILE = 'last-review.json';
 
 export function summarize(answers: Answer[], finished: Handoff['finished'], at = new Date().toISOString()): Handoff {
-  const h: Handoff = { finished, at, confirmed: [], rules: [], fixed: [], skipped: [], declined: [], options: [], reworded: [], removed: [], todo: [], next: '' };
+  const h: Handoff = { finished, at, confirmed: [], rules: [], fixed: [], skipped: [], declined: [], options: [], reworded: [], removed: [], renamed: [], todo: [], next: '' };
   for (const a of answers) {
     if (a.kind === 'option') h.options.push({ id: a.id, name: a.name, state: a.state });
+    else if (a.kind === 'rename') h.renamed = renames(h.renamed ?? [], [{ from: a.from, to: a.to }]);
     // A rule back in DECISIONS.md after the agent heard it was gone is in force again, as a new one is.
     else if (a.kind === 'restore') h.rules.push(a.id);
     else if (a.kind === 'reword' || a.kind === 'retire') rulesChanged(h, a.kind === 'reword' ? [{ id: a.id, to: a.to }] : [], a.kind === 'retire' ? [{ id: a.id, rule: a.rule, why: a.why }] : []);
@@ -96,15 +101,28 @@ function rulesChanged(h: Handoff, reworded: NonNullable<Handoff['reworded']>, re
   })];
 }
 
+/** Renamed twice, A to B then B to C: one rename, A to C. Renamed back: none. */
+function renames(was: { from: string; to: string }[], next: { from: string; to: string }[]): { from: string; to: string }[] {
+  let out = [...was];
+  for (const r of next) {
+    const before = out.find((x) => x.to === r.from);
+    out = out.filter((x) => x !== before);
+    const from = before ? before.from : r.from;
+    if (from !== r.to) out.push({ from, to: r.to });
+  }
+  return out;
+}
+
 function nextStep(h: Handoff): string {
-  const rules = h.reworded?.length || h.removed?.length ? ' Rules were edited or removed on Design rules: follow DECISIONS.md as it is now.' : '';
+  const rules = (h.reworded?.length || h.removed?.length ? ' Rules were edited or removed on Design rules: follow DECISIONS.md as it is now.' : '')
+    + (h.renamed?.length ? ' Work was renamed on the board: use each new name as the trigger from now on.' : '');
   if (!h.todo.length) return `Nothing to change in the code.${rules}`;
   return `Make each change in todo. They're recorded already, so don't judge or record them again. An approved request is the exception: record its change with --request <id> once it's made.${rules}`;
 }
 
 /** Anything decided at all. A sitting where nothing was answered hands nothing over. */
 export const decidedAnything = (h: Handoff): boolean =>
-  !!(h.confirmed.length || h.rules.length || h.fixed.length || h.skipped.length || h.declined.length || h.options.length || h.reworded?.length || h.removed?.length || h.todo.length);
+  !!(h.confirmed.length || h.rules.length || h.fixed.length || h.skipped.length || h.declined.length || h.options.length || h.reworded?.length || h.removed?.length || h.renamed?.length || h.todo.length);
 
 /** One line for the person at the terminal, when nobody's waiting on the JSON. `when` is when the agent hears of it. */
 export function handoffLine(h: Handoff, when = 'at the next /arbiter'): string | null {
@@ -116,6 +134,7 @@ export function handoffLine(h: Handoff, when = 'at the next /arbiter'): string |
     h.skipped.length && `${h.skipped.length} skipped`,
     h.reworded?.length && `${h.reworded.length} ${h.reworded.length === 1 ? 'rule' : 'rules'} edited`,
     h.removed?.length && `${h.removed.length} ${h.removed.length === 1 ? 'rule' : 'rules'} removed`,
+    h.renamed?.length && `${h.renamed.length} renamed`,
   ].filter(Boolean);
   const said = parts.length ? `Recorded: ${parts.join(', ')}.` : 'Recorded.';
   if (!h.todo.length) return said;
@@ -138,6 +157,7 @@ export function mergeHandoffs(earlier: Handoff | null, h: Handoff): Handoff {
     options: [...earlier.options, ...h.options],
     reworded: earlier.reworded ?? [],
     removed: earlier.removed ?? [],
+    renamed: renames(earlier.renamed ?? [], h.renamed ?? []),
     todo: [...earlier.todo, ...h.todo],
   };
   rulesChanged(merged, h.reworded ?? [], h.removed ?? []);

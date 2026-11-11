@@ -1,25 +1,36 @@
 import { useEffect, useState } from 'react';
 import { DIMENSION_LABEL, sentence, type BoardRule } from '@/lib/board';
-import { Button, buttonClass } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
+import { SearchButton } from '@/components/ui/search-button';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { ActionItem, ActionMenu, barDots, DOTS } from '@/components/ui/menu';
+import { Icon } from '@/components/ui/icons';
 import { Id, Meta, PageTitle, SectionTitle } from '@/components/ui/type';
 import { When } from '@/components/When';
 import type { LocalBoard } from './types';
 import { errorsOf, post } from './api';
-import { href } from './route';
+import { go, href } from './route';
 
 /**
  * Design rules, as the team board shows them (app/p/[slug]/rules/page.tsx), with how full the list is.
  * Download gives you the file. Served live, each rule can be copied, edited or removed in place. A
  * removed one keeps its row, faded, with Undo while the page is open.
  */
-export function Rules({ data, at, cap, refresh }: { data: LocalBoard; at: string | null; cap?: number; refresh: () => Promise<void> }) {
+export function Rules({ data, at, cap, refresh, query }: { data: LocalBoard; at: string | null; cap?: number; refresh: () => Promise<void>; query: URLSearchParams }) {
   const rules: BoardRule[] = data.board.rules ?? [];
+  // Filters ride in the hash, like the Overview's: `#/rules?type=visual&q=pill`. An older `kind=` link still works.
+  const kinds = [...query.getAll('type'), ...query.getAll('kind')].filter((k) => k in DIMENSION_LABEL);
+  const q = query.get('q') ?? '';
+  const needle = q.trim().toLowerCase();
+  const fits = (r: BoardRule) => (!kinds.length || kinds.includes(r.dimension)) && (!needle || `${r.id} ${r.decision} ${r.rationale}`.toLowerCase().includes(needle));
+  const filtered = kinds.length > 0 || !!needle;
   const screens = new Map(data.board.candidates.map((c) => [c.id, c]));
   // Removed here, kept as they were so each stays in its place until the page closes.
   const [removed, setRemoved] = useState<Record<string, { rule: BoardRule; why: string }>>({});
   const gone = (id: string) => !!removed[id] && !rules.some((r) => r.id === id);
-  const shown = [...rules, ...Object.values(removed).map((x) => x.rule).filter((r) => gone(r.id))];
+  const all = [...rules, ...Object.values(removed).map((x) => x.rule).filter((r) => gone(r.id))];
+  const shown = all.filter(fits);
   useEffect(() => {
     if (at) document.getElementById(at)?.scrollIntoView({ block: 'start' });
     else window.scrollTo(0, 0);
@@ -38,16 +49,24 @@ export function Rules({ data, at, cap, refresh }: { data: LocalBoard; at: string
         <div className="min-w-0">
           <PageTitle>Design rules</PageTitle>
           <Meta className={`mt-0.5 block ${cap && cap - rules.length <= 5 ? 'text-warn' : ''}`}>
-            {rules.length ? `${rules.length} rule${rules.length === 1 ? '' : 's'} you’ve saved in DECISIONS.md. Everything new follows ${rules.length === 1 ? 'it' : 'them'}.` : 'The rules you save in DECISIONS.md. Everything new follows them.'}
+            {/* A read-only copy speaks to whoever it was sent to, as its guide does: the rules aren't theirs. */}
+            {!data.live ? `${rules.length} rule${rules.length === 1 ? '' : 's'} this project’s designs follow.`
+              : rules.length ? `${rules.length} rule${rules.length === 1 ? '' : 's'} you’ve saved in DECISIONS.md. Everything new follows ${rules.length === 1 ? 'it' : 'them'}.` : 'The rules you save in DECISIONS.md. Everything new follows them.'}
             {cap ? (rules.length >= cap ? ' Full: a new rule has to replace one.' : ` It holds ${cap} at most.`) : null}
           </Meta>
         </div>
-        {rules.length ? <Download data={data} rules={rules} /> : null}
       </div>
-      {!shown.length ? (
-        <div className="mt-6 rounded-lg border border-dashed border-border-strong px-6 py-12 text-center">
+      {rules.length ? <RulesFilter data={data} rules={rules} kinds={kinds} q={q} /> : null}
+      {filtered && all.length && !shown.length ? (
+        <div className="px-6 py-16 text-center">
+          <p className="font-semibold tracking-tight">No rules match</p>
+          <p className="mt-1 text-[13px] text-muted">{needle ? `Nothing mentions “${q.trim()}”` : 'No rules of that type'}. <a href={href('rules')} className="underline hover:text-fg">Clear filters</a></p>
+        </div>
+      ) : null}
+      {!all.length ? (
+        <div className="mt-6 rounded-lg border border-dashed border-border-strong px-6 py-16 text-center">
           <p className="font-semibold tracking-tight">No design rules yet</p>
-          <p className="mx-auto mt-1 max-w-md text-[13px] text-muted">A design rule is a decision you saved as “always”. Make one from your review queue and it shows up here.</p>
+          <p className="mx-auto mt-1 max-w-md text-[13px] text-muted">A design rule is a decision you saved as “always”. Make one in your Review inbox and it shows up here.</p>
         </div>
       ) : null}
       {Object.entries(DIMENSION_LABEL).map(([dim, label]) => {
@@ -69,23 +88,65 @@ export function Rules({ data, at, cap, refresh }: { data: LocalBoard; at: string
   );
 }
 
-const DownloadIcon = <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 1.5v7.5M3.75 5.75 7 9l3.25-3.25M2 12.5h10" /></svg>;
+/**
+ * Type and search, as on the Overview's toolbar: all seven types, each with how many rules it has (none
+ * is 0, so the whole set is always in view), and words to look for in a rule, its reason or its id.
+ * Enter searches; Clear puts it all back.
+ */
+function RulesFilter({ data, rules, kinds, q }: { data: LocalBoard; rules: BoardRule[]; kinds: string[]; q: string }) {
+  const counts = new Map<string, number>();
+  for (const r of rules) counts.set(r.dimension, (counts.get(r.dimension) ?? 0) + 1);
+  const options = Object.entries(DIMENSION_LABEL).map(([k, label]) => ({ value: k, label, hint: String(counts.get(k) ?? 0) }));
+  const to = (next: { kind?: string[]; q?: string }) => {
+    const v = { kind: kinds, q, ...next };
+    go(href('rules', { type: v.kind, q: v.q.trim() || undefined }));
+  };
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-2 border-y border-border py-3">
+      <MultiSelect icon label="Type" values={kinds} options={options} onChange={(v) => to({ kind: v })} />
+      {kinds.length || q ? <Button variant="ghost" size="sm" onClick={() => to({ kind: [], q: '' })}>Clear</Button> : null}
+      {/* Search, as an icon at the bar's right end, opening into a field; then "⋯" for the file itself. */}
+      <div className="ml-auto flex items-center gap-2">
+        <SearchButton value={q} label="Search rules" placeholder={`Search ${rules.length} rules…`} onSearch={(text) => to({ q: text })} />
+        <RulesMenu data={data} rules={rules} />
+      </div>
+    </div>
+  );
+}
+
+
+/** The rules as text: the same lines DECISIONS.md has, ids, rules and their reasons. */
+const asText = (rules: BoardRule[]) => ['# Design rules', '', ...rules.flatMap((r) => [`- **${r.id}** ${sentence(r.decision)}`, ...(r.rationale ? [`  ${sentence(r.rationale)}`] : [])]), ''].join('\n');
 
 /**
- * Download, top right: DECISIONS.md itself when the board is served, the file the agent reads. A
- * copy someone was sent has no server to ask, so it writes the rules it shows into a file of its own.
+ * "⋯" at the end of the filter bar, the toolbar's height. Download gives you the file: DECISIONS.md
+ * itself when the board is served, the file the agent reads; a copy someone was sent has no server to
+ * ask, so it writes the rules it shows into a file of its own. Copy all rules puts the same text on the
+ * clipboard, to paste into a doc or a message.
  */
-function Download({ data, rules }: { data: LocalBoard; rules: BoardRule[] }) {
-  const cls = `${buttonClass('secondary', 'sm')} shrink-0`;
-  if (data.live) return <a href="/api/decisions" download="DECISIONS.md" className={cls}>{DownloadIcon}Download</a>;
-  const save = () => {
-    const text = ['# Design rules', '', ...rules.flatMap((r) => [`- **${r.id}** ${sentence(r.decision)}`, ...(r.rationale ? [`  ${sentence(r.rationale)}`] : [])]), ''].join('\n');
-    const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
-    const a = Object.assign(document.createElement('a'), { href: url, download: 'design-rules.md' });
-    a.click();
+function RulesMenu({ data, rules }: { data: LocalBoard; rules: BoardRule[] }) {
+  const [copied, setCopied] = useState(false);
+  const download = () => {
+    if (data.live) {
+      Object.assign(document.createElement('a'), { href: '/api/decisions', download: 'DECISIONS.md' }).click();
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([asText(rules)], { type: 'text/markdown' }));
+    Object.assign(document.createElement('a'), { href: url, download: 'design-rules.md' }).click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  return <button type="button" onClick={save} className={cls}>{DownloadIcon}Download</button>;
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(asText(rules)); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {}
+  };
+  return (
+    <>
+      {copied ? <span className="text-[12px] text-faint" aria-live="polite">Copied</span> : null}
+      <ActionMenu label="Download or copy the rules" tip="Download or copy" className={barDots} trigger={DOTS}>
+        <ActionItem onClick={download} icon={Icon.download} hint={data.live ? 'DECISIONS.md' : '.md'}>Download</ActionItem>
+        <ActionItem onClick={() => void copy()} icon={Icon.copy} hint={String(rules.length)}>Copy all rules</ActionItem>
+      </ActionMenu>
+    </>
+  );
 }
 
 // The rule's words stop at 40rem, a comfortable line; the date stays on the right edge.

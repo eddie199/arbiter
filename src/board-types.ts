@@ -84,7 +84,7 @@ export interface LocalBoard {
   waiting: Record<string, number>;
   /** The same decisions, enough of each to draw and place a card before anything on it is judged. */
   queued: Record<string, QueuedLine[]>;
-  /** Everything waiting in the queue, polish included. */
+  /** Everything waiting for you in the queue (old one-off fixes left in a queue aren't counted). */
   pending: number;
   /** The team board's link, once the project has published one. */
   hosted: string | null;
@@ -92,9 +92,41 @@ export interface LocalBoard {
   version: string | null;
   /** Served by `arbiter review`, so the queue can be judged. An exported copy is read-only. */
   live: boolean;
+  /** Folders made in the side nav's Areas, from `.arbiter/areas.json`. Null: none, the Areas list as the board orders it. */
+  arrangement: Arrangement | null;
+  /** Settings, from arbiter.json. Null on an exported copy, which has none. */
+  settings: BoardSettings | null;
 }
 
-export interface QueuedLine { id: string; change: string | null; decision: string; dimension: string; scope: string }
+/** What the Preferences page shows and saves. Saved in arbiter.json. */
+export interface BoardSettings {
+  /** What the agent says in chat when a piece of work settles: nothing, a line after big work, a line after everything. */
+  checkin: 'feature' | 'quiet' | 'every';
+  /** The smallest call queued for review: features and patterns, or features only. */
+  record: 'pattern' | 'feature';
+  /** Whether choices the agent made between real options are queued, or only what you asked for or corrected. */
+  agentCalls: boolean;
+  /** Whether the agent takes a picture when a screen changes. */
+  pictures: boolean;
+  /** Where the app runs, for those pictures. */
+  app: string | null;
+  /** Whether the agent offers to group areas into folders once they pile up. */
+  suggestFolders: boolean;
+  /** The most rules DECISIONS.md holds, and how many it has now. */
+  cap: number;
+  rules: number;
+}
+
+/** A folder in the side nav's Areas: a name of your own, holding areas by name, in your order. */
+export interface AreaFolder { id: string; name: string; areas: string[] }
+
+export interface Arrangement {
+  folders: AreaFolder[];
+  /** The Areas list from the top, as you left it: a folder as `folder:<id>`, an area by its name. Anything not in it follows, in the board's own order. */
+  order: string[];
+}
+
+export interface QueuedLine { id: string; change: string | null; decision: string; dimension: string; scope: string; date: string }
 
 export interface LocalComment {
   id: string;
