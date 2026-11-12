@@ -23,4 +23,5 @@ export const Icon = {
   down: icon(<path d="M7 2.5v9M3.5 8 7 11.5 10.5 8" />),
   moveTo: icon(<path d="M2.5 7h9M8 3.5 11.5 7 8 10.5" />),
   moveOut: icon(<path d="M11.5 7h-9M6 3.5 2.5 7 6 10.5" />),
+  merge: icon(<><path d="M3 2.5v2.5a4 4 0 0 0 4 4h4.5" /><path d="M3 11.5V9" /><path d="M9 6.5l2.5 2.5L9 11.5" /></>),
 };

@@ -48,9 +48,9 @@ export function Screenshot({ src, alt, height = 400, tag }: { src: string | null
     <TooltipProvider>
       <Dialog>
         <div className={`relative overflow-hidden rounded-lg border border-border bg-surface-2 p-4 sm:p-6 ${full ? '' : 'sm:h-[var(--shot)]'}`} style={{ '--shot': `${height}px` } as React.CSSProperties}>
-          <DialogTrigger className="mx-auto block w-full cursor-zoom-in overflow-hidden rounded-md border border-border bg-bg text-left shadow-sm sm:h-full" style={tall ? { maxWidth: TALL_INLINE } : undefined} title="Open full size">
+          <Tooltip label="Open full size"><DialogTrigger className="mx-auto block w-full cursor-zoom-in overflow-hidden rounded-md border border-border bg-bg text-left shadow-sm sm:h-full" style={tall ? { maxWidth: TALL_INLINE } : undefined}>
             <img key={src} ref={measure} src={src} alt={alt} className={full ? 'block h-auto w-full' : 'block h-auto w-full sm:h-full sm:object-cover sm:object-top'} />
-          </DialogTrigger>
+          </DialogTrigger></Tooltip>
           {full ? null : <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-20 bg-gradient-to-t from-surface-2 to-transparent sm:block" />}
           {tag ? <span className="pointer-events-none absolute bottom-6 left-6 rounded-full border border-border bg-bg/90 px-2 py-0.5 text-[12px] text-muted shadow-sm">{tag}</span> : null}
           <Tooltip label={label}>
@@ -142,7 +142,7 @@ function Viewer({ src, alt }: { src: string; alt: string }) {
         <DialogTitle className="min-w-0 truncate text-[13px] font-normal text-muted">{alt}</DialogTitle>
         <div className="flex shrink-0 items-center gap-1">
           <ZoomButton label="Zoom out" disabled={step === 0} onClick={() => go((s) => s - 1)}><path d="M3 7h8" /></ZoomButton>
-          <button type="button" onClick={() => go(() => BASE)} title="Back to the starting size (0)" className="h-7 min-w-14 rounded-ui px-2 text-[13px] tabular-nums text-muted hover:bg-surface-2 hover:text-fg">{pct ? `${pct}%` : '—'}</button>
+          <Tooltip label="Back to the starting size (0)"><button type="button" onClick={() => go(() => BASE)} className="h-7 min-w-14 rounded-ui px-2 text-[13px] tabular-nums text-muted hover:bg-surface-2 hover:text-fg">{pct ? `${pct}%` : '—'}</button></Tooltip>
           <ZoomButton label="Zoom in" disabled={step === ZOOMS.length - 1} onClick={() => go((s) => s + 1)}><path d="M3 7h8M7 3v8" /></ZoomButton>
           <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
           <DialogClose aria-label="Close" className="flex h-7 w-7 items-center justify-center rounded-ui text-muted hover:bg-surface-2 hover:text-fg">
@@ -160,8 +160,8 @@ function Viewer({ src, alt }: { src: string; alt: string }) {
 
 function ZoomButton({ label, disabled, onClick, children }: { label: string; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick} className="flex h-7 w-7 items-center justify-center rounded-ui text-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent">
+    <Tooltip label={label}><button type="button" aria-label={label} disabled={disabled} onClick={onClick} className="flex h-7 w-7 items-center justify-center rounded-ui text-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">{children}</svg>
-    </button>
+    </button></Tooltip>
   );
 }

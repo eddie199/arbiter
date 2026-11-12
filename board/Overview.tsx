@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BoardCandidate, nameIn, STATE_LABEL, STATE_ORDER, sentence } from '@/lib/board';
-import { fullDate, When } from '@/components/When';
+import { dayWords, fullDate, When } from '@/components/When';
 import { Thumb } from '@/components/Thumb';
 import { KindCover, KindThumb } from '@/components/KindCover';
 import { Meta, PageTitle, SectionTitle } from '@/components/ui/type';
@@ -10,19 +10,18 @@ import type { LocalBoard, QueuedLine } from './types';
 import { href } from './route';
 import { areasOf, Counts, ReviewCount, StateBadge, undecided } from './bits';
 import { Toolbar } from './Toolbar';
+import { Tooltip } from '@/components/ui/tooltip';
 
 /**
  * How the Overview orders its changes: by area (each area under its heading, what's waiting first), or
  * newest or oldest first as one list across areas. Kept in this browser, like the Review inbox's sort.
  */
 const SORT_KEY = 'arbiter-overview-sort';
-type Sort = 'area' | 'new' | 'old';
-const SORTS: { value: Sort; label: string; hint?: string }[] = [
-  { value: 'area', label: 'By area', hint: 'Waiting first' },
-  { value: 'new', label: 'Newest' },
-  { value: 'old', label: 'Oldest' },
-];
-const readSort = (): Sort => { try { const s = localStorage.getItem(SORT_KEY); return s === 'new' || s === 'old' ? s : 'area'; } catch { return 'area'; } };
+/** By area, Newest, Oldest, or only what changed Today or Yesterday, newest first. */
+type Sort = 'area' | 'new' | 'old' | 'today' | 'yesterday';
+const SORT_VALUES: Sort[] = ['area', 'new', 'old', 'today', 'yesterday'];
+const DAY: Partial<Record<Sort, string>> = { today: 'Today', yesterday: 'Yesterday' };
+const readSort = (): Sort => { try { const s = localStorage.getItem(SORT_KEY) as Sort; return SORT_VALUES.includes(s) ? s : 'area'; } catch { return 'area'; } };
 
 /**
  * The team board's Overview (app/p/[slug]/page.tsx), drawn from the repo: every change as a card,
@@ -32,7 +31,7 @@ const readSort = (): Sort => { try { const s = localStorage.getItem(SORT_KEY); r
 export function Overview({ data, query, folder }: { data: LocalBoard; query: URLSearchParams; folder?: { id: string; name: string; areas: string[] } | null }) {
   const q = query.get('q') ?? '';
   const [sort, setSort] = useState<Sort>(readSort);
-  const pickSort = (s: string) => { const v = SORTS.some((o) => o.value === s) ? (s as Sort) : 'area'; setSort(v); try { localStorage.setItem(SORT_KEY, v); } catch {} };
+  const pickSort = (s: string) => { const v = SORT_VALUES.includes(s as Sort) ? (s as Sort) : 'area'; setSort(v); try { localStorage.setItem(SORT_KEY, v); } catch {} };
   // A folder from the side nav shows its areas, each under its own heading, in the folder's order.
   const section = folder ? folder.areas : query.getAll('section').filter(Boolean);
   const status = query.getAll('status').filter(Boolean);
@@ -52,13 +51,23 @@ export function Overview({ data, query, folder }: { data: LocalBoard; query: URL
   const needle = q.trim().toLowerCase();
   const matches = (c: BoardCandidate) => !needle || [c.name, c.reason ?? '', c.notes, ...c.decisions.map((d) => `${d.change ?? ''} ${d.decision}`), ...queuedOn(c).map((d) => `${d.change ?? ''} ${d.decision}`)].join(' ').toLowerCase().includes(needle);
   const hasStatus = (c: BoardCandidate) => status.some((s) => (s === 'waiting' ? wait(c) > 0 : s === c.state && !undecided(c)));
-  const cands = all.filter((c) => (!section.length || section.includes(areaOf(c))) && (!status.length || hasStatus(c)) && matches(c));
+  // A card's last change: its latest decision, judged or still waiting.
+  const lastOf = (c: BoardCandidate) => queuedOn(c).reduce((a, d) => (d.date > a ? d.date : a), c.date);
+  // Today or Yesterday: only what last changed that day, said the way dates are said everywhere.
+  const onDay = (c: BoardCandidate, day: string) => dayWords(lastOf(c)) === day;
+  const day = DAY[sort];
+  const cands = all.filter((c) => (!section.length || section.includes(areaOf(c))) && (!status.length || hasStatus(c)) && matches(c) && (!day || onDay(c, day)));
+  const SORTS: { value: Sort; label: string; hint?: string }[] = [
+    { value: 'area', label: 'By area', hint: 'Waiting first' },
+    { value: 'new', label: 'Newest' },
+    { value: 'old', label: 'Oldest' },
+    { value: 'today', label: 'Today', hint: String(all.filter((c) => onDay(c, 'Today')).length) },
+    { value: 'yesterday', label: 'Yesterday', hint: String(all.filter((c) => onDay(c, 'Yesterday')).length) },
+  ];
   const features = (folder ? folder.areas : allFeatures).filter((f) => cands.some((c) => areaOf(c) === f));
   const filtered = status.length > 0 || (!folder && section.length > 1) || !!needle;
   // Newest or Oldest is one list in that order, across areas, each card saying its area.
   const flatOut = filtered || sort !== 'area';
-  // A card's last change: its latest decision, judged or still waiting.
-  const lastOf = (c: BoardCandidate) => queuedOn(c).reduce((a, d) => (d.date > a ? d.date : a), c.date);
   const byDate = (a: BoardCandidate, b: BoardCandidate) => (sort === 'old' ? lastOf(a).localeCompare(lastOf(b)) : lastOf(b).localeCompare(lastOf(a))) || a.id.localeCompare(b.id);
   // What's waiting for you comes first.
   const byState = (a: BoardCandidate, b: BoardCandidate) => Number(wait(b) > 0) - Number(wait(a) > 0) || STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state) || allFeatures.indexOf(areaOf(a)) - allFeatures.indexOf(areaOf(b)) || a.id.localeCompare(b.id);
@@ -95,7 +104,8 @@ export function Overview({ data, query, folder }: { data: LocalBoard; query: URL
       ) : null}
       <div className="mb-4">
         <PageTitle>{folder ? folder.name : section.length === 1 ? section[0] : 'Overview'}</PageTitle>
-        <Meta className="mt-0.5 block">{all.length} change{all.length === 1 ? '' : 's'}{!data.live && board.exported ? <> · as of {fullDate(board.exported)}</> : null}</Meta>
+        {/* What's on screen: this area or folder, narrowed by Status, search and Today or Yesterday. */}
+        <Meta className="mt-0.5 block">{cands.length} change{cands.length === 1 ? '' : 's'}{!data.live && board.exported ? <> · as of {fullDate(board.exported)}</> : null}</Meta>
       </div>
       {all.length ? (
         <Toolbar
@@ -118,6 +128,11 @@ export function Overview({ data, query, folder }: { data: LocalBoard; query: URL
         <div className="px-6 py-16 text-center">
           <p className="font-semibold tracking-tight">This folder is empty</p>
           <p className="mt-1 text-[13px] text-muted">{data.live ? 'Drag areas into it in the side nav, or use Move to in an area’s menu.' : 'Nothing has been put in it yet.'}</p>
+        </div>
+      ) : all.length && !cands.length && day && !filtered ? (
+        <div className="px-6 py-16 text-center">
+          <p className="font-semibold tracking-tight">Nothing changed {day.toLowerCase()}</p>
+          <p className="mt-1 text-[13px] text-muted">The agent hasn’t recorded anything {day.toLowerCase()}. <button type="button" onClick={() => pickSort('new')} className="underline hover:text-fg">Show newest</button></p>
         </div>
       ) : all.length && !cands.length ? (
         <div className="px-6 py-16 text-center">
@@ -179,7 +194,7 @@ function Card({ c, area, n, asks, waiting, queued, label, last }: { c: BoardCand
           (what's waiting for you, or an option's state), then the counts as icons and numbers. */}
       <div className="flex flex-1 flex-col p-4">
         {area ? <p className="mb-0.5 truncate text-[12px] text-faint">{area}</p> : null}
-        <h3 className="line-clamp-2 break-words font-semibold leading-snug tracking-tight group-hover:underline" title={c.name}>{label}</h3>
+        <Tooltip label={c.name}><h3 className="line-clamp-2 break-words font-semibold leading-snug tracking-tight group-hover:underline">{label}</h3></Tooltip>
         {/* One description under the title, up to two lines, the same one a row shows: the reason, else what changed first, else the notes.
             The first line runs the card's width; the last stops about two words short of the edge. Two floats do it: an
             empty one a line tall, then a 64px one cleared under it, on the second line. They sit in a block inside the
@@ -221,11 +236,11 @@ function Row({ c, first, area, n, asks, waiting, queued, label, last }: { c: Boa
       <div className="min-w-0">
         {/* The area, when it isn't the heading above, sits just after the name, quieter. */}
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate font-semibold tracking-tight group-hover:underline" title={c.name}>{label}</span>
+          <Tooltip label={c.name}><span className="truncate font-semibold tracking-tight group-hover:underline">{label}</span></Tooltip>
           {area ? <span className="shrink-0 text-[12px] text-faint">{area}</span> : null}
         </div>
         {/* Cut off well before the right-hand side, so a row reads as a name and a glance, not a paragraph. */}
-        {what ? <div className="mt-0.5 max-w-md truncate text-[13px] text-muted" title={what}>{what}</div> : null}
+        {what ? <Tooltip label={what}><div className="mt-0.5 max-w-md truncate text-[13px] text-muted">{what}</div></Tooltip> : null}
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-faint sm:hidden">{facts}<span>{when}</span></div>
       </div>
       {/* Area and date first, then what's waiting and the counts, side by side. Whatever a row hasn't got

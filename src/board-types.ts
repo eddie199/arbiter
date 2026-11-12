@@ -20,6 +20,8 @@ export interface BoardDecision {
   ref?: string | null;
   /** When it was recorded: what places it among a card's pictures. */
   date?: string;
+  /** A rule still in DECISIONS.md. A rule since retired or replaced has verdict "rule" and this false. */
+  active?: boolean;
 }
 
 /** One picture of a card, when it was taken. A card's versions run oldest first, the current picture last. */

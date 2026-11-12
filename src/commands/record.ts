@@ -43,7 +43,8 @@ import {
   writeArchive,
   writePending,
 } from '../store';
-import { findOverlaps } from '../overlap';
+import { explainOverlaps, findOverlaps } from '../overlap';
+import { readCandidates } from '../candidates';
 import { checkable, verify } from '../verify';
 import { sweep, summarize } from '../sweep';
 import { parseFindings, toDecisionInput } from '../findings';
@@ -569,13 +570,15 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
     } else if (!opts.keepBoth) {
       const overlaps = findOverlaps(input, active, { ignore: config?.overlap?.ignore });
       if (overlaps.length) {
+        // Each also says why in plain words (sure: what both apply to; a guess: the words they share), for the board.
+        const why = explainOverlaps(input, overlaps, active, new Map(readCandidates(paths).map((c) => [c.id, c.name])));
         return keepRequest({
           exitCode: 2,
           output: {
             status: 'overlap',
             message: `This rule overlaps ${overlaps.length} active rule${overlaps.length === 1 ? '' : 's'}. Nothing was written. Ask the user which it replaces, then re-run.`,
             candidate: input,
-            overlaps,
+            overlaps: overlaps.map((o, i) => ({ ...o, ...why[i] })),
             options: [
               ...overlaps.map((o) => ({
                 flag: `--supersedes ${o.id}${again}`,
@@ -593,6 +596,7 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
         exitCode: 3,
         output: {
           status: 'cap',
+          cap,
           message: `DECISIONS.md holds ${nextActive.length} of ${cap} rules. Nothing was written. Supersede an existing rule with --supersedes <id> to make room.`,
           candidate: input,
           active: nextActive.map((d) => ({ id: d.id, decision: d.decision, scope: d.scope })),

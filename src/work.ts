@@ -157,3 +157,31 @@ export function historyFile(paths: Paths, rel: string): string | null {
   const abs = path.join(workDir(paths), HISTORY, m[1], `${m[2]}.${m[3]}`);
   return fs.existsSync(abs) ? abs : null;
 }
+
+/**
+ * A piece of work merged into another: every picture of both, by when each was taken, becomes the
+ * other's. The newest is its picture; the rest are its earlier pictures, the most recent ten kept.
+ * False when the merged one had no pictures.
+ */
+export function mergePictures(paths: Paths, from: string, to: string): boolean {
+  const mine = workVersions(paths, from);
+  if (!mine.length) return false;
+  const all = [...mine, ...workVersions(paths, to)].map((v) => ({ abs: path.join(workDir(paths), v.file), date: v.date }));
+  const dir = path.join(workDir(paths), HISTORY, to);
+  fs.mkdirSync(dir, { recursive: true });
+  // Everything into the history first, named by when it was taken; then the newest comes back out.
+  const staged = all.map((v) => {
+    let dest = path.join(dir, stampOf(new Date(v.date)) + path.extname(v.abs).toLowerCase());
+    if (dest !== v.abs && fs.existsSync(dest)) dest = path.join(dir, stampOf(new Date(Date.parse(v.date) + 1)) + path.extname(v.abs).toLowerCase());
+    if (dest !== v.abs) fs.renameSync(v.abs, dest);
+    return { abs: dest, date: v.date };
+  }).sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+  const newest = staged[staged.length - 1];
+  const cur = path.join(workDir(paths), to + path.extname(newest.abs));
+  fs.renameSync(newest.abs, cur);
+  fs.utimesSync(cur, new Date(newest.date), new Date(newest.date));
+  const left = fs.readdirSync(dir).filter((f) => dateOfStamp(path.parse(f).name)).sort();
+  for (const f of left.slice(0, Math.max(0, left.length - KEEP_VERSIONS))) fs.rmSync(path.join(dir, f), { force: true });
+  fs.rmSync(path.join(workDir(paths), HISTORY, from), { recursive: true, force: true });
+  return true;
+}

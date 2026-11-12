@@ -6,6 +6,7 @@ import type { LocalBoard } from './types';
 import { arrangementOf, keyOf, layoutOf, type Entry } from '../src/area-names';
 import { errorsOf, post } from './api';
 import { href, type Route } from './route';
+import { Tooltip } from '@/components/ui/tooltip';
 
 /**
  * Areas in the side nav, with folders you make: name one, drag areas into it, drag rows to reorder.
@@ -306,7 +307,7 @@ export function AreasNav({ data, names, counts, route, view, folded, onFold, ref
         <button type="button" onClick={onFold} aria-expanded={!folded} className="flex h-7 min-w-0 flex-1 items-center gap-1 px-2.5 text-[12px] text-faint hover:text-muted">
           <Chevron open={!folded} />
           <span>Areas</span>
-          {folded && activeInside ? <span className="ml-auto h-1.5 w-1.5 rounded-full bg-fg" title="Current page is in here" /> : null}
+          {folded && activeInside ? <Tooltip label="Current page is in here"><span className="ml-auto h-1.5 w-1.5 rounded-full bg-fg" /></Tooltip> : null}
         </button>
         {live ? (
           <Dots label="Areas: options" className="mr-0.5" back={back}>

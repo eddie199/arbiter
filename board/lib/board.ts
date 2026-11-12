@@ -54,7 +54,27 @@ export function conversation(notes: { id: string; kind: string; author_name: str
 export const STATE_ORDER: CandidateState[] = ['approved', 'in_review', 'generated', 'recorded', 'rejected', 'superseded'];
 /** In a designer's words. The record keeps its own (`generated`, `superseded`, `recorded`); only the board says these. */
 export const STATE_LABEL: Record<CandidateState, string> = { approved: 'Approved', in_review: 'In review', generated: 'Draft', recorded: 'Decided', rejected: 'Rejected', superseded: 'Replaced' };
-export const DIMENSION_LABEL: Record<string, string> = { structure: 'Structure', interaction: 'Interaction', states: 'States', content: 'Content', visual: 'Visual', motion: 'Motion', access: 'Accessibility' };
+/** A decision's state as its pill says it: Rule, Retired or Corrected; none for one only confirmed. */
+export const verdictLabel = (d: { verdict: string; active?: boolean }): string | null =>
+  d.verdict === 'rule' ? (d.active === false ? 'Retired' : 'Rule') : d.verdict === 'fix' ? 'Corrected' : null;
+
+/**
+ * A decision as text, the way its change's page shows it: id, type and state, then Change, Rule or
+ * Pattern, Rejected and Applies to. What Copy puts on the clipboard, on a change's page and on Design
+ * rules alike, so one copied from either reads the same.
+ */
+export function decisionText(d: Pick<BoardDecision, 'id' | 'change' | 'decision' | 'rejected' | 'verdict' | 'dimension' | 'active'>, applies: string | null): string {
+  const dim = d.dimension ? DIMENSION_LABEL[d.dimension] ?? d.dimension : null;
+  return [
+    [d.id, dim, verdictLabel(d)].filter(Boolean).join(' · '),
+    `Change: ${sentence(d.change ?? d.decision)}`,
+    d.change && d.change !== d.decision ? `${d.verdict === 'rule' ? 'Rule' : 'Pattern'}: ${sentence(d.decision)}` : null,
+    d.rejected.length === 1 ? `Rejected: ${sentence(d.rejected[0])}` : d.rejected.length ? ['Rejected:', ...d.rejected.map((r) => `- ${sentence(r)}`)].join('\n') : null,
+    applies ? `Applies to: ${applies}` : null,
+  ].filter(Boolean).join('\n');
+}
+
+export const DIMENSION_LABEL: Record<string, string> ={ structure: 'Structure', interaction: 'Interaction', states: 'States', content: 'Content', visual: 'Visual', motion: 'Motion', access: 'Accessibility' };
 
 /** A change page with at least this many decisions, of more than one kind, gets a Kind filter. */
 export const KIND_FILTER_AT = 6;

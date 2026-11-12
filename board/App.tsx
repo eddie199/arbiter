@@ -176,16 +176,16 @@ function TopBar({ data, waiting, page, areas, updated, stopped, onRefresh }: { d
           <span className="hidden text-faint sm:inline">/</span>
           <a href={href('overview')} className="hidden text-muted hover:text-fg sm:inline">{data.board.project}</a>
           {data.live
-            ? <Badge className="cursor-default" title="Only you see this board. It runs on your computer, from this project’s files.">Local</Badge>
-            : <Badge className="cursor-default" title={`A copy of this project’s design decisions${data.board.exported ? `, as of ${fullDate(data.board.exported)}` : ''}. It doesn’t update, and feedback goes to whoever sent it.`}>Read-only Copy</Badge>}
+            ? <Tooltip label="Only you see this board. It runs on your computer, from this project’s files."><Badge className="cursor-default">Local</Badge></Tooltip>
+            : <Tooltip label={`A copy of this project’s design decisions${data.board.exported ? `, as of ${fullDate(data.board.exported)}` : ''}. It doesn’t update, and feedback goes to whoever sent it.`}><Badge className="cursor-default">Read-only Copy</Badge></Tooltip>}
         </div>
         {/* Relative, so the popovers in it hang from the bar's right end, not from their buttons. */}
         <nav className="relative flex items-center gap-1 text-[13px]">
           {data.live ? <Updated at={updated} stopped={stopped} onRefresh={onRefresh} /> : null}
           {data.live && waiting ? (
-            <a href={href('review')} aria-label={`Review inbox: ${waiting} waiting`} title="Review inbox" aria-current={page === 'review' ? 'page' : undefined} className={`flex h-7 items-center gap-1.5 rounded-ui px-2 tabular-nums md:hidden ${page === 'review' ? 'bg-surface-2 text-fg' : 'text-muted hover:bg-surface-2 hover:text-fg'}`}>
+            <Tooltip label="Review inbox"><a href={href('review')} aria-label={`Review inbox: ${waiting} waiting`} aria-current={page === 'review' ? 'page' : undefined} className={`flex h-7 items-center gap-1.5 rounded-ui px-2 tabular-nums md:hidden ${page === 'review' ? 'bg-surface-2 text-fg' : 'text-muted hover:bg-surface-2 hover:text-fg'}`}>
               {ReviewIcon}{waiting}
-            </a>
+            </a></Tooltip>
           ) : null}
           <BoardHelp data={data} page={page} areas={areas} />
           <ThemeToggle />
@@ -227,9 +227,9 @@ function Updated({ at, stopped, onRefresh }: { at: Date | null; stopped: boolean
   return (
     <div className="hidden items-center sm:flex">
       {at || stopped ? (
-        <span className="whitespace-nowrap pl-1 text-[12px] tabular-nums text-muted" title="The board checks for changes every few seconds and redraws when something changes.">
+        <Tooltip label="The board checks for changes every few seconds and redraws when something changes."><span className="whitespace-nowrap pl-1 text-[12px] tabular-nums text-muted">
           {stopped ? 'Stopped' : `Updated ${timeOf(at!)}`}
-        </span>
+        </span></Tooltip>
       ) : null}
       <TooltipProvider>
         <Tooltip label="Refresh">
@@ -405,7 +405,7 @@ function Rail({ route, data, sections, rules, waiting, refresh }: Nav) {
                 <button type="button" onClick={() => toggle(g.key)} aria-expanded={!folded} className="group mb-1 flex h-7 w-full items-center gap-1 rounded-ui px-2.5 text-[12px] text-faint hover:bg-surface-2 hover:text-muted">
                   <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className={`transition-transform ${folded ? '' : 'rotate-90'}`}><path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   <span>{g.title}</span>
-                  {folded && activeInside ? <span className="ml-auto h-1.5 w-1.5 rounded-full bg-fg" title="Current page is in here" /> : null}
+                  {folded && activeInside ? <Tooltip label="Current page is in here"><span className="ml-auto h-1.5 w-1.5 rounded-full bg-fg" /></Tooltip> : null}
                 </button>
               ) : null}
               {folded ? null : (

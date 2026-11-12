@@ -23,7 +23,7 @@ import type { Agent, Board, BoardCandidate, BoardDecision, BoardRequest, LocalBo
 
 /** On the board: judged, still in force, and not polish. */
 const shown = (d: Decision) => d.verdict !== 'pending' && d.verdict !== 'retire' && d.level !== 'polish';
-const toDecision = (d: Decision): BoardDecision => ({ id: d.id, change: d.change, decision: d.decision, rejected: d.rejected, verdict: d.verdict, dimension: d.dimension, scope: d.scope, ref: d.ref, date: d.date });
+const toDecision = (d: Decision, inForce?: Set<string>): BoardDecision => ({ id: d.id, change: d.change, decision: d.decision, rejected: d.rejected, verdict: d.verdict, dimension: d.dimension, scope: d.scope, ref: d.ref, date: d.date, ...(inForce && d.verdict === 'rule' ? { active: inForce.has(d.id) } : {}) });
 
 export interface BoardOptions {
   /** Where the page finds pictures: the review server's `/snapshots/`, or an export's `snapshots/` folder. */
@@ -40,6 +40,8 @@ export interface BoardOptions {
  */
 export function boardOf(paths: Paths, opts: BoardOptions): Board {
   const known = readCandidates(paths);
+  // Which rules are still in force, so a retired one doesn't read as a rule on its change's page.
+  const inForce = new Set(readActive(paths).map((d) => d.id));
   const candidates: BoardCandidate[] = known.map((c) => ({
     id: c.id,
     name: c.name,
@@ -52,7 +54,7 @@ export function boardOf(paths: Paths, opts: BoardOptions): Board {
     supersededBy: c.supersededBy,
     url: null,
     snapshot: c.snapshot && fs.existsSync(path.join(candidatesDir(paths), c.snapshot)) ? `${opts.pictures}${c.snapshot}` : null,
-    decisions: decisionsFor(paths, c.id).filter(shown).map(toDecision),
+    decisions: decisionsFor(paths, c.id).filter(shown).map((d) => toDecision(d, inForce)),
   }));
   // Screenless decisions: one card per piece of work.
   const ids = new Set(known.map((c) => c.id));
@@ -75,7 +77,7 @@ export function boardOf(paths: Paths, opts: BoardOptions): Board {
       id, name: trigger, feature: areas.get(trigger.toLowerCase()) ?? null, state: 'recorded', work: true,
       author: last.author, date: last.date, reason: null, notes: '', supersededBy: null, url: null,
       snapshot: shot ? `${opts.pictures}${path.basename(shot)}` : null,
-      decisions: ds.filter(shown).map(toDecision),
+      decisions: ds.filter(shown).map((d) => toDecision(d, inForce)),
       ...versionsOf(paths, id, opts.pictures),
     });
   }

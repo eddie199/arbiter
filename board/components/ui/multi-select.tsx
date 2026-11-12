@@ -3,6 +3,7 @@
 
 import { Menu as BaseMenu } from '@base-ui-components/react/menu';
 import { cn } from './cn';
+import { Tooltip } from './tooltip';
 
 type Tone = 'ok' | 'warn' | 'bad' | 'info' | 'neutral';
 export interface MultiOption { value: string; label: string; hint?: string; tone?: Tone }
@@ -66,9 +67,9 @@ export function FilterPill({ label, prefix, tone = 'neutral', onRemove }: { labe
     <span className={cn('inline-flex h-7 items-center gap-1 rounded-full pl-2.5 pr-1 text-[13px]', PILL[tone])}>
       {prefix ? <span className="opacity-70">{prefix}</span> : null}
       <span className="font-medium">{label}</span>
-      <button type="button" onClick={onRemove} aria-label={`Remove ${prefix ? `${prefix} ` : ''}${label}`} title="Remove" className="ml-0.5 flex h-5 w-5 items-center justify-center rounded-full hover:bg-fg/10">
+      <Tooltip label="Remove"><button type="button" onClick={onRemove} aria-label={`Remove ${prefix ? `${prefix} ` : ''}${label}`} className="ml-0.5 flex h-5 w-5 items-center justify-center rounded-full hover:bg-fg/10">
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><path d="M2.5 2.5l5 5M7.5 2.5l-5 5" /></svg>
-      </button>
+      </button></Tooltip>
     </span>
   );
 }

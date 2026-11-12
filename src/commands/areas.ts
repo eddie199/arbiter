@@ -116,6 +116,8 @@ export function placement(paths: Paths, entry: Decision, earlier: Decision[]): R
     const first = !earlier.some((d) => workId(d.trigger) === workId(entry.trigger)) && !readArchive(paths).some((d) => workId(d.trigger) === workId(entry.trigger));
     const others = all.filter((a) => a !== mine).map((a) => a.name);
     const fresh = first && mine.changes.length === 1 && others.length > 0;
+    // New work beside changes already in its area: it may continue one of them, and then it belongs in it.
+    const beside = first && !fresh ? mine.changes.filter((c) => workId(c) !== workId(entry.trigger)) : [];
     return {
       area: mine.name,
       ...(mine.folder ? { folder: mine.folder } : {}),
@@ -123,6 +125,11 @@ export function placement(paths: Paths, entry: Decision, earlier: Decision[]): R
         newArea: true,
         areas: others.slice(0, 40),
         hint: `"${entry.trigger}" starts an area of its own. If it belongs in one of these, rename it: npx arbiter rename "${entry.trigger}" "<Area> — <what changed>"`,
+      } : {}),
+      ...(beside.length ? {
+        newChange: true,
+        changes: beside.slice(0, 40),
+        hint: `"${entry.trigger}" is a new change in ${mine.name}. If it continues one of these, merge it, so its picture becomes that change's next version: npx arbiter rename "${entry.trigger}" "<that change>" --merge`,
       } : {}),
     };
   } catch {

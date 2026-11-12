@@ -19,8 +19,9 @@ export function Select({ label, value, options, onChange, className }: { label: 
         </BaseSelect.Icon>
       </BaseSelect.Trigger>
       <BaseSelect.Portal>
-        <BaseSelect.Positioner sideOffset={6} align="start" alignItemWithTrigger={false}>
-          <BaseSelect.Popup className="min-w-44 rounded-lg border border-border bg-bg p-1 shadow-lg transition-opacity data-[ending-style]:opacity-0 data-[starting-style]:opacity-0">
+        {/* Above a dialog it may open in, and no taller than the room there is: a long list scrolls. */}
+        <BaseSelect.Positioner sideOffset={6} align="start" alignItemWithTrigger={false} className="z-[60]">
+          <BaseSelect.Popup className="max-h-[min(var(--available-height),20rem)] min-w-44 overflow-y-auto rounded-lg border border-border bg-bg p-1 shadow-lg transition-opacity data-[ending-style]:opacity-0 data-[starting-style]:opacity-0">
             <BaseSelect.List>
               {options.map((o) => (
                 <BaseSelect.Item key={o.value} value={o.value} className="flex h-8 cursor-default select-none items-center justify-between gap-4 rounded-ui px-2 text-[13px] text-fg outline-none data-[highlighted]:bg-surface-2">

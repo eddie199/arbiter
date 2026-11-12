@@ -21,13 +21,15 @@ import { spawn } from 'node:child_process';
 import { judge, judgeAll, JudgeAction, Judgement, retire, reword, unjudge, unretire } from './record';
 import { updateCandidate } from './candidate';
 import { candidatesDir, readCandidates } from '../candidates';
-import { findRoot, readActive, readPending, resolvePaths } from '../store';
+import { findRoot, readActive, readArchive, readPending, resolvePaths } from '../store';
 import { autoPublish } from '../autopublish';
 import { historyFile, workDir } from '../work';
 import { liveBoard, reviewState } from '../localboard';
 import { cleanArrangement, writeArrangement } from '../areas';
 import { saveSettings } from '../settings';
 import { renameWork } from './rename';
+import { editChange, promote, restoreDecision } from './decision';
+import { remove } from './remove';
 import { Answer, clearHandoff, Handoff, HANDOFF_NAME, readHandoff, saveAnswer, summarize, withdrawAnswer, withdrawRemoval } from '../handoff';
 import { hookInstalled } from '../hook';
 import type { Decision } from '../schema';
@@ -106,6 +108,8 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
   let changed = false;
   // Every answer that went through, in order: the terminal's line about this sitting.
   const answers: Answer[] = [];
+  // Decisions removed on a change's page, with where each was, so Undo can put them back while the board is open.
+  const removedDecisions = new Map<string, { entry: Decision; index: number }>();
   // Each one is handed over as it's given, so the agent can take it while the board stays open.
   const answer = (a: Answer) => {
     answers.push(a);
@@ -198,6 +202,8 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
           to?: string;
           supersedes?: string;
           keepBoth?: boolean;
+          /** Record it though the files it names don't match it, marked unverified. */
+          unverified?: boolean;
           /** Follow D-0009 on a clash: a fix to the rule's wording, and the code goes back to the rule. */
           follows?: string;
         };
@@ -207,7 +213,7 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
         const item = queued[at];
         const active = readActive(paths);
         const was = active.findIndex((d) => d.id === body.supersedes);
-        const result = judge(body.id, { as: body.as, to: body.to, supersedes: body.supersedes, keepBoth: body.keepBoth, cwd });
+        const result = judge(body.id, { as: body.as, to: body.to, supersedes: body.supersedes, keepBoth: body.keepBoth, unverified: body.unverified === true, cwd });
         if (result.exitCode === 0 && item) {
           changed = true;
           const id = body.as === 'skip' ? undefined : String(result.output.id);
@@ -360,11 +366,60 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
       // Rename on a change's page: the work and everything filed under it move to the new name, as
       // `arbiter rename` does. The agent hears the new name, so its next decisions don't start a second card.
       if (req.method === 'POST' && url.pathname === '/api/rename') {
-        const body = JSON.parse(await readBody(req)) as { from: string; to: string };
-        const result = renameWork(String(body.from ?? ''), String(body.to ?? ''), { cwd });
+        const body = JSON.parse(await readBody(req)) as { from: string; to: string; merge?: boolean };
+        const result = renameWork(String(body.from ?? ''), String(body.to ?? ''), { cwd, merge: body.merge === true });
         if (result.exitCode === 0) {
           changed = true;
           answer({ kind: 'rename', from: String(result.output.from), to: String(result.output.to) });
+        }
+        json(res, 200, { exitCode: result.exitCode, ...result.output });
+        return;
+      }
+      // A change's page, on one of its decisions: new words for its Change line; remove it, with Undo while
+      // the board is open; or make it a rule. A rule's own words and its removal go through reword and retire.
+      if (req.method === 'POST' && url.pathname === '/api/edit-change') {
+        const body = JSON.parse(await readBody(req)) as { id: string; to: string };
+        const result = editChange(String(body.id ?? ''), String(body.to ?? ''), { cwd });
+        if (result.exitCode === 0) changed = true;
+        json(res, 200, { exitCode: result.exitCode, ...result.output });
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/api/remove-decision') {
+        const body = JSON.parse(await readBody(req)) as { id: string };
+        const before = readArchive(paths);
+        const index = before.findIndex((d) => d.id === body.id);
+        const result = remove(String(body.id ?? ''), { cwd });
+        if (result.exitCode === 0 && index >= 0) {
+          changed = true;
+          removedDecisions.set(body.id, { entry: before[index], index });
+        }
+        json(res, 200, { exitCode: result.exitCode, ...result.output });
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/api/restore-decision') {
+        const body = JSON.parse(await readBody(req)) as { id: string };
+        const was = removedDecisions.get(body.id);
+        if (!was) {
+          json(res, 200, { exitCode: 1, status: 'invalid', errors: ['Only a decision removed on this board since it started can be put back'] });
+          return;
+        }
+        const result = restoreDecision(was, { cwd });
+        if (result.exitCode === 0) {
+          changed = true;
+          removedDecisions.delete(body.id);
+        }
+        json(res, 200, { exitCode: result.exitCode, ...result.output });
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/api/promote') {
+        const body = JSON.parse(await readBody(req)) as { id: string; keepBoth?: boolean; supersedes?: string };
+        const replacing = body.supersedes ? readActive(paths).find((d) => d.id === body.supersedes)?.decision ?? '' : '';
+        const result = promote(String(body.id ?? ''), { cwd, keepBoth: body.keepBoth === true, supersedes: body.supersedes || undefined });
+        if (result.exitCode === 0) {
+          changed = true;
+          answer({ kind: 'rule', id: String(result.output.id) });
+          // A rule it replaced is out of force: the agent hears that as it hears a rule removed.
+          if (result.output.replaced) answer({ kind: 'retire', id: String(result.output.replaced), rule: replacing, why: `Replaced by ${result.output.id}` });
         }
         json(res, 200, { exitCode: result.exitCode, ...result.output });
         return;

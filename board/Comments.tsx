@@ -5,6 +5,7 @@ import { When } from '@/components/When';
 import type { LocalComment } from './types';
 import { href } from './route';
 import { cap } from './bits';
+import { Tooltip } from '@/components/ui/tooltip';
 
 /**
  * The team board's threads (components/CommentThread.tsx), read-only: comments arrive with
@@ -50,7 +51,7 @@ export function CommentLine({ n, small, stale, requests, cards, candidate }: { n
   return (
     <li className={small ? 'text-[13px]' : undefined}>
       {small ? <Glyph d={request ? REQUEST : COMMENT} className="mr-1.5 align-[-1px] text-faint" /> : null}
-      <span className="font-semibold">{cap(n.author_name)}</span> <span className={`${small ? 'text-[12px]' : 'text-[13px]'} text-muted`}>{request ? 'requested a change ' : ''}· <When iso={n.created_at} />{old ? <span className="text-faint" title="Written about an earlier version"> · earlier version</span> : null}</span>
+      <span className="font-semibold">{cap(n.author_name)}</span> <span className={`${small ? 'text-[12px]' : 'text-[13px]'} text-muted`}>{request ? 'requested a change ' : ''}· <When iso={n.created_at} />{old ? <Tooltip label="Written about an earlier version"><span className="text-faint"> · earlier version</span></Tooltip> : null}</span>
       <br />{n.body}
       {answer ? <Answer a={answer} small={small} cards={cards} candidate={candidate} /> : null}
     </li>

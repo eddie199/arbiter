@@ -576,8 +576,16 @@ The board nests four levels: **Folder → Area → Change → Decision**. A chan
 2. **An area is a screen, or part of one, named the way a designer would say it:** `Review inbox`, not `To review`.
 3. **Reuse an area before making one.** Name the work `<Area> — <what changed>`: `Review inbox — Sorting`, `Change page — Comments`. Make a new area only when nothing there fits.
 4. **Foundations** is only for work that truly sits on every screen: type, colour, spacing, voice.
+5. **Continue a change rather than start one.** Before naming new work, look at the changes already in its area. If the work is still about the thing one of them names, reuse that name exactly: its decisions join that change, and the picture you take when it settles becomes the change's next version, so the board shows how it got there. Start a new name only for a different thing on the same screen: another part of the page, a different feature, or a title that would need "and" to cover both. The person's words help ("the cards again", "fix that date" point back), and time doesn't decide: a continuation can come days later.
+
+   | Work | Name |
+   |---|---|
+   | Card titles, then card dates, then card status | `Overview page — Cards`, three times: one change, three versions |
+   | The list view's rows, after the cards | `Overview page — List rows`: a different element on the same screen |
 
 The reply to `record --pending` says where the work landed (`area`, and `folder` when it's in one). When it also has `newArea: true`, the work started an area of its own and `areas` lists the ones already there. If one fits, rename the work into it straight away, before more decisions land on it: `npx arbiter rename "<trigger>" "<Area> — <what changed>"`. Use the new name as the `trigger` from then on. If none fits, leave it: it's a new area.
+
+When it has `newChange: true` instead, the work started a new change in an area that already has some, listed in `changes`. If it continues one of them (rule 5), merge it into that one straight away: `npx arbiter rename "<trigger>" "<that change>" --merge`. Its decisions take that name, and its pictures and comments join that change. Use that name as the `trigger` from then on. If it's really a different thing, leave it. The person can also merge a change on the board, from its page's "⋯", and you hear of it as a rename.
 
 **Folders.** When eight or more areas sit outside any folder, offer once per session to group them, unless `npx arbiter areas` says folder suggestions are off. Propose three to six folders by where a person sees the work, each with the areas it would hold, as a short plain-text list, and ask `Group them like this? (yes / no)`. Only on yes, save it:
 

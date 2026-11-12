@@ -264,6 +264,7 @@ program
 program
   .command('rename <work> <new-name>')
   .description('Rename a piece of work everywhere the record keeps it. Its comments on the board follow it at the next publish.')
+  .option('--merge', 'the new name is a piece of work that already exists: this one joins it, decisions, pictures and comments')
   .action(async (work: string, newName: string, opts) => {
     const result = renameWork(work, newName, opts);
     process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');

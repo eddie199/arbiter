@@ -7,6 +7,8 @@
  * read as a local date, not as midnight in London.
  */
 
+import { Tooltip } from '@/components/ui/tooltip';
+
 const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 function parse(iso: string): Date | null {
@@ -51,5 +53,5 @@ export function When({ iso, time = false, className }: { iso: string; time?: boo
   const d = parse(iso);
   if (!d) return <span className={className}>{iso}</span>;
   const text = time && !DAY_ONLY.test(iso) ? `${dayWords(iso)}, ${clock(d)}` : dayWords(iso);
-  return <time dateTime={iso} title={exact(iso)} className={className}>{text}</time>;
+  return <Tooltip label={exact(iso)}><time dateTime={iso} className={className}>{text}</time></Tooltip>;
 }

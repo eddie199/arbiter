@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { conversation, DIMENSION_LABEL, kindOptions, nameIn, scopeWords, sentence, STATE_LABEL, STATE_ORDER, type BoardCandidate } from '@/lib/board';
+import { conversation, decisionText, DIMENSION_LABEL, kindOptions, nameIn, scopeWords, sentence, STATE_LABEL, STATE_ORDER, verdictLabel, type BoardCandidate } from '@/lib/board';
 import { When } from '@/components/When';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonClass } from '@/components/ui/button';
@@ -14,6 +14,8 @@ import { areasOf, cap, PLANS, StateBadge, undecided, WaitingBadge } from './bits
 import { CommentLine, DecisionThread } from './Comments';
 import { ChangeMenu } from './ChangeMenu';
 import { byVersion, VersionGroups, VersionRow } from './Versions';
+import { DecisionActions, RemovedDecision, type Removal } from './DecisionActions';
+import { Tooltip } from '@/components/ui/tooltip';
 
 /**
  * One change, as the team board shows it (components/ScreenView.tsx): what it is, the picture,
@@ -55,21 +57,29 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
   const showing = chosen !== null && chosen < versions.length ? chosen : versions.length - 1;
   const pick = (i: number) => setChosen(i === versions.length - 1 ? null : i);
   // With versions, decisions count in the order they were made, so the numbers follow the timeline.
-  const ordered = versions.length > 1 ? [...listed].sort((a, b) => Date.parse(a.date ?? '') - Date.parse(b.date ?? '')) : listed;
+  // Decisions removed on this page stay in their place, faded, with Undo, while it's open.
+  const [removed, setRemoved] = useState<Record<string, Removal>>({});
+  const gone = Object.values(removed).filter((r) => r.kind === 'decision' && !listed.some((x) => x.id === r.d.id)).map((r) => r.d as (typeof listed)[number]);
+  const withRemoved = gone.length ? [...listed, ...gone].sort((a, b) => a.id.localeCompare(b.id)) : listed;
+  const ordered = versions.length > 1 ? [...withRemoved].sort((a, b) => Date.parse(a.date ?? '') - Date.parse(b.date ?? '')) : listed;
   // Applies to names a screen, never a file: a decision about one file is about this change.
   const applies = (scope?: string) => (scope?.startsWith('file:') ? short : scopeWords(scope));
 
   // One decision in Decided here: its id and kind, then Change, Rule or Pattern, Rejected, Applies to.
   const item = (d: (typeof listed)[number]) => {
+    if (removed[d.id]) return <RemovedDecision key={d.id} r={removed[d.id]} refresh={refresh} onUndone={() => setRemoved(({ [d.id]: _, ...x }) => x)} />;
     const i = ordered.indexOf(d);
     const dim = d.dimension ? DIMENSION_LABEL[d.dimension] ?? d.dimension : null;
     const where = applies(d.scope);
+    const status = verdictLabel(d);
+    // Copy takes the decision as it reads here, id first, to paste into a doc or a chat.
+    const text = decisionText(d, where);
     return (
-      <li key={d.id} id={d.id} className="scroll-mt-20 py-5">
+      <li key={d.id} id={d.id} className="group/decision scroll-mt-20 py-5">
         <div className="mb-3 flex items-center gap-2">
           <Id className={at === d.id ? 'text-fg' : undefined}>{d.id}</Id>
           {dim ? <Badge>{dim}</Badge> : null}
-          {d.verdict === 'rule' ? <a href={href('rules', { at: d.id })} title="See it under Design rules" className="inline-flex rounded-full hover:opacity-75"><Badge tone="ok">Rule</Badge></a> : d.verdict === 'fix' ? <Badge tone="warn">Corrected</Badge> : null}
+          {status === 'Retired' ? <Badge>Retired</Badge> : status === 'Rule' ? <Tooltip label="See it under Design rules"><a href={href('rules', { at: d.id })} className="inline-flex rounded-full hover:opacity-75"><Badge tone="ok">Rule</Badge></a></Tooltip> : status === 'Corrected' ? <Badge tone="warn">Corrected</Badge> : null}
           <Faint className="ml-auto">{i + 1} of {ordered.length}</Faint>
         </div>
         <KeyValues>
@@ -79,6 +89,7 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
           {d.rejected.length ? <><Label>Rejected</Label><dd className="text-muted">{d.rejected.map((r) => <div key={r}>{sentence(r)}</div>)}</dd></> : null}
           {where ? <><Label>Applies to</Label><dd className="text-muted">{where}</dd></> : null}
         </KeyValues>
+        {data.live ? <DecisionActions d={d} copyText={text} last={!!c.work && c.decisions.length === 1} refresh={refresh} onRemoved={(r) => setRemoved((x) => ({ ...x, [d.id]: r }))} /> : null}
         <div className="pl-[calc(6rem+0.75rem)]"><DecisionThread decision={d.id} comments={comments} requests={requests} cards={ids} candidate={c.id} version={version} /></div>
       </li>
     );
@@ -97,7 +108,7 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
       <header>
         <div className="flex items-start justify-between gap-4">
           <PageTitle className="min-w-0">{short}</PageTitle>
-          {data.live ? <ChangeMenu c={c} area={area} short={short} areas={[...new Set(cands.map(areaOf))].sort((x, y) => x.localeCompare(y))} waiting={waiting} refresh={refresh} /> : null}
+          {data.live ? <ChangeMenu c={c} area={area} short={short} areas={[...new Set(cands.map(areaOf))].sort((x, y) => x.localeCompare(y))} others={cands.filter((x) => x.work && x.id !== c.id).map((x) => ({ name: x.name, area: areaOf(x) }))} waiting={waiting} refresh={refresh} /> : null}
         </div>
         {c.reason && <Lede className="max-w-3xl">“{sentence(c.reason)}”</Lede>}
         {c.notes && <p className="mt-2 max-w-3xl">{c.notes}</p>}
@@ -148,7 +159,7 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
             </div>
           ) : !c.decisions.length ? <p className="text-[13px] text-muted">{fresh && waiting ? 'Nothing decided yet. What the agent decided here is waiting for your review.' : 'No decisions recorded here yet.'}</p> : (
             versions.length > 1 ? <VersionGroups groups={byVersion(ordered, versions)} versions={versions} onShow={(i) => { pick(i); document.getElementById('picture')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }} item={item} />
-              : <ol className="divide-y divide-border border-t border-border">{listed.map(item)}</ol>
+              : <ol className="divide-y divide-border border-t border-border">{withRemoved.map(item)}</ol>
           )}
         </section>
 

@@ -16,6 +16,8 @@ import { CompactIcon, ListIcon, SingleIcon, ViewToggle } from './Toolbar';
 import type { Agent, PendingDecision, ReviewState } from './types';
 import { errorsOf, post, whenAgent, type Reply } from './api';
 import { go, href } from './route';
+import { Tooltip } from '@/components/ui/tooltip';
+import { FullDialog, MismatchDialog, OverlapDialog, type FailedCheck, type Overlap, type RuleLine } from './RuleDialogs';
 
 /** What happened to an item judged in this sitting: it stays in place, collapsed to one line. */
 export interface Result { item: PendingDecision; kind: 'ok' | 'skip'; text: string }
@@ -134,7 +136,7 @@ export function ReviewPage({ state, at, area, areaOfCard, results, onJudged, onU
           ? `${asked.length} waiting. Confirm what’s right, make what should always hold a rule, and fix the rest in your own words.`
           : 'Nothing left waiting. What you decided is on the board now.'}</Meta>
       </div>
-      <div className="flex flex-wrap items-center gap-2 border-y border-border py-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
         <Select label="Sort" value={sort} options={SORTS} onChange={(v) => pickSort(v as Sort)} />
         {areas.length > 1 ? <MultiSelect label="Area" values={picked} options={areas} onChange={(v) => go(href('review', { area: v }))} /> : null}
         <div className="ml-auto flex flex-wrap items-center gap-3">
@@ -279,8 +281,8 @@ function Single({ all, results, at, cur, setCur, agent, rules, onJudged, onUndo,
   }
 
   const nav = <>
-    <Button className="w-8 px-0!" disabled={i === 0} onClick={() => move(-1)} aria-label="Previous" title="Previous (←)">{ArrowLeft}</Button>
-    <Button className="w-8 px-0!" disabled={i === queue.length - 1} onClick={() => move(1)} aria-label="Next" title="Next (→)">{ArrowRight}</Button>
+    <Tooltip label="Previous (←)"><Button className="w-8 px-0!" disabled={i === 0} onClick={() => move(-1)} aria-label="Previous">{ArrowLeft}</Button></Tooltip>
+    <Tooltip label="Next (→)"><Button className="w-8 px-0!" disabled={i === queue.length - 1} onClick={() => move(1)} aria-label="Next">{ArrowRight}</Button></Tooltip>
   </>;
   return (
     <div className="mt-8">
@@ -354,8 +356,10 @@ function Undo({ id, onUndo, keys }: { id: string; onUndo: (id: string) => Promis
 
 type Panel =
   | { kind: 'fix' }
-  | { kind: 'overlap'; res: Reply; body: Record<string, unknown> }
-  | { kind: 'contradicted'; res: Reply }
+  // What Make it a rule stopped to ask, in a dialog, with what was sent and what to say once it's done.
+  | { kind: 'overlap'; overlaps: Overlap[]; body: Record<string, unknown>; done?: string }
+  | { kind: 'full'; rules: RuleLine[]; cap: number; body: Record<string, unknown>; done?: string }
+  | { kind: 'mismatch'; failed: FailedCheck[]; body: Record<string, unknown>; done?: string }
   | { kind: 'message'; text: string; bad?: boolean };
 
 /** One decision waiting for you, in the board's decision shape: its picture if it's visual, id and badges, then the lines. */
@@ -376,10 +380,11 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudge
     setBusy(true);
     const res = await post('/api/judge', { id: d.id, ...body });
     setBusy(false);
-    if (res.exitCode === 2) return setPanel({ kind: 'overlap', res, body });
-    if (res.exitCode === 3) return setPanel({ kind: 'message', text: String(res.message), bad: true });
-    if (res.exitCode === 4) return setPanel({ kind: 'contradicted', res });
+    if (res.exitCode === 2) return setPanel({ kind: 'overlap', overlaps: (res.overlaps as Overlap[]) ?? [], body, done });
+    if (res.exitCode === 3) return setPanel({ kind: 'full', rules: (res.active as RuleLine[]) ?? [], cap: Number(res.cap), body, done });
+    if (res.exitCode === 4) return setPanel({ kind: 'mismatch', failed: (res.failed as FailedCheck[]) ?? [], body, done });
     if (res.exitCode !== 0) return setPanel({ kind: 'message', text: errorsOf(res), bad: true });
+    setPanel(null);
     const skipped = res.status === 'skipped';
     onJudged({
       item: d,
@@ -402,6 +407,8 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudge
   ];
   // The cap on rules only matters when it's close: then it's worth knowing before making another.
   const near = d.level !== 'polish' && !r && rules.active >= rules.cap - RULES_NEAR;
+  // The fix and a message are answered on the card; the rest ask in a dialog, over the card as it was.
+  const inline = panel?.kind === 'fix' || panel?.kind === 'message';
 
   useEffect(() => {
     if (!keys) return;
@@ -436,7 +443,7 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudge
       <Id>{d.id}</Id>
       <Badge tone="info">{cap(d.level)}</Badge>
       <Badge>{dim}</Badge>
-      {d.verified === false ? <span title="The files did not match this claim when it was queued"><Badge tone="bad">Unverified</Badge></span> : null}
+      {d.verified === false ? <Tooltip label="The files did not match this claim when it was queued"><span><Badge tone="bad">Unverified</Badge></span></Tooltip> : null}
       <Faint className="ml-auto"><When iso={d.date} />{n ? ` · ${(i ?? 0) + 1} of ${n}` : ''}</Faint>
     </span>
   );
@@ -456,7 +463,7 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudge
   // Its buttons and whatever it's asking (the fix, an overlap), under the rows, in every view.
   const after = (
     <>
-      {panel || nav ? null : <div className="mt-3 flex flex-wrap items-center gap-1.5">{buttons}</div>}
+      {inline || nav ? null : <div className="mt-3 flex flex-wrap items-center gap-1.5">{buttons}</div>}
 
       {panel?.kind === 'fix' ? (
         <form className="mt-3 border-t border-border pt-3" onSubmit={(e) => { e.preventDefault(); if (fix.trim()) void send({ as: 'fix', to: fix.trim() }); }}>
@@ -473,33 +480,7 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudge
         </form>
       ) : null}
 
-      {panel?.kind === 'overlap' ? (
-        <div className="mt-3 border-t border-border pt-3 text-[14px]">
-          <p className="mb-2">Overlaps {(panel.res.overlaps as unknown[]).length === 1 ? 'an active rule' : `${(panel.res.overlaps as unknown[]).length} active rules`}:</p>
-          {(panel.res.overlaps as { id: string; decision: string; confidence: string; reason: string }[]).map((o) => (
-            <div key={o.id} className="mb-2 rounded-ui bg-surface-2 px-3 py-2">
-              <div><Id>{o.id}</Id> {sentence(o.decision)}</div>
-              <div className={`text-[12px] ${o.confidence === 'exact' ? 'text-ok' : 'text-warn'}`}>{o.confidence === 'exact' ? 'Exact' : 'Possible'}: {o.reason}</div>
-            </div>
-          ))}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {(panel.res.overlaps as { id: string }[]).map((o) => <Button key={o.id} size="sm" variant="primary" disabled={busy} onClick={() => send({ ...panel.body, supersedes: o.id })}>Replace {o.id}</Button>)}
-            <Button size="sm" disabled={busy} onClick={() => send({ ...panel.body, keepBoth: true })}>Keep both</Button>
-            <Button size="sm" variant="ghost" onClick={() => setPanel(null)}>Cancel</Button>
-          </div>
-        </div>
-      ) : null}
 
-      {panel?.kind === 'contradicted' ? (
-        <div className="mt-3 border-t border-border pt-3 text-[14px]">
-          <p className="text-bad">The files don’t match this claim:</p>
-          <ul className="my-2 list-disc pl-5 text-muted">
-            {(panel.res.failed as { kind: string; needle?: string; file: string; detail?: string }[]).map((f, k) => <li key={k}>{f.kind}{f.needle ? ` “${f.needle}”` : ''} in {f.file}{f.detail ? ` (${f.detail})` : ''}</li>)}
-          </ul>
-          <p className="mb-2 text-muted">Ask the agent to fix the code, or confirm it as an exception instead.</p>
-          <Button size="sm" variant="ghost" onClick={() => setPanel(null)}>OK</Button>
-        </div>
-      ) : null}
 
       {panel?.kind === 'message' ? (
         <div className="mt-3 flex items-center gap-3 border-t border-border pt-3 text-[14px]">
@@ -507,6 +488,23 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudge
           <Button size="sm" variant="ghost" onClick={() => setPanel(null)}>OK</Button>
         </div>
       ) : null}
+    </>
+  );
+  // Make it a rule's questions, in the same dialogs as a change's page. A fix is checked as its new words.
+  const asked = panel && 'body' in panel ? panel : null;
+  const mine = { id: d.id, decision: typeof asked?.body.to === 'string' ? asked.body.to : d.decision };
+  // Each answer adds to what was sent (anyway, keep both), except a Replace, which settles the overlap Keep both did.
+  const again = (extra: Record<string, unknown>) => {
+    if (!asked) return;
+    const { keepBoth: _kept, ...rest } = asked.body;
+    void send({ ...('supersedes' in extra ? rest : asked.body), ...extra }, asked.done);
+  };
+  const close = () => setPanel(null);
+  const dialogs = (
+    <>
+      <OverlapDialog mine={mine} busy={busy} onClose={close} overlaps={panel?.kind === 'overlap' ? panel.overlaps : null} onKeepBoth={() => again({ keepBoth: true })} onReplace={(id) => again({ supersedes: id })} />
+      <FullDialog mine={mine} busy={busy} onClose={close} full={panel?.kind === 'full' ? panel : null} onReplace={(id) => again({ supersedes: id })} />
+      <MismatchDialog mine={mine} busy={busy} onClose={close} failed={panel?.kind === 'mismatch' ? panel.failed : null} anyway={asked?.body.as === 'rule' ? 'Make it a rule anyway' : 'Save fix anyway'} onAnyway={() => again({ unverified: true })} />
     </>
   );
   const arrow = <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className={`shrink-0 text-faint transition-transform ${open ? 'rotate-180' : ''}`}><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
@@ -543,15 +541,16 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudge
       {after}
     </div>
   );
-  if (!nav) return card;
+  if (!nav) return <>{card}{dialogs}</>;
 
   // Single: the buttons sit under the card on the page itself, across its width, the arrows at the end.
   // While the card asks something (the fix, an overlap), it's answered there, so the row steps back.
   return (
     <>
       {card}
+      {dialogs}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        {panel ? <Faint>{panel.kind === 'fix' ? 'Write the fix above. Esc cancels.' : 'Choose above to carry on.'}</Faint> : buttons}
+        {inline ? <Faint>{panel?.kind === 'fix' ? 'Write the fix above. Esc cancels.' : 'Choose above to carry on.'}</Faint> : buttons}
         <div className="ml-auto flex items-center gap-2">{nav}</div>
       </div>
     </>

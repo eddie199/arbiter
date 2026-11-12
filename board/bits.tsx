@@ -1,5 +1,6 @@
 import { areasFor, type BoardCandidate } from '@/lib/board';
 import { Badge, stateTone } from '@/components/ui/badge';
+import { Tooltip } from '@/components/ui/tooltip';
 import type { LocalBoard } from './types';
 
 /** As in components/Shell.tsx, without the footer that file's Next.js link comes with. */
@@ -21,7 +22,7 @@ const TRAY = <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke=
  */
 export function ReviewCount({ n }: { n: number }) {
   const words = `${n} to review`;
-  return <Badge tone="info" className="gap-1 tabular-nums" title={words}>{TRAY}<span aria-hidden="true">{n}</span><span className="sr-only">{words}</span></Badge>;
+  return <Tooltip label={words}><Badge tone="info" className="gap-1 tabular-nums">{TRAY}<span aria-hidden="true">{n}</span><span className="sr-only">{words}</span></Badge></Tooltip>;
 }
 
 const icon = (d: React.ReactNode) => <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">{d}</svg>;
@@ -47,8 +48,8 @@ export function Counts({ decisions, comments, requests }: { decisions: number; c
   return (
     <span className="inline-flex items-center gap-3 text-[13px] tabular-nums text-muted">
       {/* Decided is a pill like what's waiting, in green: the two read as a pair, to do and done. */}
-      {decisions ? <Badge tone="done" className="gap-1 tabular-nums" title={decided}>{DECIDED_SMALL}<span aria-hidden="true">{decisions}</span><span className="sr-only">{decided}</span></Badge> : null}
-      {items.map((x) => <span key={x.words} className="inline-flex items-center gap-1" title={x.words}>{x.icon}<span aria-hidden="true">{x.n}</span><span className="sr-only">{x.words}</span></span>)}
+      {decisions ? <Tooltip label={decided}><Badge tone="done" className="gap-1 tabular-nums">{DECIDED_SMALL}<span aria-hidden="true">{decisions}</span><span className="sr-only">{decided}</span></Badge></Tooltip> : null}
+      {items.map((x) => <Tooltip key={x.words} label={x.words}><span className="inline-flex items-center gap-1">{x.icon}<span aria-hidden="true">{x.n}</span><span className="sr-only">{x.words}</span></span></Tooltip>)}
     </span>
   );
 }

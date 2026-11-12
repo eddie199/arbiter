@@ -22,7 +22,7 @@ export function Toolbar({ q, section, folder, status, view, sections, statuses, 
   const pills = chosenStatus.length + chosenArea.length;
 
   return (
-    <div className="border-y border-border py-3">
+    <div className="border-b border-border pb-3">
       <div className="flex flex-wrap items-center gap-2">
         {/* Sort leads, as in the Review inbox's toolbar. */}
         {sort ? <Select label="Sort" value={sort.value} options={sort.options} onChange={sort.onChange} /> : null}

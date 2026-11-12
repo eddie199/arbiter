@@ -78,7 +78,7 @@ export function Preferences({ data, refresh }: { data: LocalBoard; refresh: () =
           />
           <FieldError text={errors.record} />
         </Row>
-        <Row label="The agent’s own calls" hint="Off: only what you asked for or corrected.">
+        <Row kind="switch" label="The agent’s own calls" hint="Off: only what you asked for or corrected.">
           <Switch checked={shown.agentCalls} onChange={(on) => void save({ agentCalls: on })} tip="When the agent picks between real options on its own, like tabs or a dropdown, it records the choice for you to confirm. Off: only what you asked for or corrected.">Record choices the agent made between real options</Switch>
           <FieldError text={errors.agentCalls} />
         </Row>
@@ -89,12 +89,12 @@ export function Preferences({ data, refresh }: { data: LocalBoard; refresh: () =
           <Cap value={shown.cap} min={Math.max(1, s.rules)} onSave={(cap) => save({ cap })} />
           <FieldError text={errors.cap} />
         </Row>
-        <Row label="Pictures" hint="One picture of a screen when work on it settles, for its card.">
+        <Row kind="switch" label="Pictures" hint="One picture of a screen when work on it settles, for its card.">
           <Switch checked={shown.pictures} onChange={(on) => void save({ pictures: on })} tip="When work on a screen settles, the agent opens the app and takes one picture of it for that change's card. Off: no pictures, and nothing says one is missing.">Take a picture when a screen changes</Switch>
           <FieldError text={errors.pictures} />
           {shown.pictures ? <App value={s.app} onSave={(app) => save({ app })} error={errors.app} /> : null}
         </Row>
-        <Row label="Folders" hint="Offered once a session, when eight or more areas sit outside a folder.">
+        <Row kind="switch" label="Folders" hint="Offered once a session, when eight or more areas sit outside a folder.">
           <Switch checked={shown.suggestFolders} onChange={(on) => void save({ suggestFolders: on })} tip="When eight or more areas sit outside a folder, the agent offers once a session to group them. It only saves folders you say yes to.">Suggest folders when areas pile up</Switch>
           <FieldError text={errors.suggestFolders} />
         </Row>
@@ -104,23 +104,30 @@ export function Preferences({ data, refresh }: { data: LocalBoard; refresh: () =
   );
 }
 
-/** A titled group of settings, with a line on what it covers under its title, ruled like the lists on Design rules. */
+/**
+ * A titled group of settings, with a line on what it covers under its title. A hairline sits above each
+ * group, the first included; the settings inside one aren't ruled, so the lines only mark the groups.
+ */
 function Group({ title, about, children }: { title: string; about: string; children: React.ReactNode }) {
   return (
-    <section className="mt-8 [&+&]:mt-14">
+    <section className="mt-8 border-t border-border pt-10 [&+&]:mt-10">
       <SectionTitle className="mb-0.5!">{title}</SectionTitle>
-      <p className="mb-3 text-[13px] text-muted">{about}</p>
-      <div className="divide-y divide-border border-t border-border">{children}</div>
+      <p className="mb-2 text-[13px] text-muted">{about}</p>
+      <div>{children}</div>
     </section>
   );
 }
 
-/** A setting: its name on the left, then the control, with what it does under it. Stacked on a phone. */
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/**
+ * A setting: its name on the left, then the control, with what it does under it. Stacked on a phone.
+ * The name's line is as tall as the control beside it, so their words sit on one line: 32px beside a
+ * field or a choice of a few, 21px beside a switch and its words.
+ */
+function Row({ label, hint, kind = 'field', children }: { label: string; hint?: string; kind?: 'field' | 'switch'; children: React.ReactNode }) {
   const [control, ...rest] = Array.isArray(children) ? children : [children];
   return (
     <div className="grid gap-x-6 gap-y-2 py-4 md:grid-cols-[12rem_minmax(0,1fr)]">
-      <div className="text-[14px] md:pt-1">{label}</div>
+      <div className={`text-[14px] ${kind === 'switch' ? 'md:leading-[21px]' : 'md:leading-8'}`}>{label}</div>
       <div className="min-w-0">
         {control}
         {hint ? <p className="mt-1.5 max-w-xl text-[13px] text-muted">{hint}</p> : null}

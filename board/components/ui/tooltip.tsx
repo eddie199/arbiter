@@ -10,7 +10,7 @@ export function Tooltip({ label, children }: { label: string; children: React.Re
     <BaseTooltip.Root>
       <BaseTooltip.Trigger render={children} />
       <BaseTooltip.Portal>
-        <BaseTooltip.Positioner sideOffset={6}>
+        <BaseTooltip.Positioner sideOffset={6} className="z-[60]">
           <BaseTooltip.Popup className="max-w-64 rounded-ui bg-fg px-2 py-1 text-[12px] text-bg shadow-md transition-opacity data-[ending-style]:opacity-0 data-[starting-style]:opacity-0">{label}</BaseTooltip.Popup>
         </BaseTooltip.Positioner>
       </BaseTooltip.Portal>

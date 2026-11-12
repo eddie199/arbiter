@@ -3,6 +3,7 @@ import type { BoardCandidate } from '@/lib/board';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { ActionItem, ActionMenu, barDots, DOTS } from '@/components/ui/menu';
 import { Icon } from '@/components/ui/icons';
 import { Faint } from '@/components/ui/type';
@@ -18,11 +19,13 @@ export const nameOf = (area: string, title: string): string => {
 
 /**
  * "⋯" beside a change's title, the toolbar's height, live board only. Rename (a piece of work: an option
- * screen keeps its id whatever it's called, so it isn't renamed here), the Review inbox at what's waiting
- * on it, and its name or the command for its picture to paste elsewhere.
+ * screen keeps its id whatever it's called, so it isn't renamed here), Merge into another piece of work it
+ * continues, the Review inbox at what's waiting on it, and its name or the command for its picture to paste
+ * elsewhere.
  */
-export function ChangeMenu({ c, area, short, areas, waiting, refresh }: { c: BoardCandidate; area: string; short: string; areas: string[]; waiting: number; refresh: () => Promise<void> }) {
+export function ChangeMenu({ c, area, short, areas, others, waiting, refresh }: { c: BoardCandidate; area: string; short: string; areas: string[]; others: { name: string; area: string }[]; waiting: number; refresh: () => Promise<void> }) {
   const [renaming, setRenaming] = useState(false);
+  const [merging, setMerging] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const copy = (text: string, done: string) => {
     void navigator.clipboard?.writeText(text).then(() => { setNote(done); setTimeout(() => setNote(null), 1500); }).catch(() => {});
@@ -33,11 +36,13 @@ export function ChangeMenu({ c, area, short, areas, waiting, refresh }: { c: Boa
       {note ? <Faint aria-live="polite">{note}</Faint> : null}
       <ActionMenu label="Change options" tip="Rename and more" className={barDots} trigger={DOTS}>
         {c.work ? <ActionItem icon={Icon.pencil} onClick={() => setRenaming(true)}>Rename</ActionItem> : null}
+        {c.work && others.length ? <ActionItem icon={Icon.merge} onClick={() => setMerging(true)}>Merge into…</ActionItem> : null}
         {waiting ? <ActionItem icon={Icon.tray} hint={String(waiting)} onClick={() => go(href('review', { at: c.id }))}>Review what’s waiting</ActionItem> : null}
         <ActionItem icon={Icon.copy} onClick={() => copy(c.name, 'Name copied')}>Copy name</ActionItem>
         {c.snapshot ? null : <ActionItem icon={Icon.camera} onClick={() => copy(picture, 'Command copied')}>Copy the picture command</ActionItem>}
       </ActionMenu>
       {c.work ? <RenameDialog open={renaming} onOpenChange={setRenaming} name={c.name} area={area} short={short} areas={areas} refresh={refresh} /> : null}
+      {c.work && others.length ? <MergeDialog open={merging} onOpenChange={setMerging} name={c.name} area={area} others={others} refresh={refresh} /> : null}
     </div>
   );
 }
@@ -95,6 +100,50 @@ function RenameDialog({ open, onOpenChange, name, area, short, areas, refresh }:
             <Button type="submit" size="md" variant="primary" disabled={busy || !next || same}>{busy ? 'Renaming…' : 'Rename'}</Button>
           </div>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Merge into another piece of work: for work started under a new name that continues an existing change.
+ * Pick the change it continues (the ones in its own area first). Its decisions take that name, its pictures
+ * join that change's in the order they were taken, its comments move, and the agent hears the name. The
+ * page moves to the change it joined.
+ */
+function MergeDialog({ open, onOpenChange, name, area, others, refresh }: { open: boolean; onOpenChange: (o: boolean) => void; name: string; area: string; others: { name: string; area: string }[]; refresh: () => Promise<void> }) {
+  const sorted = [...others].sort((a, b) => (a.area === area ? 0 : 1) - (b.area === area ? 0 : 1) || a.name.localeCompare(b.name));
+  const [into, setInto] = useState(sorted[0]?.name ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (open) { setInto(sorted[0]?.name ?? ''); setError(null); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const merge = async () => {
+    if (!into) return;
+    setBusy(true);
+    const r = await post('/api/rename', { from: name, to: into, merge: true });
+    setBusy(false);
+    if (r.exitCode) { const e = errorsOf(r); setError(e.charAt(0).toUpperCase() + e.slice(1)); return; }
+    onOpenChange(false);
+    await refresh();
+    const to = (r.card as { to?: string } | undefined)?.to;
+    if (to) go(href(to));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogTitle className="font-semibold tracking-tight">Merge into another change</DialogTitle>
+        <DialogDescription className="mt-1.5 text-[13px] text-muted">Use merge when this work is part of another change. It moves everything here into the change you pick.</DialogDescription>
+        <div className="mt-4">
+          <Select label="Into" value={into} options={sorted.map((o) => ({ value: o.name, label: o.name }))} onChange={setInto} />
+        </div>
+        <p className="mt-3 text-[13px] text-muted">This page goes away after you merge.</p>
+        {error ? <p role="alert" className="mt-2 text-[13px] text-bad">{error}</p> : null}
+        <div className="flex justify-end gap-2 pt-5">
+          <Button type="button" size="md" variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
+          <Button type="button" size="md" variant="primary" onClick={() => void merge()} disabled={busy || !into}>{busy ? 'Merging…' : 'Merge'}</Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

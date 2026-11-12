@@ -23,7 +23,9 @@ export type Answer =
   | { kind: 'retire'; id: string; rule: string; why: string }
   | { kind: 'restore'; id: string }
   /** On a change's page: a piece of work renamed, so the agent's next decisions use the new name. */
-  | { kind: 'rename'; from: string; to: string };
+  | { kind: 'rename'; from: string; to: string }
+  /** On a change's page: a decision you'd confirmed, made a rule. In force from now, as any new rule. */
+  | { kind: 'rule'; id: string };
 
 /** What's left for the agent: the code side of an answer. */
 export type Todo =
@@ -66,7 +68,7 @@ export function summarize(answers: Answer[], finished: Handoff['finished'], at =
     if (a.kind === 'option') h.options.push({ id: a.id, name: a.name, state: a.state });
     else if (a.kind === 'rename') h.renamed = renames(h.renamed ?? [], [{ from: a.from, to: a.to }]);
     // A rule back in DECISIONS.md after the agent heard it was gone is in force again, as a new one is.
-    else if (a.kind === 'restore') h.rules.push(a.id);
+    else if (a.kind === 'restore' || a.kind === 'rule') h.rules.push(a.id);
     else if (a.kind === 'reword' || a.kind === 'retire') rulesChanged(h, a.kind === 'reword' ? [{ id: a.id, to: a.to }] : [], a.kind === 'retire' ? [{ id: a.id, rule: a.rule, why: a.why }] : []);
     else if (a.kind === 'request') {
       if (a.status === 'declined') h.declined.push({ id: a.id, author: a.author, reason: a.reason ?? '' });

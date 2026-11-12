@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { DIMENSION_LABEL, sentence, type BoardRule } from '@/lib/board';
+import { decisionText, DIMENSION_LABEL, nameIn, scopeWords, sentence, type BoardRule } from '@/lib/board';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
 import { SearchButton } from '@/components/ui/search-button';
@@ -10,6 +10,8 @@ import { Id, Meta, PageTitle, SectionTitle } from '@/components/ui/type';
 import { When } from '@/components/When';
 import type { LocalBoard } from './types';
 import { errorsOf, post } from './api';
+import { areasOf } from './bits';
+import { RemoveDialog } from './RemoveDialog';
 import { go, href } from './route';
 
 /**
@@ -26,6 +28,15 @@ export function Rules({ data, at, cap, refresh, query }: { data: LocalBoard; at:
   const fits = (r: BoardRule) => (!kinds.length || kinds.includes(r.dimension)) && (!needle || `${r.id} ${r.decision} ${r.rationale}`.toLowerCase().includes(needle));
   const filtered = kinds.length > 0 || !!needle;
   const screens = new Map(data.board.candidates.map((c) => [c.id, c]));
+  const areaOf = areasOf(data);
+  // Copy for a rule reads as it does on its change's page: the decision there, a file named by that change.
+  const copyOf = (r: BoardRule) => {
+    for (const c of data.board.candidates) {
+      const d = c.decisions.find((x) => x.id === r.id);
+      if (d) return decisionText(d, d.scope?.startsWith('file:') ? nameIn(areaOf(c), c.name) : scopeWords(d.scope));
+    }
+    return decisionText({ id: r.id, dimension: r.dimension, verdict: 'rule', decision: r.decision, change: null, rejected: [] }, null);
+  };
   // Removed here, kept as they were so each stays in its place until the page closes.
   const [removed, setRemoved] = useState<Record<string, { rule: BoardRule; why: string }>>({});
   const gone = (id: string) => !!removed[id] && !rules.some((r) => r.id === id);
@@ -79,7 +90,7 @@ export function Rules({ data, at, cap, refresh, query }: { data: LocalBoard; at:
             <ul className="divide-y divide-border border-t border-border">
               {rs.map((r) => gone(r.id)
                 ? <RemovedRow key={r.id} r={r} why={removed[r.id].why} onUndo={restore} />
-                : <RuleRow key={r.id} r={r} at={at} from={r.candidate ? screens.get(r.candidate) ?? null : null} live={data.live} hosted={data.hosted} onRemoved={(why) => setRemoved((x) => ({ ...x, [r.id]: { rule: r, why } }))} refresh={refresh} />)}
+                : <RuleRow key={r.id} r={r} at={at} from={r.candidate ? screens.get(r.candidate) ?? null : null} live={data.live} copyText={copyOf(r)} onRemoved={(why) => setRemoved((x) => ({ ...x, [r.id]: { rule: r, why } }))} refresh={refresh} />)}
             </ul>
           </section>
         );
@@ -102,7 +113,7 @@ function RulesFilter({ data, rules, kinds, q }: { data: LocalBoard; rules: Board
     go(href('rules', { type: v.kind, q: v.q.trim() || undefined }));
   };
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-2 border-y border-border py-3">
+    <div className="mt-4 flex flex-wrap items-center gap-2 border-b border-border pb-3">
       <MultiSelect icon label="Type" values={kinds} options={options} onChange={(v) => to({ kind: v })} />
       {kinds.length || q ? <Button variant="ghost" size="sm" onClick={() => to({ kind: [], q: '' })}>Clear</Button> : null}
       {/* Search, as an icon at the bar's right end, opening into a field; then "⋯" for the file itself. */}
@@ -220,25 +231,12 @@ function EditButtons({ a }: { a: RuleActions }) {
   );
 }
 
-/** Why it's going, then Remove. */
-function RemoveForm({ a }: { a: RuleActions }) {
-  return (
-    <form className="mt-3 max-w-xl" onSubmit={(e) => { e.preventDefault(); void a.remove(); }}>
-      <p className="mb-2 text-[13px] text-muted">Why isn’t it a rule any more? Your agent stops following it, and the history keeps it with your reason.</p>
-      <Textarea autoFocus aria-label={`Why ${a.id} is removed`} value={a.text} onChange={(e) => a.setText(e.target.value)} onKeyDown={a.keys(a.remove)} placeholder="One line" rows={2} className="min-h-14" />
-      <div className="mt-2 flex items-center gap-1.5">
-        <Button size="sm" variant="danger" disabled={a.busy || !oneLine(a.text)}>Remove</Button>
-        <Button size="sm" variant="ghost" type="button" onClick={a.close}>Cancel</Button>
-      </div>
-    </form>
-  );
-}
 
 /**
  * A rule: its words, its reason, where it was decided. Served live, Copy, Edit
  * and Remove show on hover or focus, as a decision's own actions do.
  */
-function RuleRow({ r, at, from, live, hosted, onRemoved, refresh }: { r: BoardRule; at: string | null; from: { id: string; name: string } | null; live: boolean; hosted: string | null; onRemoved: (why: string) => void; refresh: () => Promise<void> }) {
+function RuleRow({ r, at, from, live, copyText, onRemoved, refresh }: { r: BoardRule; at: string | null; from: { id: string; name: string } | null; live: boolean; copyText: string; onRemoved: (why: string) => void; refresh: () => Promise<void> }) {
   const a = useRuleActions(r, refresh, onRemoved);
   return (
     <li id={r.id} className={`group/rule ${ROW}`}>
@@ -247,28 +245,28 @@ function RuleRow({ r, at, from, live, hosted, onRemoved, refresh }: { r: BoardRu
         {a.mode === 'edit' ? <EditBox a={a} /> : <div>{sentence(r.decision)}</div>}
         {r.rationale ? <div className="mt-0.5 text-[13px] text-muted">{sentence(r.rationale)}</div> : null}
         {from ? <Meta className="mt-1 block">Decided on <a href={href(from.id)} className="text-fg hover:underline">{from.name}</a></Meta> : null}
-        {a.mode === 'edit' ? <EditButtons a={a} /> : a.mode === 'remove' ? <RemoveForm a={a} /> : live ? (
+        {a.mode === 'edit' ? <EditButtons a={a} /> : live ? (
           <div className="mt-1 flex items-center gap-3 text-[12px] text-faint opacity-0 transition-opacity focus-within:opacity-100 group-hover/rule:opacity-100 group-focus-within/rule:opacity-100">
-            <RuleCopy r={r} hosted={hosted} />
+            <RuleCopy text={copyText} />
             <button type="button" onClick={() => a.open('edit')} className="hover:text-fg">Edit</button>
             <button type="button" onClick={() => a.open('remove')} className="hover:text-bad">Remove</button>
           </div>
         ) : null}
-        {a.error ? <p className="mt-2 text-[13px] text-bad">{a.error}</p> : null}
+        {a.error && a.mode !== 'remove' ? <p className="mt-2 text-[13px] text-bad">{a.error}</p> : null}
+        <RemoveDialog
+          open={a.mode === 'remove'} onOpenChange={(o) => { if (!o) a.close(); }} busy={a.busy} error={a.error} onRemove={() => void a.remove()}
+          title={`Remove ${r.id}?`} body="Why remove this rule? Your agent will stop following it."
+          why={a.text} onWhy={a.setText}
+        />
       </div>
       {r.date ? <When iso={r.date} className="pt-0.5 text-right text-xs tabular-nums text-faint" /> : <span />}
     </li>
   );
 }
 
-/**
- * Copy, for one rule: its words and its reason as text, to paste anywhere, and its link on the team
- * board when there is one. A link to this board would open nowhere but here.
- */
-function RuleCopy({ r, hosted, className = 'hover:text-fg' }: { r: { id: string; decision: string; rationale: string }; hosted: string | null; className?: string }) {
+/** Copy, for one rule: the whole decision as text, as Copy on its change's page gives it, to paste anywhere. */
+function RuleCopy({ text, className = 'hover:text-fg' }: { text: string; className?: string }) {
   const [copied, setCopied] = useState(false);
-  const link = hosted ? `${hosted.replace(/\/+$/, '')}/rules#${r.id}` : null;
-  const text = [`${r.id}: ${sentence(r.decision)}`, r.rationale ? `Why: ${sentence(r.rationale)}` : null, link].filter(Boolean).join('\n');
   const copy = async () => {
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {}
   };

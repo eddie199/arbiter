@@ -7,6 +7,10 @@
  * the repo keeps it — the archive, the queue, DECISIONS.md, its picture, requests and comments —
  * and notes the move in .arbiter/renamed.json, so the next publish moves the board's comments too.
  *
+ * With `--merge`, the new name may be one a piece of work already has: this one joins it. Its decisions take
+ * that name, its pictures join that one's by when each was taken, and its comments and requests move to
+ * it. For work started under a new name that turned out to continue an existing change.
+ *
  * Screens (C-0002) aren't renamed here: their id is a number, so a new name never moves a comment.
  */
 
@@ -17,13 +21,13 @@ import { readCandidates } from '../candidates';
 import { readComments, writeComments } from '../comments';
 import { oneLine, readRequests, writeRequests } from '../requests';
 import type { Decision } from '../schema';
-import { addRename, moveHistory, workDir, workId, workSnapshot } from '../work';
+import { addRename, mergePictures, moveHistory, workDir, workId, workSnapshot } from '../work';
 
 export interface RenameResult { exitCode: 0 | 1; output: Record<string, unknown> }
 
 const fail = (errors: string[]): RenameResult => ({ exitCode: 1, output: { status: 'invalid', errors } });
 
-export function renameWork(from: string, to: string, opts: { cwd?: string } = {}): RenameResult {
+export function renameWork(from: string, to: string, opts: { cwd?: string; merge?: boolean } = {}): RenameResult {
   const root = findRoot(opts.cwd);
   const paths = resolvePaths(root);
   const oldName = oneLine(from ?? '');
@@ -47,20 +51,26 @@ export function renameWork(from: string, to: string, opts: { cwd?: string } = {}
   if (!found.length) return fail([`no piece of work called "${oldName}" — name it as its decisions did (npx arbiter rules --archive shows them)`]);
   const current = found[0].trigger;
   if (current === newName) return fail([`"${current}" is already called that`]);
-  // Two pieces of work with one id would be one card with two names. Merging them is a different act.
+  // Two pieces of work with one id would be one card with two names: merging them is asked for by name.
   const taken = newId !== oldId ? all.find((d) => workId(d.trigger) === newId) : undefined;
-  if (taken) return fail([`there's already a piece of work called "${taken.trigger}" — renaming "${current}" onto it would merge the two`]);
+  if (taken && !opts.merge) return fail([`there's already a piece of work called "${taken.trigger}" — renaming "${current}" onto it would merge the two. To merge them: npx arbiter rename "${current}" "${taken.trigger}" --merge`]);
+  // Merged, its decisions take the other's name exactly as that one has it.
+  const target = taken ? taken.trigger : newName;
 
   const wrote: string[] = [];
-  const rename = (ds: Decision[]) => ds.map((d) => (mine(d) ? { ...d, trigger: newName } : d));
+  const rename = (ds: Decision[]) => ds.map((d) => (mine(d) ? { ...d, trigger: target } : d));
   if (archive.some(mine)) { writeArchive(paths, rename(archive)); wrote.push('.arbiter/archive.md'); }
   if (pending.some(mine)) { writePending(paths, rename(pending)); wrote.push('.arbiter/pending.md'); }
   if (active.some(mine)) { writeActive(paths, rename(active)); wrote.push('DECISIONS.md'); }
 
   if (newId !== oldId) {
+    // Merged: its pictures join the other's, in the order they were taken.
+    if (taken) {
+      if (mergePictures(paths, oldId, newId)) wrote.push(`.arbiter/work/${newId}`);
+    }
     // The picture is filed under the id; it follows. Anything already filed under the new id belongs
     // to no decision (that was checked above), so it's a leftover and goes.
-    const shot = workSnapshot(paths, oldId);
+    const shot = taken ? null : workSnapshot(paths, oldId);
     if (shot) {
       const stale = workSnapshot(paths, newId);
       if (stale) fs.rmSync(stale, { force: true });
@@ -69,7 +79,7 @@ export function renameWork(from: string, to: string, opts: { cwd?: string } = {}
       wrote.push(`.arbiter/work/${path.basename(next)}`);
     }
     // Its earlier pictures go with it.
-    if (moveHistory(paths, oldId, newId)) wrote.push(`.arbiter/work/history/${newId}/`);
+    if (!taken && moveHistory(paths, oldId, newId)) wrote.push(`.arbiter/work/history/${newId}/`);
     const requests = readRequests(paths);
     if (requests.some((r) => r.screen === oldId)) {
       writeRequests(paths, requests.map((r) => (r.screen === oldId ? { ...r, screen: newId } : r)));
@@ -87,9 +97,9 @@ export function renameWork(from: string, to: string, opts: { cwd?: string } = {}
   return {
     exitCode: 0,
     output: {
-      status: 'renamed',
+      status: taken ? 'merged' : 'renamed',
       from: current,
-      to: newName,
+      to: target,
       decisions: found.length,
       ...(newId !== oldId ? { card: { from: oldId, to: newId } } : {}),
       wrote,
