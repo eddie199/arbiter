@@ -12,6 +12,8 @@
   --accent: #171717; --accent-fg: #ffffff;
   --ok: #0f7b3f; --warn: #a15c00; --bad: #d4111f; --info: #0060d0;
   --ok-bg: #e8f5ee; --warn-bg: #fff4e0; --bad-bg: #fdecec;
+  /* The brand red: a secondary colour, used sparingly, on Home only (DESIGN.md, "Accent red"). Not --accent, which is black. What waits for you elsewhere is --info. */
+  --brand: #d71921; --brand-fg: #ffffff;
   --radius: 6px;
 }
 /* Dark only when chosen: the page loads light whatever the system says, and the toggle remembers. */
@@ -23,6 +25,8 @@
   --accent: #ededed; --accent-fg: #000000;
   --ok: #3ecf8e; --warn: #f5a623; --bad: #ff6166; --info: #52a8ff;
   --ok-bg: #062b1a; --warn-bg: #2a1c00; --bad-bg: #2a0a0d;
+  /* A touch lighter on black, so a small red mark still reads (4.6:1), with white still legible on it. */
+  --brand: #e5242c; --brand-fg: #ffffff;
 }
 @theme inline {
   --color-bg: var(--bg); --color-surface: var(--surface); --color-surface-2: var(--surface-2);
@@ -30,6 +34,7 @@
   --color-border: var(--border); --color-border-strong: var(--border-strong);
   --color-accent: var(--accent); --color-accent-fg: var(--accent-fg);
   --color-ok: var(--ok); --color-warn: var(--warn); --color-bad: var(--bad); --color-info: var(--info);
+  --color-brand: var(--brand); --color-brand-fg: var(--brand-fg);
   --color-ok-bg: var(--ok-bg); --color-warn-bg: var(--warn-bg); --color-bad-bg: var(--bad-bg);
   --radius-ui: var(--radius);
   --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -40,3 +45,24 @@
 html { scrollbar-gutter: stable; background: var(--bg); }
 body { background: var(--bg); color: var(--fg); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
 :focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+/* Home's tiles (DESIGN.md, "Home"): a light grain over the tile's own colour, stronger on grey than on
+   black or red. Only Home has tiles. */
+.tile-grain::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0 0 0 0 1'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncG type='linear' slope='2.4' intercept='-0.7'/%3E%3CfeFuncB type='linear' slope='2.4' intercept='-0.7'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px; mix-blend-mode: overlay; opacity: var(--grain, .55);
+}
+
+/* Home's motion, and only Home's: tiles settle in reading order, a line rises in, a live dot breathes.
+   All of it is off with reduced motion, where everything simply shows. */
+:root { --ease-out: cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes home-rise { from { opacity: 0; transform: translateY(6px); } }
+@keyframes home-tile { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+@keyframes home-breathe { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .home-rise { animation: home-rise 500ms var(--ease-out) backwards; animation-delay: var(--delay, 0ms); }
+  .home-row { animation: home-rise 400ms var(--ease-out) backwards; animation-delay: calc(var(--r, 0) * 35ms); }
+  .home-tile { animation: home-tile 500ms var(--ease-out) backwards; animation-delay: calc(80ms + var(--i, 0) * 45ms); }
+  .home-breathe { animation: home-breathe 2.4s ease-in-out infinite; }
+}

@@ -10,6 +10,7 @@ import { MultiSelect } from '@/components/ui/multi-select';
 import { Select } from '@/components/ui/select';
 import { ActionItem, ActionMenu, ActionSeparator, barDots, DOTS, dotsTrigger } from '@/components/ui/menu';
 import { Icon } from '@/components/ui/icons';
+import { Chevron } from '@/components/ui/expander';
 import { When } from '@/components/When';
 import { BeforeNow } from './Versions';
 import { CompactIcon, ListIcon, SingleIcon, ViewToggle } from './Toolbar';
@@ -507,7 +508,8 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudge
       <MismatchDialog mine={mine} busy={busy} onClose={close} failed={panel?.kind === 'mismatch' ? panel.failed : null} anyway={asked?.body.as === 'rule' ? 'Make it a rule anyway' : 'Save fix anyway'} onAnyway={() => again({ unverified: true })} />
     </>
   );
-  const arrow = <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className={`shrink-0 text-faint transition-transform ${open ? 'rotate-180' : ''}`}><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  // The board's expander chevron (components/ui/expander.tsx): ⌄, flipped while open.
+  const arrow = <Chevron open={open} className="shrink-0 text-faint" />;
   const toggle = () => setOpen((o) => !o);
 
   // Compact is this card folded to its top line and its change, the top line where List and Single have it.

@@ -22,6 +22,8 @@ export interface BoardDecision {
   date?: string;
   /** A rule still in DECISIONS.md. A rule since retired or replaced has verdict "rule" and this false. */
   active?: boolean;
+  /** The rule this goes against, kept as a one-off exception to it (D-0018). Only when there is one. */
+  against?: string;
 }
 
 /** One picture of a card, when it was taken. A card's versions run oldest first, the current picture last. */
@@ -175,6 +177,21 @@ export interface PendingDecision {
   /** The screen this changed has no picture yet: the command that takes one. */
   picture: { command: string } | null;
 }
+
+/** One worktree's edits not yet committed: lines added and removed, and files changed. */
+export interface GitWorktree {
+  path: string;
+  /** Its folder's name, to tell worktrees apart. */
+  name: string;
+  /** Null: detached, on no branch. */
+  branch: string | null;
+  added: number;
+  removed: number;
+  files: number;
+}
+
+/** What `/api/git` sends Home's Not committed tile: each worktree of the project's repository, the board's own first. Null: not a git repository. */
+export interface GitEdits { worktrees: GitWorktree[] }
 
 /** How the agent hears of what you judge on the board: an agent waiting on the page, the Claude Code hook with your next message, or the next /arbiter. */
 export type Agent = 'waiting' | 'next-message' | 'arbiter';

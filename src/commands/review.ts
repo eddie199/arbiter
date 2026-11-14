@@ -28,6 +28,7 @@ import { liveBoard, reviewState } from '../localboard';
 import { cleanArrangement, writeArrangement } from '../areas';
 import { saveSettings } from '../settings';
 import { renameWork } from './rename';
+import { uncommitted } from '../git-edits';
 import { editChange, promote, restoreDecision } from './decision';
 import { remove } from './remove';
 import { Answer, clearHandoff, Handoff, HANDOFF_NAME, readHandoff, saveAnswer, summarize, withdrawAnswer, withdrawRemoval } from '../handoff';
@@ -186,6 +187,11 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
       }
       if (req.method === 'GET' && url.pathname === '/api/board') {
         json(res, 200, boardData());
+        return;
+      }
+      // Home's Not committed tile: each worktree's edits not yet committed, read from git as it asks.
+      if (req.method === 'GET' && url.pathname === '/api/git') {
+        json(res, 200, uncommitted(root));
         return;
       }
       // DECISIONS.md as it is, for Download on Design rules: the file the agent reads, not a copy of it.

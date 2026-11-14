@@ -7,6 +7,7 @@ const tones: Record<Tone, string> = {
   ok: 'bg-ok-bg text-ok',
   warn: 'bg-warn-bg text-warn',
   bad: 'bg-bad-bg text-bad',
+  /** What's waiting for you, and a decision's size in the Review inbox (Feature, Pattern): blue on the grey pill. */
   info: 'bg-surface-2 text-info',
   /** Decided, beside Waiting's `info`: the same grey pill, in green. */
   done: 'bg-surface-2 text-ok',
@@ -16,5 +17,5 @@ export function Badge({ tone = 'neutral', className, ...props }: React.HTMLAttri
   return <span className={cn('inline-flex h-5 items-center rounded-full px-2 text-[11px] font-medium leading-none', tones[tone], className)} {...props} />;
 }
 
-/** Candidate state → badge tone. */
-export const stateTone = (state: string): Exclude<Tone, 'done'> => (state === 'approved' ? 'ok' : state === 'rejected' || state === 'superseded' ? 'bad' : state === 'in_review' ? 'warn' : 'neutral');
+/** Candidate state → badge tone. Rejected and Replaced are history, not alarms: grey, like Draft. */
+export const stateTone = (state: string): Exclude<Tone, 'done'> => (state === 'approved' ? 'ok' : state === 'in_review' ? 'warn' : 'neutral');

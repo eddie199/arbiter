@@ -13,9 +13,11 @@ import { cn } from './cn';
  *   Meta          13px · regular · muted          who · when · where
  *   Id            12px · mono · muted             D-0017, C-0004
  *   Faint         12px · regular · faint          the least important thing on the line
+ *   BigNumber     48px · light · tight            Home only: the figure a tile is about
  *
  * Categories (dimension, status, verdict) are Badges, Title case. Nothing is uppercase.
- * One exception to two weights: a decision's Change line is medium.
+ * One exception to two weights: a decision's Change line is medium. And one on Home only: its big
+ * numbers are light (300), recorded on the PC as D-0033.
  * Use these instead of writing sizes by hand so every board page reads the same.
  */
 
@@ -52,6 +54,23 @@ export function Id({ className, ...p }: React.HTMLAttributes<HTMLElement>) {
 
 export function Faint({ className, ...p }: React.HTMLAttributes<HTMLElement>) {
   return <span className={cn('text-xs text-faint', className)} {...p} />;
+}
+
+/**
+ * Home only: the figure a tile is about, 48px light, tight and tabular. A unit sits beside it small, in
+ * the tile's quiet colour: `<BigNumber unit="fix">1</BigNumber>`, or `<Unit>` inside for "1h 34m".
+ */
+export function BigNumber({ children, unit, className, ...p }: React.HTMLAttributes<HTMLSpanElement> & { unit?: React.ReactNode }) {
+  return (
+    <span className={cn('block whitespace-nowrap text-[48px] font-light leading-none tracking-[-0.04em] tabular-nums', className)} {...p}>
+      {children}{unit != null ? <Unit>{unit}</Unit> : null}
+    </span>
+  );
+}
+
+/** A big number's unit: 20px, its tracking back to normal, in the tile's quiet colour. */
+export function Unit({ className, ...p }: React.HTMLAttributes<HTMLSpanElement>) {
+  return <span className={cn('ml-0.5 text-[20px] tracking-normal text-[var(--tile-quiet,var(--muted))]', className)} {...p} />;
 }
 
 /** Key/value rows: a fixed label column, values in fg. The shape of every decision and every properties block. */

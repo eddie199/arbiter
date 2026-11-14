@@ -11,6 +11,7 @@ import { href } from './route';
 import { areasOf, Counts, ReviewCount, StateBadge, undecided } from './bits';
 import { Toolbar } from './Toolbar';
 import { Tooltip } from '@/components/ui/tooltip';
+import { Kind } from '@/components/ui/icons';
 
 /**
  * How the Overview orders its changes: by area (each area under its heading, what's waiting first), or
@@ -96,8 +97,9 @@ export function Overview({ data, query, folder }: { data: LocalBoard; query: URL
       {data.pending && data.live && !folder && !query.getAll('section').length ? (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
           <div>
-            <div className="font-semibold tracking-tight">{data.pending} waiting for your review</div>
-            <div className="mt-0.5 text-[13px] text-muted">Decisions the agent made that you haven’t judged yet. Each one joins the board once you have.</div>
+            {/* The inbox's tray beside the count, in the Waiting colour, as on the cards' pills. */}
+            <div className="flex items-center gap-2 font-semibold tracking-tight"><span className="text-info">{Kind.waiting()}</span>{data.pending} waiting for your review</div>
+            <div className="mt-0.5 pl-6 text-[13px] text-muted">Decisions the agent made that you haven’t judged yet. Each one joins the board once you have.</div>
           </div>
           <a href={href('review')} className={buttonClass('secondary', 'md')}>Review them</a>
         </div>

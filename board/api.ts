@@ -1,4 +1,4 @@
-import type { Agent, LocalBoard, ReviewState } from './types';
+import type { Agent, GitEdits, LocalBoard, ReviewState } from './types';
 
 /**
  * The CLI's review server: the same calls the old review page made. Every write is JSON, which
@@ -21,6 +21,16 @@ export const getState = async (): Promise<ReviewState> => {
   const res = await fetch('/api/state');
   if (!res.ok) throw new Error(`the review queue didn't load (${res.status})`);
   return (await res.json()) as ReviewState;
+};
+
+/** Each worktree's edits not yet committed, for Home. Null: not a git repository, or the board has stopped. */
+export const getGit = async (): Promise<GitEdits | null> => {
+  try {
+    const res = await fetch('/api/git');
+    return res.ok ? ((await res.json()) as GitEdits | null) : null;
+  } catch {
+    return null;
+  }
 };
 
 /** This tab, to the server: it checks for changes as this tab, and says goodbye as it closes. */

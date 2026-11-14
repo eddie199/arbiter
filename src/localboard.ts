@@ -23,7 +23,7 @@ import type { Agent, Board, BoardCandidate, BoardDecision, BoardRequest, LocalBo
 
 /** On the board: judged, still in force, and not polish. */
 const shown = (d: Decision) => d.verdict !== 'pending' && d.verdict !== 'retire' && d.level !== 'polish';
-const toDecision = (d: Decision, inForce?: Set<string>): BoardDecision => ({ id: d.id, change: d.change, decision: d.decision, rejected: d.rejected, verdict: d.verdict, dimension: d.dimension, scope: d.scope, ref: d.ref, date: d.date, ...(inForce && d.verdict === 'rule' ? { active: inForce.has(d.id) } : {}) });
+const toDecision = (d: Decision, inForce?: Set<string>): BoardDecision => ({ id: d.id, change: d.change, decision: d.decision, rejected: d.rejected, verdict: d.verdict, dimension: d.dimension, scope: d.scope, ref: d.ref, date: d.date, ...(d.against ? { against: d.against } : {}), ...(inForce && d.verdict === 'rule' ? { active: inForce.has(d.id) } : {}) });
 
 export interface BoardOptions {
   /** Where the page finds pictures: the review server's `/snapshots/`, or an export's `snapshots/` folder. */

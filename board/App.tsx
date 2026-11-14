@@ -13,6 +13,7 @@ import { Overview } from './Overview';
 import { Change } from './Change';
 import { Rules } from './Rules';
 import { Preferences } from './Preferences';
+import { Home } from './Home';
 import { ReviewPage, type Results } from './Review';
 import { AreasNav, folderIn, layoutOf } from './Areas';
 
@@ -26,7 +27,9 @@ import { AreasNav, folderIn, layoutOf } from './Areas';
  * up within seconds, and there's nothing to finish. Close the tab when you're done with it.
  */
 export function App({ initial }: { initial: LocalBoard }) {
-  const route = useRoute();
+  const asked = useRoute();
+  // Home is the live board's; an exported copy opens on the Overview.
+  const route: Route = asked.page === 'home' && !initial.live ? { ...asked, page: 'overview' } : asked;
   const [data, setData] = useState(initial);
   const [state, setState] = useState<ReviewState | null>(null);
   // What was judged in this sitting stays on the page, collapsed, until the next visit.
@@ -107,6 +110,7 @@ export function App({ initial }: { initial: LocalBoard }) {
     page = c ? <Change key={c.id} data={data} c={c} at={at} kinds={[...route.query.getAll('type'), ...route.query.getAll('kind')]} refresh={refresh} /> : <NotHere />;
   } else if (route.page === 'rules') page = <Rules data={data} at={at} cap={state?.cap} refresh={refresh} query={route.query} />;
   else if (route.page === 'preferences') page = live && data.settings ? <Preferences data={data} refresh={refresh} /> : <NotHere />;
+  else if (route.page === 'home') page = <Home data={data} waiting={waiting} />;
   else page = <Overview data={data} query={route.query} folder={folder} />;
 
   const nav = { route, data, sections, rules, waiting, refresh };
@@ -137,6 +141,7 @@ export function App({ initial }: { initial: LocalBoard }) {
 }
 
 function titleOf(route: Route, data: LocalBoard): string {
+  if (route.page === 'home') return 'Home';
   if (route.page === 'review') return 'Review inbox';
   if (route.page === 'rules') return 'Design rules';
   if (route.page === 'preferences') return 'Preferences';
@@ -172,9 +177,9 @@ function TopBar({ data, waiting, page, areas, updated, stopped, onRefresh }: { d
     <div className="sticky top-0 z-30 border-b border-border bg-bg/90 backdrop-blur">
       <div className="mx-auto flex h-12 max-w-6xl items-center justify-between px-5">
         <div className="flex items-center gap-3">
-          <a href={href('overview')} className="flex items-center"><Lockup size={18} /></a>
+          <a href={href('home')} className="flex items-center"><Lockup size={18} /></a>
           <span className="hidden text-faint sm:inline">/</span>
-          <a href={href('overview')} className="hidden text-muted hover:text-fg sm:inline">{data.board.project}</a>
+          <a href={href('home')} className="hidden text-muted hover:text-fg sm:inline">{data.board.project}</a>
           {data.live
             ? <Tooltip label="Only you see this board. It runs on your computer, from this project’s files."><Badge className="cursor-default">Local</Badge></Tooltip>
             : <Tooltip label={`A copy of this project’s design decisions${data.board.exported ? `, as of ${fullDate(data.board.exported)}` : ''}. It doesn’t update, and feedback goes to whoever sent it.`}><Badge className="cursor-default">Read-only Copy</Badge></Tooltip>}
@@ -272,6 +277,7 @@ function BoardHelp({ data, page, areas }: { data: LocalBoard; page: Route['page'
   const { open, setOpen, box } = usePop();
   const live = data.live;
   const parts = [
+    ...(live ? [{ href: href('home'), icon: HomeIcon, name: 'Home', on: page === 'home', says: 'Your build summary: what’s waiting, what you decided lately, this week’s changes, and the latest updates.' }] : []),
     { href: href('overview'), icon: OverviewIcon, name: 'Overview', on: page === 'overview', says: `Every change, with its picture. Open one for the decisions behind it and what was turned down.${areas ? ' Areas group them by part of the product.' : ''}` },
     ...(live || data.board.rules?.length ? [{ href: href('rules'), icon: RulesIcon, name: 'Design rules', on: page === 'rules', says: live ? 'The rules you’ve saved in DECISIONS.md. Everything new follows them.' : 'The rules this project’s designs follow.' }] : []),
     ...(live ? [{ href: href('review'), icon: ReviewIcon, name: 'Review inbox', on: page === 'review', says: 'What the agent decided that you haven’t judged yet. Confirm it, make it a rule, or fix it.' }] : []),
@@ -360,6 +366,8 @@ function Command({ text, className }: { text: string; className?: string }) {
 }
 
 const KEY = 'arbiter-rail';
+/** Home: a house. */
+const HomeIcon = <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><path d="M1.5 6.2 7 1.8l5.5 4.4v6H8.6V9H5.4v3.2H1.5z" /></svg>;
 const OverviewIcon = <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true" className="shrink-0"><rect x="1" y="1" width="5" height="7" rx="1" /><rect x="8" y="1" width="5" height="4" rx="1" /><rect x="8" y="7" width="5" height="6" rx="1" /><rect x="1" y="10" width="5" height="3" rx="1" /></svg>;
 const RulesIcon = <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true" className="shrink-0"><path d="M4.5 3.5h7.5M4.5 7h7.5M4.5 10.5h7.5" /><circle cx="2" cy="3.5" r=".6" fill="currentColor" /><circle cx="2" cy="7" r=".6" fill="currentColor" /><circle cx="2" cy="10.5" r=".6" fill="currentColor" /></svg>;
 /** What's waiting for you: a tray. */
@@ -381,6 +389,7 @@ function Rail({ route, data, sections, rules, waiting, refresh }: Nav) {
   const toggle = (k: string) => setClosed((c) => { const n = { ...c, [k]: !c[k] }; try { localStorage.setItem(KEY, JSON.stringify(n)); } catch {} return n; });
 
   const groups: { key: string; title?: string; items: Item[] }[] = [
+    { key: 'home', items: data.live ? [{ href: href('home'), label: 'Home', icon: HomeIcon, on: route.page === 'home' }] : [] },
     { key: 'all', items: [{ href: href('overview', { view }), label: 'Overview', hint: String(data.board.candidates.length), icon: OverviewIcon, on: onOverview && !section && !route.query.get('folder') }] },
     { key: 'sections', title: 'Areas', items: sections.map((s) => ({ href: href('overview', { section: s.name, view }), label: s.name, hint: String(s.count), on: onOverview && section === s.name })) },
     { key: 'rules', items: rules ? [{ href: href('rules'), label: 'Design rules', hint: String(rules), icon: RulesIcon, on: route.page === 'rules' }] : [] },
@@ -400,7 +409,7 @@ function Rail({ route, data, sections, rules, waiting, refresh }: Nav) {
           const folded = !!g.title && !!closed[g.key];
           const activeInside = g.items.some((it) => it.on);
           return (
-            <div key={g.key} className={!i ? '' : g.key === 'sections' ? 'mt-2' /* Areas belongs under Overview */ : 'mt-4'}>
+            <div key={g.key} className={!i ? '' : g.key === 'all' ? 'mt-0.5' /* Overview sits right under Home */ : g.key === 'sections' ? 'mt-2' /* Areas belongs under Overview */ : 'mt-4'}>
               {g.title ? (
                 <button type="button" onClick={() => toggle(g.key)} aria-expanded={!folded} className="group mb-1 flex h-7 w-full items-center gap-1 rounded-ui px-2.5 text-[12px] text-faint hover:bg-surface-2 hover:text-muted">
                   <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className={`transition-transform ${folded ? '' : 'rotate-90'}`}><path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -436,6 +445,7 @@ function Chips({ route, data, sections, rules, waiting }: Nav) {
   const chip = (on: boolean) => `shrink-0 rounded-full border px-3 py-1 text-[13px] ${on ? 'border-fg bg-fg text-bg' : 'border-border text-muted hover:border-border-strong hover:text-fg'}`;
   return (
     <div className="-mx-5 mb-5 flex gap-2 overflow-x-auto px-5 pb-1 md:hidden [scrollbar-width:none]">
+      {data.live ? <a href={href('home')} className={chip(route.page === 'home')}>Home</a> : null}
       <a href={href('overview')} className={chip(onBoard && !section && !route.query.get('folder'))}>Overview</a>
       {layoutOf(sections.map((s) => s.name), data.arrangement).filter((e) => data.live || e.kind !== 'folder' || e.areas.some((a) => sections.some((s) => s.name === a))).map((e) => e.kind === 'folder'
         ? <a key={`f-${e.id}`} href={href('overview', { folder: e.id })} className={chip(onBoard && route.query.get('folder') === e.id)}>{e.name} <span className="opacity-60">{e.areas.reduce((n, a) => n + (sections.find((s) => s.name === a)?.count ?? 0), 0)}</span></a>

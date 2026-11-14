@@ -10,6 +10,7 @@ It started as the team board's pages, ported from the site repo (`hosted/local`,
 |---|---|
 | `main.tsx` | Loads the board from the CLI (`/api/board`), or from `window.__ARBITER_BOARD__` in an exported copy |
 | `App.tsx` | The shell: top bar, rail, the phone chip row, the footer |
+| `Home.tsx` | Home, live board only: the build summary in tiles, and Latest updates. Not committed reads git through `/api/git` (`src/git-edits.ts`) |
 | `Overview.tsx`, `Toolbar.tsx` | Overview: every piece of work as a card or a row |
 | `Areas.tsx` | Areas in the rail, with the folders you make: name, drag, reorder; saved in `.arbiter/areas.json` |
 | `Change.tsx`, `Comments.tsx` | One change. Comments are read-only: the team writes them on the team board |
@@ -17,10 +18,10 @@ It started as the team board's pages, ported from the site repo (`hosted/local`,
 | `Rules.tsx` | Design rules, with Copy, Edit and Remove on each rule |
 | `Versions.tsx` | A change's earlier pictures: the version row, Compare (before and after), Before and Now in the inbox, and decisions grouped by version |
 | `Preferences.tsx` | Preferences, live board only: check-ins, what gets recorded, rules and pictures; saved in `arbiter.json` (`src/settings.ts`) |
-| `route.ts` | Pages in the hash (`#/`, `#/c/C-0001`, `#/rules`, `#/preferences`), so it works from a file on disk too |
+| `route.ts` | Pages in the hash (`#/` Home, `#/overview`, `#/c/C-0001`, `#/rules`, `#/preferences`), so it works from a file on disk too. An exported copy has no Home: its `#/` is the Overview |
 | `api.ts` | The calls to the CLI's review server |
 | `types.ts` | What the CLI sends. The shapes themselves are in `src/board-types.ts`, shared with the CLI |
-| `components/`, `lib/board.ts` | The board's own copies of the parts it started with: type, buttons, badges, dropdowns, tooltips, the screenshot viewer, the area and state words |
+| `components/`, `lib/board.ts` | The board's own copies of the parts it started with: type, buttons, badges, dropdowns, tooltips, the screenshot viewer, the area and state words. Since: Home's tiles (`ui/tile.tsx`), list rows (`ui/list-row.tsx`) and expanders (`ui/expander.tsx`) |
 | `globals.css`, `styles.css` | Tokens, dark mode, base type, and Geist from the fonts folder the CLI serves |
 | `DESIGN.md` | The board's design notes |
 
