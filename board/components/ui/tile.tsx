@@ -30,7 +30,7 @@ export function TileGrid({ className, ...p }: React.HTMLAttributes<HTMLDivElemen
 export function Tile({ tone = 'grey', cols = 1, rows = 1, i = 0, spill, className, style, ...p }: React.ComponentProps<'div'> & { tone?: Tone; cols?: 1 | 2; rows?: 1 | 2; i?: number; spill?: boolean }) {
   return (
     <div
-      style={{ gridColumn: `span ${cols}`, gridRow: `span ${rows}`, ['--i' as string]: i, ...style }}
+      style={{ gridColumn: cols > 1 ? `span ${cols}` : undefined, gridRow: rows > 1 ? `span ${rows}` : undefined, ['--i' as string]: i, ...style }}
       className={cn('tile-grain home-tile relative flex flex-col justify-between rounded-[22px] p-4', spill ? 'overflow-visible' : 'overflow-hidden', TONES[tone], className)}
       {...p}
     />

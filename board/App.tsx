@@ -14,6 +14,7 @@ import { Change } from './Change';
 import { Rules } from './Rules';
 import { Preferences } from './Preferences';
 import { Home } from './Home';
+import { HomeStart } from './HomeStart';
 import { ReviewPage, type Results } from './Review';
 import { AreasNav, folderIn, layoutOf } from './Areas';
 
@@ -110,7 +111,8 @@ export function App({ initial }: { initial: LocalBoard }) {
     page = c ? <Change key={c.id} data={data} c={c} at={at} kinds={[...route.query.getAll('type'), ...route.query.getAll('kind')]} refresh={refresh} /> : <NotHere />;
   } else if (route.page === 'rules') page = <Rules data={data} at={at} cap={state?.cap} refresh={refresh} query={route.query} />;
   else if (route.page === 'preferences') page = live && data.settings ? <Preferences data={data} refresh={refresh} /> : <NotHere />;
-  else if (route.page === 'home') page = <Home data={data} waiting={waiting} />;
+  // `look=start…`: Home's onboarding, designs in progress (HomeStart.tsx), shown only at these addresses for now.
+  else if (route.page === 'home') page = route.query.get('look')?.startsWith('start') ? <HomeStart look={route.query.get('look')!} /> : <Home data={data} waiting={waiting} />;
   else page = <Overview data={data} query={route.query} folder={folder} />;
 
   const nav = { route, data, sections, rules, waiting, refresh };

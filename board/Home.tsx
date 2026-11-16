@@ -409,7 +409,7 @@ function WeekTile({ events, areaOf }: { events: Ev[]; areaOf: (c: BoardCandidate
  * Not committed: this branch's edits not yet committed, read from git every few seconds while the tab is
  * in view. The branch opens a menu of the repository's other worktrees. Not a git repository: no tile.
  */
-function NotCommittedTile() {
+export function NotCommittedTile({ i = 5 }: { i?: number }) {
   const [git, setGit] = useState<GitEdits | null | undefined>(undefined);
   const [pick, setPick] = useState(0);
   useEffect(() => {
@@ -423,16 +423,16 @@ function NotCommittedTile() {
     return () => { stop = true; clearInterval(t); document.removeEventListener('visibilitychange', back); };
   }, []);
   if (!git?.worktrees.length) return null;
-  return <NotCommittedBody git={git} pick={Math.min(pick, git.worktrees.length - 1)} onPick={setPick} />;
+  return <NotCommittedBody git={git} i={i} pick={Math.min(pick, git.worktrees.length - 1)} onPick={setPick} />;
 }
 
-function NotCommittedBody({ git, pick, onPick }: { git: GitEdits; pick: number; onPick: (i: number) => void }) {
+function NotCommittedBody({ git, i, pick, onPick }: { git: GitEdits; i: number; pick: number; onPick: (i: number) => void }) {
   const wt = git.worktrees[pick];
   const clean = !wt.files;
-  const big = useCountUp(wt.added, 5);
+  const big = useCountUp(wt.added, i);
   const branch = wt.branch ?? `${wt.name} (no branch)`;
   return (
-    <Tile i={5}>
+    <Tile i={i}>
       <div className="min-w-0">
         <TileTitle tip="Edits on this branch not yet committed to git: lines added and removed, and files changed.">
           {clean ? null : <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true" />}

@@ -66,3 +66,18 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-sans); -
   .home-tile { animation: home-tile 500ms var(--ease-out) backwards; animation-delay: calc(80ms + var(--i, 0) * 45ms); }
   .home-breathe { animation: home-breathe 2.4s ease-in-out infinite; }
 }
+
+/* Home's onboarding, Keep track: before and after, wiped. The divider sweeps across twice as the page
+   opens and rests in the middle; with reduced motion it simply sits there. */
+/* --x is where the pointer is over the card, set while it moves there; without it, the middle. */
+.home-wipe { clip-path: inset(0 0 0 var(--x, 50%)); transition: clip-path 160ms var(--ease-out); }
+.home-wipe-line { left: var(--x, 50%); transition: left 160ms var(--ease-out); }
+@media (prefers-reduced-motion: reduce) { .home-wipe, .home-wipe-line { transition: none; } }
+/* Build: a request typed out into the chat's box while you point at the card. */
+@keyframes home-type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes home-wipe { 0%, 100% { clip-path: inset(0 0 0 50%); } 30% { clip-path: inset(0 0 0 22%); } 70% { clip-path: inset(0 0 0 78%); } }
+@keyframes home-wipe-line { 0%, 100% { left: 50%; } 30% { left: 22%; } 70% { left: 78%; } }
+@media (prefers-reduced-motion: no-preference) {
+  .home-wipe { animation: home-wipe 3.6s ease-in-out 700ms 2; }
+  .home-wipe-line { animation: home-wipe-line 3.6s ease-in-out 700ms 2; }
+}

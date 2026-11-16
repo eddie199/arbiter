@@ -22,6 +22,8 @@ export function parse(hash: string): Route {
   const parts = path.split('/').filter(Boolean);
   if (parts[0] === 'c' && parts[1]) return { page: 'change', id: decodeURIComponent(parts[1]), query };
   if (parts[0] === 'rules' || parts[0] === 'review' || parts[0] === 'preferences' || parts[0] === 'overview') return { page: parts[0], id: null, query };
+  // `#/home` is Home too, for Home with a query: `#/home?look=start` previews a design in progress.
+  if (parts[0] === 'home') return { page: 'home', id: null, query };
   return { page: !parts.length && !qs ? 'home' : 'overview', id: null, query };
 }
 
