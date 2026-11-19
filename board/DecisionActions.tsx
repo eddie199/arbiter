@@ -8,7 +8,7 @@ import { FullDialog, OverlapDialog, type Overlap, type RuleLine } from './RuleDi
 import { go, href } from './route';
 
 /** A decision as the change page has it. `active` is false for a rule since retired or replaced. */
-export interface ActionDecision { id: string; change: string | null; decision: string; verdict: string; active?: boolean }
+export interface ActionDecision { id: string; change: string | null; decision: string; verdict: string; active?: boolean; against?: { id: string } | null }
 /** What a removal on this page did: a rule retired, with why, or a decision taken out of the record. */
 export interface Removal { d: ActionDecision; kind: 'rule' | 'decision'; why?: string }
 
@@ -104,7 +104,8 @@ export function DecisionActions({ d, copyText, last, onRemoved, refresh }: { d: 
         <div className="mt-2 flex items-center gap-3 text-[12px] text-faint opacity-0 transition-opacity focus-within:opacity-100 group-hover/decision:opacity-100 group-focus-within/decision:opacity-100">
           <button type="button" onClick={() => void copy()} className="hover:text-fg">{copied ? 'Copied' : 'Copy'}</button>
           <button type="button" onClick={() => open('edit')} className="hover:text-fg">Edit</button>
-          {!rule && d.verdict !== 'rule' ? <button type="button" disabled={busy} onClick={() => void promote()} className="hover:text-ok">Make it a rule</button> : null}
+          {/* Not on an exception: as a rule it would say the opposite of the rule it's an exception to. */}
+          {!rule && d.verdict !== 'rule' && !d.against ? <button type="button" disabled={busy} onClick={() => void promote()} className="hover:text-ok">Make it a rule</button> : null}
           {/* A retired rule stays on the record: its retirement points at it. */}
           {d.verdict === 'rule' && d.active === false ? null : <button type="button" onClick={() => open('remove')} className="hover:text-bad">Remove</button>}
         </div>

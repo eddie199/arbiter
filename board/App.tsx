@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { areasOf, PLANS } from './bits';
+import { areasOf, overviewCards, PLANS } from './bits';
 import { clock, dayWords, fullDate } from '@/components/When';
 import { Lockup } from '@/components/ui/mark';
 import { buttonClass } from '@/components/ui/button';
@@ -83,7 +83,9 @@ export function App({ initial }: { initial: LocalBoard }) {
   const cands = data.board.candidates;
   const areaOf = areasOf(data);
   const names = [...new Set(cands.map(areaOf))];
-  const sections = names.length === 1 ? [] : names.map((n) => ({ name: n, count: cands.filter((c) => areaOf(c) === n).length }));
+  // Counted as the Overview shows them: a set of options is one.
+  const shown = overviewCards(cands, areaOf);
+  const sections = names.length === 1 ? [] : names.map((n) => ({ name: n, count: shown.filter((c) => areaOf(c) === n).length }));
   const rules = data.board.rules?.length ?? 0;
   const at = route.query.get('at');
   // A folder of areas you made in the side nav, when the Overview is showing one.
@@ -381,7 +383,7 @@ function Rail({ route, data, sections, rules, waiting, refresh }: Nav) {
   const toggle = (k: string) => setClosed((c) => { const n = { ...c, [k]: !c[k] }; try { localStorage.setItem(KEY, JSON.stringify(n)); } catch {} return n; });
 
   const groups: { key: string; title?: string; items: Item[] }[] = [
-    { key: 'all', items: [{ href: href('overview', { view }), label: 'Overview', hint: String(data.board.candidates.length), icon: OverviewIcon, on: onOverview && !section && !route.query.get('folder') }] },
+    { key: 'all', items: [{ href: href('overview', { view }), label: 'Overview', hint: String(overviewCards(data.board.candidates, areasOf(data)).length), icon: OverviewIcon, on: onOverview && !section && !route.query.get('folder') }] },
     { key: 'sections', title: 'Areas', items: sections.map((s) => ({ href: href('overview', { section: s.name, view }), label: s.name, hint: String(s.count), on: onOverview && section === s.name })) },
     { key: 'rules', items: rules ? [{ href: href('rules'), label: 'Design rules', hint: String(rules), icon: RulesIcon, on: route.page === 'rules' }] : [] },
     {

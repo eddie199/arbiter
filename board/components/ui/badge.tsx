@@ -13,8 +13,6 @@ const tones: Record<Tone, string> = {
 };
 
 export function Badge({ tone = 'neutral', className, ...props }: React.HTMLAttributes<HTMLSpanElement> & { tone?: Tone }) {
-  return <span className={cn('inline-flex h-5 items-center rounded-full px-2 text-[11px] font-medium leading-none', tones[tone], className)} {...props} />;
+  return <span className={cn('inline-flex h-5 items-center rounded-full px-2 text-[12px] font-medium leading-none', tones[tone], className)} {...props} />;
 }
 
-/** Candidate state → badge tone. */
-export const stateTone = (state: string): Exclude<Tone, 'done'> => (state === 'approved' ? 'ok' : state === 'rejected' || state === 'superseded' ? 'bad' : state === 'in_review' ? 'warn' : 'neutral');

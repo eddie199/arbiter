@@ -19,11 +19,16 @@ import { readLinkOrNull } from './hosted';
 import { missingPictures } from './pictures';
 import { readArrangement } from './areas';
 import { settingsOf } from './settings';
-import type { Agent, Board, BoardCandidate, BoardDecision, BoardRequest, LocalBoard, PendingDecision, QueuedLine, ReviewState } from './board-types';
+import { checkable, verify } from './verify';
+import type { Agent, Board, BoardCandidate, BoardDecision, BoardRequest, CodeCheck, LocalBoard, PendingDecision, QueuedLine, ReviewState } from './board-types';
 
 /** On the board: judged, still in force, and not polish. */
 const shown = (d: Decision) => d.verdict !== 'pending' && d.verdict !== 'retire' && d.level !== 'polish';
-const toDecision = (d: Decision, inForce?: Set<string>): BoardDecision => ({ id: d.id, change: d.change, decision: d.decision, rejected: d.rejected, verdict: d.verdict, dimension: d.dimension, scope: d.scope, ref: d.ref, date: d.date, ...(inForce && d.verdict === 'rule' ? { active: inForce.has(d.id) } : {}) });
+/** A decision as the board shows it. An exception carries the rule it goes against, found among every rule ever recorded, retired ones too. */
+const toDecision = (d: Decision, inForce?: Set<string>, rules?: Map<string, Decision>): BoardDecision => {
+  const rule = d.against && d.verdict !== 'rule' ? rules?.get(d.against) : undefined;
+  return { id: d.id, change: d.change, decision: d.decision, rejected: d.rejected, verdict: d.verdict, dimension: d.dimension, scope: d.scope, ref: d.ref, date: d.date, ...(inForce && d.verdict === 'rule' ? { active: inForce.has(d.id) } : {}), ...(rule ? { against: { id: rule.id, decision: rule.decision, rationale: rule.rationale } } : {}) };
+};
 
 export interface BoardOptions {
   /** Where the page finds pictures: the review server's `/snapshots/`, or an export's `snapshots/` folder. */
@@ -42,6 +47,8 @@ export function boardOf(paths: Paths, opts: BoardOptions): Board {
   const known = readCandidates(paths);
   // Which rules are still in force, so a retired one doesn't read as a rule on its change's page.
   const inForce = new Set(readActive(paths).map((d) => d.id));
+  const archive = readArchive(paths);
+  const ruleById = new Map(archive.filter((d) => d.verdict === 'rule').map((d) => [d.id, d]));
   const candidates: BoardCandidate[] = known.map((c) => ({
     id: c.id,
     name: c.name,
@@ -54,11 +61,10 @@ export function boardOf(paths: Paths, opts: BoardOptions): Board {
     supersededBy: c.supersededBy,
     url: null,
     snapshot: c.snapshot && fs.existsSync(path.join(candidatesDir(paths), c.snapshot)) ? `${opts.pictures}${c.snapshot}` : null,
-    decisions: decisionsFor(paths, c.id).filter(shown).map((d) => toDecision(d, inForce)),
+    decisions: decisionsFor(paths, c.id).filter(shown).map((d) => toDecision(d, inForce, ruleById)),
   }));
   // Screenless decisions: one card per piece of work.
   const ids = new Set(known.map((c) => c.id));
-  const archive = readArchive(paths);
   const loose = archive.filter((d) => shown(d) && (!d.candidate || !ids.has(d.candidate)));
   const byWork = new Map<string, Decision[]>();
   for (const d of loose) byWork.set(d.trigger, [...(byWork.get(d.trigger) ?? []), d]);
@@ -77,7 +83,7 @@ export function boardOf(paths: Paths, opts: BoardOptions): Board {
       id, name: trigger, feature: areas.get(trigger.toLowerCase()) ?? null, state: 'recorded', work: true,
       author: last.author, date: last.date, reason: null, notes: '', supersededBy: null, url: null,
       snapshot: shot ? `${opts.pictures}${path.basename(shot)}` : null,
-      decisions: ds.filter(shown).map((d) => toDecision(d, inForce)),
+      decisions: ds.filter(shown).map((d) => toDecision(d, inForce, ruleById)),
       ...versionsOf(paths, id, opts.pictures),
     });
   }
@@ -139,6 +145,17 @@ function beforeOf(all: { file: string; date: string }[], date: string): { src: s
   return v ? { src: `/snapshots/${v.file}`, date: v.date } : null;
 }
 
+/**
+ * What the files a waiting decision names say now, read again each time the inbox loads: each check that
+ * fails, for the card's Code Clash. Null when they match, or it names none. A fix made since clears it, and
+ * code broken since shows here instead of only when it's judged.
+ */
+function codeClashOf(root: string, d: Decision): CodeCheck[] | null {
+  if (!checkable(d.files ?? [], d.expect ?? null)) return null;
+  const failed = verify(root, d.files ?? [], d.expect ?? null).checks.filter((c) => !c.ok);
+  return failed.length ? failed.map(({ ok: _ok, ...c }) => c) : null;
+}
+
 export function reviewState(paths: Paths, agent: Agent): ReviewState {
   const candidates = readCandidates(paths);
   const byId = new Map(candidates.map((c) => [c.id, c]));
@@ -159,8 +176,9 @@ export function reviewState(paths: Paths, agent: Agent): ReviewState {
     return {
       ...d,
       card,
-      // The rule a clash is with, while it's still in force: the page offers Follow / Replace / Keep as exception.
-      againstRule: d.against ? active.filter((r) => r.id === d.against).map((r) => ({ id: r.id, decision: r.decision }))[0] ?? null : null,
+      // The rule a clash is with, while it's still in force: the page offers Keep as exception / Follow / Make this the rule. Its reason shows on hover.
+      againstRule: d.against ? active.filter((r) => r.id === d.against).map((r) => ({ id: r.id, decision: r.decision, rationale: r.rationale }))[0] ?? null : null,
+      codeClash: codeClashOf(paths.root, d),
       candidateName: d.candidate ? byId.get(d.candidate)?.name ?? null : null,
       // Its card's picture, so what changed is in view where it's judged.
       snapshotUrl: shotOf(card),

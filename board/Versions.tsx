@@ -140,7 +140,9 @@ export function VersionGroups<D>({ groups, versions, onShow, item }: { groups: {
               <span className="ml-auto text-[12px] text-faint"><button type="button" onClick={() => onShow(g.version!)} className="hover:text-fg hover:underline">Show version</button></span>
             ) : null}
           </div>
-          {g.decisions.length ? <ol className="divide-y divide-border border-t border-border">{g.decisions.map(item)}</ol> : <p className="border-t border-border py-3 text-[13px] text-faint">No new decisions at this version.</p>}
+          {/* A hairline under the heading, none between its decisions: the version is what groups them
+              (D-0034, an exception to D-0017's hairline-divided list, for version sections only). */}
+          {g.decisions.length ? <ol className="border-t border-border">{g.decisions.map(item)}</ol> : <p className="border-t border-border py-3 text-[13px] text-faint">No new decisions at this version.</p>}
         </div>
       ))}
     </div>

@@ -115,3 +115,14 @@ function post(p: number, route: string, body: unknown): Promise<unknown> {
     req.end(JSON.stringify(body));
   });
 }
+
+test('an exception carries the rule it goes against to the board, with the rule’s reason', () => {
+  const cwd = tmp();
+  const o = { cwd, author: 'test' };
+  record(input({ verdict: 'rule', trigger: 'Privacy', decision: 'Settings save straight away', change: 'Privacy switches save as you flip them', rationale: 'Nothing to forget to save', scope: 'pattern:settings-autosave', dimension: 'interaction' }), o);
+  record(input({ verdict: 'accept', against: 'D-0001', call: 'asked', trigger: 'Billing', decision: 'Changing plan waits for a Confirm button', change: 'Changing plan waits for a Confirm button', scope: 'file:app/billing.tsx', dimension: 'interaction' }), o);
+  const board = boardOf(resolvePaths(cwd), { pictures: 'snapshots/', includeRules: false, queued: [] });
+  const of = (id: string) => board.candidates.flatMap((c) => c.decisions).find((d) => d.id === id)!;
+  assert.deepEqual(of('D-0002').against, { id: 'D-0001', decision: 'Settings save straight away', rationale: 'Nothing to forget to save' });
+  assert.equal(of('D-0001').against, undefined, 'a rule is no exception');
+});

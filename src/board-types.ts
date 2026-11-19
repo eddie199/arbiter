@@ -22,6 +22,8 @@ export interface BoardDecision {
   date?: string;
   /** A rule still in DECISIONS.md. A rule since retired or replaced has verdict "rule" and this false. */
   active?: boolean;
+  /** The rule it's an exception to: what it goes against, kept here only. Its reason shows on hover. */
+  against?: { id: string; decision: string; rationale?: string } | null;
 }
 
 /** One picture of a card, when it was taken. A card's versions run oldest first, the current picture last. */
@@ -148,12 +150,20 @@ export interface LocalComment {
   board_version?: string | null;
 }
 
+/**
+ * One check of a file a decision names that failed: the file isn't there or is outside the project
+ * (`exists`), doesn't have what it should (`present`), or still has what it shouldn't (`absent`, with the
+ * text a pattern matched as `found`).
+ */
+export interface CodeCheck { kind: 'exists' | 'present' | 'absent'; file: string; needle?: string; detail?: string; found?: string }
+
 /** A decision waiting for review, as `/api/state` sends it. */
 export interface PendingDecision {
   id: string;
   level: 'feature' | 'pattern' | 'polish';
   dimension: string;
-  verified?: boolean | null;
+  /** What the files it names say now, read again each time the inbox loads: each check that fails, for its Code Clash. Null when they match, or it names none. */
+  codeClash: CodeCheck[] | null;
   author: string;
   date: string;
   change: string | null;
@@ -166,8 +176,8 @@ export interface PendingDecision {
   candidate?: string | null;
   /** The card it waits on: its screen, or its piece of work. */
   card: string;
-  /** The rule it goes against, while that rule is in force: Follow, Replace or Keep as exception. */
-  againstRule: { id: string; decision: string } | null;
+  /** The rule it goes against, while that rule is in force: Keep as exception, Follow it, or Make this the rule. */
+  againstRule: { id: string; decision: string; rationale?: string } | null;
   candidateName: string | null;
   snapshotUrl: string | null;
   /** The picture from before this decision, when the card's picture was retaken after it: Before beside Now. */

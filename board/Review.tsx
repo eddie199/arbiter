@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DIMENSION_LABEL, scopeWords, sentence } from '@/lib/board';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,12 +12,13 @@ import { ActionItem, ActionMenu, ActionSeparator, barDots, DOTS, dotsTrigger } f
 import { Icon } from '@/components/ui/icons';
 import { When } from '@/components/When';
 import { BeforeNow } from './Versions';
+import { CHIP, ClashBadge } from './bits';
 import { CompactIcon, ListIcon, SingleIcon, ViewToggle } from './Toolbar';
 import type { Agent, PendingDecision, ReviewState } from './types';
 import { errorsOf, post, whenAgent, type Reply } from './api';
 import { go, href } from './route';
 import { Tooltip } from '@/components/ui/tooltip';
-import { FullDialog, MismatchDialog, OverlapDialog, type FailedCheck, type Overlap, type RuleLine } from './RuleDialogs';
+import { clashWords, FullDialog, MismatchDialog, OverlapDialog, type FailedCheck, type Overlap, type RuleLine } from './RuleDialogs';
 
 /** What happened to an item judged in this sitting: it stays in place, collapsed to one line. */
 export interface Result { item: PendingDecision; kind: 'ok' | 'skip'; text: string }
@@ -30,7 +31,6 @@ const SORTS: { value: Sort; label: string; hint?: string }[] = [
   { value: 'old', label: 'Oldest' },
   { value: 'big', label: 'Biggest', hint: 'Clashes, then features' },
 ];
-const VIEW_KEY = 'arbiter-review-view';
 type View = 'list' | 'compact' | 'single';
 const VIEWS = [
   { value: 'compact' as const, label: 'Compact', icon: CompactIcon },
@@ -40,10 +40,10 @@ const VIEWS = [
 /** Typing in a box, or in a dialog like the picture's viewer: the keys are its, not the page's. */
 const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || !!t.closest('[role="dialog"]'));
 
-/** Biggest first: a clash with a rule needs a call made, then a feature outweighs a pattern, and polish comes last. */
-const weight = (d: PendingDecision) => (d.againstRule ? 0 : d.level === 'feature' ? 1 : d.level === 'pattern' ? 2 : 3);
-/** How near the cap on rules has to be before a card says so, beside Make it a rule. */
-const RULES_NEAR = 5;
+/** A clash with a rule or with the code: checked one by one, never in Confirm all or Skip all. */
+const clash = (d: PendingDecision) => !!d.againstRule || !!d.codeClash;
+/** Biggest first: a clash needs a call made, then a feature outweighs a pattern, and polish comes last. */
+const weight = (d: PendingDecision) => (clash(d) ? 0 : d.level === 'feature' ? 1 : d.level === 'pattern' ? 2 : 3);
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 /**
@@ -58,8 +58,9 @@ const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 export function ReviewPage({ state, at, area, areaOfCard, results, onJudged, onUndone, refresh }: { state: ReviewState; at: string | null; area: string[]; areaOfCard: (card: string) => string | null; results: Results; onJudged: (r: Results) => void; onUndone: (id: string) => void; refresh: () => Promise<void> }) {
   const [sort, setSort] = useState<Sort>(() => { try { const s = localStorage.getItem(SORT_KEY); return s === 'old' || s === 'big' ? s : 'new'; } catch { return 'new'; } });
   const pickSort = (s: Sort) => { setSort(s); try { localStorage.setItem(SORT_KEY, s); } catch {} };
-  const [view, setView] = useState<View>(() => { try { const v = localStorage.getItem(VIEW_KEY); return v === 'single' || v === 'compact' ? v : 'list'; } catch { return 'list'; } });
-  const pickView = (v: View) => { setView(v); try { localStorage.setItem(VIEW_KEY, v); } catch {} };
+  // Compact every time the inbox opens, the first in the toggle. Another view lasts until you leave.
+  const [view, setView] = useState<View>('compact');
+  const pickView = (v: View) => setView(v);
   // The decision Single shows, kept by id so one arriving while you read doesn't move you.
   const [cur, setCur] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -90,11 +91,10 @@ export function ReviewPage({ state, at, area, areaOfCard, results, onJudged, onU
   const all = [...asked, ...done]
     .filter((d) => !picked.length || picked.includes(areaOf(d)))
     .sort((a, b) => (sort === 'big' ? weight(a) - weight(b) || newest(a, b) : sort === 'old' ? -newest(a, b) : newest(a, b)));
-  const clashes = all.filter((d) => d.againstRule && !results[d.id]);
-  // What Confirm all and Skip all at the top take: everything shown and still waiting, but not a clash,
-  // which needs its own answer.
-  const bulk = all.filter((d) => !results[d.id] && !d.againstRule);
-  const rules = { active: state.active, cap: state.cap };
+  const clashes = all.filter((d) => clash(d) && !results[d.id]);
+  // What Confirm all and Skip all at the top take: everything shown and still waiting, but not a clash
+  // with a rule or the code, which you check one by one.
+  const bulk = all.filter((d) => !results[d.id] && !clash(d));
   const landing = useRef<HTMLElement>(null);
   const target = at ? all.find((d) => d.card === at)?.trigger : undefined;
   useEffect(() => {
@@ -140,24 +140,19 @@ export function ReviewPage({ state, at, area, areaOfCard, results, onJudged, onU
         <Select label="Sort" value={sort} options={SORTS} onChange={(v) => pickSort(v as Sort)} />
         {areas.length > 1 ? <MultiSelect label="Area" values={picked} options={areas} onChange={(v) => go(href('review', { area: v }))} /> : null}
         <div className="ml-auto flex flex-wrap items-center gap-3">
-          {clashes.length ? (
-            <button type="button" onClick={() => (view === 'single' ? setCur(clashes[0].id) : document.getElementById(clashes[0].id)?.scrollIntoView({ block: 'start' }))} className="text-[13px] text-warn hover:underline">
-              {clashes.length} {clashes.length === 1 ? 'goes' : 'go'} against a rule
-            </button>
-          ) : null}
           {bulk.length > 1 ? <BulkMenu list={bulk} clashes={clashes.length} filtered={picked.length > 0} onGo={(as) => judgeGroup(bulk, as)} /> : null}
           <ViewToggle value={view} options={VIEWS} onChange={pickView} />
         </div>
       </div>
-      {notice ? <p className="mt-3 flex items-baseline gap-3 text-[13px] text-warn">{notice}<button type="button" onClick={() => setNotice(null)} className="text-muted hover:text-fg hover:underline">Dismiss</button></p> : null}
+      {notice ? <p className="mt-3 flex items-baseline gap-3 text-[13px]">{notice}<button type="button" onClick={() => setNotice(null)} className="text-muted hover:text-fg hover:underline">Dismiss</button></p> : null}
       {view === 'single' ? (
-        <Single all={all} results={results} at={at} cur={cur} setCur={setCur} agent={state.agent} rules={rules} onJudged={(r) => { onJudged({ [r.item.id]: r }); void refresh(); }} onUndo={undo} onList={() => pickView('list')} />
+        <Single all={all} results={results} at={at} cur={cur} setCur={setCur} agent={state.agent} onJudged={(r) => { onJudged({ [r.item.id]: r }); void refresh(); }} onUndo={undo} onList={() => pickView('list')} />
       ) : groupByTrigger(all).map((g) => {
         const items = g.items;
         const waiting = items.filter((d) => !results[d.id]).length;
         const pics = [...new Map(items.filter((d) => !results[d.id] && d.picture).map((d) => [d.picture!.command, d.picture!])).values()];
-        // What Confirm all and Skip all take: the group's decisions still waiting, but not a clash, which needs its own call.
-        const plain = items.filter((d) => !results[d.id] && !d.againstRule);
+        // What Confirm all and Skip all take: the group's decisions still waiting, but not a clash, which you check one by one.
+        const plain = items.filter((d) => !results[d.id] && !clash(d));
         // Its card on the board, when it has one.
         const onBoard = items.map((d) => d.card).find((card) => areaOfCard(card) !== null) ?? null;
         const command = pics.map((p) => p.command).join('\n');
@@ -182,7 +177,7 @@ export function ReviewPage({ state, at, area, areaOfCard, results, onJudged, onU
               ) : null}
             </div>
             <div className={`grid ${view === 'compact' ? 'gap-2' : 'gap-3'}`}>
-              {items.map((d, i) => (results[d.id] ? <Judged key={d.id} r={results[d.id]} onUndo={undo} /> : <DecisionCard key={d.id} d={d} i={i} n={items.length} agent={state.agent} rules={rules} compact={view === 'compact'} onJudged={(r) => { onJudged({ [d.id]: r }); void refresh(); }} />))}
+              {items.map((d, i) => (results[d.id] ? <Judged key={d.id} r={results[d.id]} onUndo={undo} /> : <DecisionCard key={d.id} d={d} i={i} n={items.length} agent={state.agent} compact={view === 'compact'} onJudged={(r) => { onJudged({ [d.id]: r }); void refresh(); }} />))}
             </div>
           </section>
         );
@@ -194,8 +189,8 @@ export function ReviewPage({ state, at, area, areaOfCard, results, onJudged, onU
 /**
  * Confirm all and Skip all for everything the inbox is showing (in the areas picked, if any), behind a
  * "⋯" the toolbar's height, as each group has its own. It's every decision at once, so each asks first,
- * in a small dialog that says what happens. A clash with a rule is left for its own answer either way,
- * and each one can still be taken back with Undo while the page is open.
+ * in a small dialog that says what happens. A clash, with a rule or the code, is left for you to check one
+ * by one either way, and each one can still be taken back with Undo while the page is open.
  */
 function BulkMenu({ list, clashes, filtered, onGo }: { list: PendingDecision[]; clashes: number; filtered: boolean; onGo: (as: 'accept' | 'skip') => Promise<void> }) {
   const [asking, setAsking] = useState<'accept' | 'skip' | null>(null);
@@ -217,8 +212,8 @@ function BulkMenu({ list, clashes, filtered, onGo }: { list: PendingDecision[]; 
         <DialogContent>
           <DialogTitle className="font-semibold tracking-tight">{verb} all {n} decisions{filtered ? ' shown' : ''}?</DialogTitle>
           <DialogDescription className="mt-1.5 text-[13px] text-muted">
-            {asking === 'skip' ? 'Each one leaves the queue and isn’t recorded anywhere.' : 'Each one joins the board as decided.'}
-            {clashes ? ` ${clashes} that ${clashes === 1 ? 'goes' : 'go'} against a rule ${clashes === 1 ? 'stays' : 'stay'} for you to answer.` : ''}
+            {asking === 'skip' ? 'Each one leaves the queue and isn’t recorded anywhere.' : 'Each one joins the board as approved.'}
+            {clashes ? ` ${clashes === 1 ? '1 clash stays' : `${clashes} clashes stay`} for you to check one by one.` : ''}
             {' '}You can undo any of them while this page is open.
           </DialogDescription>
           <div className="mt-5 flex justify-end gap-2">
@@ -233,11 +228,11 @@ function BulkMenu({ list, clashes, filtered, onGo }: { list: PendingDecision[]; 
 
 /**
  * One decision at a time, in the order and area picked above, the picture bigger. Each button has its
- * key: C, R, S and F (Follow, Replace, Keep as exception and Skip on a clash: F, R, E, S); left and right
+ * key: C, R, S and F (Keep as exception, Follow, Make this the rule and Skip on a clash: E, F, R, S); left and right
  * move without judging. Judged, it moves on to the next and says above what it recorded, with Undo (Z)
  * to bring it back.
  */
-function Single({ all, results, at, cur, setCur, agent, rules, onJudged, onUndo, onList }: { all: PendingDecision[]; results: Results; at: string | null; cur: string | null; setCur: (id: string) => void; agent: Agent; rules: { active: number; cap: number }; onJudged: (r: Result) => void; onUndo: (id: string) => Promise<string | null>; onList: () => void }) {
+function Single({ all, results, at, cur, setCur, agent, onJudged, onUndo, onList }: { all: PendingDecision[]; results: Results; at: string | null; cur: string | null; setCur: (id: string) => void; agent: Agent; onJudged: (r: Result) => void; onUndo: (id: string) => Promise<string | null>; onList: () => void }) {
   const queue = all.filter((d) => !results[d.id]);
   const [last, setLast] = useState<Result | null>(null);
   // Where it was: once that one is judged, the one after it has its place.
@@ -291,7 +286,7 @@ function Single({ all, results, at, cur, setCur, agent, rules, onJudged, onUndo,
         <h2 className="min-w-0 truncate text-[15px] font-semibold tracking-tight">{d.trigger}</h2>
         <span className="ml-auto shrink-0 text-[13px] tabular-nums text-muted" aria-live="polite">{i + 1} of {queue.length}</span>
       </div>
-      <DecisionCard key={d.id} d={d} agent={agent} rules={rules} keys wide nav={nav} onJudged={(r) => { setLast(r); onJudged(r); }} />
+      <DecisionCard key={d.id} d={d} agent={agent} keys wide nav={nav} onJudged={(r) => { setLast(r); onJudged(r); }} />
       <p className="mt-3 text-[12px] text-faint">Press the letter on a button to choose it. <Kbd>←</Kbd> <Kbd>→</Kbd> move between decisions without judging.</p>
     </div>
   );
@@ -362,8 +357,9 @@ type Panel =
   | { kind: 'mismatch'; failed: FailedCheck[]; body: Record<string, unknown>; done?: string }
   | { kind: 'message'; text: string; bad?: boolean };
 
+
 /** One decision waiting for you, in the board's decision shape: its picture if it's visual, id and badges, then the lines. */
-function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudged }: { d: PendingDecision; i?: number; n?: number; agent: Agent; rules: { active: number; cap: number }; keys?: boolean; wide?: boolean; nav?: React.ReactNode; compact?: boolean; onJudged: (r: Result) => void }) {
+function DecisionCard({ d, i, n, agent, keys, wide, nav, compact, onJudged }: { d: PendingDecision; i?: number; n?: number; agent: Agent; keys?: boolean; wide?: boolean; nav?: React.ReactNode; compact?: boolean; onJudged: (r: Result) => void }) {
   const [panel, setPanel] = useState<Panel | null>(null);
   // Compact: closed to its top line and its Change until opened.
   const [open, setOpen] = useState(false);
@@ -393,20 +389,21 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudge
     });
   };
 
-  // Goes against a rule: someone has to say which wins. The same three as the review in chat.
-  const actions: { key: string; label: string; variant?: 'primary' | 'ghost'; run: () => void }[] = r ? [
-    { key: 'f', label: `Follow ${r.id}`, variant: 'primary', run: () => void send({ as: 'fix', to: r.decision, follows: r.id }, `Recorded. Your agent changes it to match ${r.id} ${whenAgent(agent)}.`) },
-    { key: 'r', label: `Replace ${r.id}`, run: () => void send({ as: 'rule', supersedes: r.id }) },
-    { key: 'e', label: 'Keep as exception', run: () => void send({ as: 'accept' }, `Recorded as an exception to ${r.id}.`) },
-    { key: 's', label: 'Skip', variant: 'ghost', run: () => void send({ as: 'skip' }) },
+  // Each button says what it does on hover.
+  const skip = { key: 's', label: 'Skip', variant: 'ghost' as const, tip: 'Takes it out of the inbox without recording it.', run: () => void send({ as: 'skip' }) };
+  // Goes against a rule: you say which wins, so none of the answers is filled. Keep as exception sits where
+  // Confirm does on other cards (both keep what the agent did), and Make this the rule where Make it a rule does.
+  const actions: { key: string; label: string; variant?: 'primary' | 'ghost'; tip: string; run: () => void }[] = r ? [
+    { key: 'e', label: 'Keep as exception', tip: `This screen keeps it. ${r.id} stays for everything else.`, run: () => void send({ as: 'accept' }, `Recorded as an exception to ${r.id}.`) },
+    { key: 'f', label: `Follow ${r.id}`, tip: `Your agent changes it to match ${r.id}.`, run: () => void send({ as: 'fix', to: r.decision, follows: r.id }, `Recorded. Your agent changes it to match ${r.id} ${whenAgent(agent)}.`) },
+    { key: 'r', label: 'Make this the rule', variant: 'ghost', tip: `Replaces ${r.id}, which moves to the archive.`, run: () => void send({ as: 'rule', supersedes: r.id }) },
+    skip,
   ] : [
-    { key: 'c', label: 'Confirm', variant: 'primary', run: () => void send({ as: 'accept' }) },
-    ...(d.level !== 'polish' ? [{ key: 'r', label: 'Make it a rule', run: () => void send({ as: 'rule' }) }] : []),
-    { key: 's', label: 'Skip', variant: 'ghost' as const, run: () => void send({ as: 'skip' }) },
-    { key: 'f', label: 'Fix', variant: 'ghost' as const, run: () => { setFix(''); setPanel({ kind: 'fix' }); } },
+    { key: 'c', label: 'Confirm', variant: 'primary', tip: 'Keeps it as it is. It joins the board as approved.', run: () => void send({ as: 'accept' }) },
+    ...(d.level !== 'polish' ? [{ key: 'r', label: 'Make it a rule', tip: 'Adds it to DECISIONS.md, so your agent follows it from now on.', run: () => void send({ as: 'rule' }) }] : []),
+    skip,
+    { key: 'f', label: 'Fix', variant: 'ghost' as const, tip: 'Say what it should be instead. Your agent makes the change.', run: () => { setFix(''); setPanel({ kind: 'fix' }); } },
   ];
-  // The cap on rules only matters when it's close: then it's worth knowing before making another.
-  const near = d.level !== 'polish' && !r && rules.active >= rules.cap - RULES_NEAR;
   // The fix and a message are answered on the card; the rest ask in a dialog, over the card as it was.
   const inline = panel?.kind === 'fix' || panel?.kind === 'message';
 
@@ -427,14 +424,13 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudge
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  // In Single they're the page's main controls: all one size and outlined, Confirm filled.
   const buttons = actions.map((a) => (
-    <Fragment key={a.key}>
-      {/* In Single they're the page's main controls: all one size and outlined, Confirm filled. */}
+    <Tooltip key={a.key} label={a.tip}>
       <Button size={nav ? 'md' : 'sm'} variant={nav && a.variant === 'ghost' ? 'secondary' : a.variant} className={nav ? 'px-2.5!' : undefined} disabled={busy} onClick={a.run} aria-keyshortcuts={keys ? a.key.toUpperCase() : undefined}>
         {a.label}{keys ? <kbd className="font-mono text-[11px] opacity-60">{a.key.toUpperCase()}</kbd> : null}
       </Button>
-      {near && a.key === 'r' ? <Faint className="mx-1">{rules.active} of {rules.cap} design rules in use</Faint> : null}
-    </Fragment>
+    </Tooltip>
   ));
 
   // Its top line: id, size, type, and when. No name: on the local board it's always you.
@@ -443,7 +439,8 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudge
       <Id>{d.id}</Id>
       <Badge tone="info">{cap(d.level)}</Badge>
       <Badge>{dim}</Badge>
-      {d.verified === false ? <Tooltip label="The files did not match this claim when it was queued"><span><Badge tone="bad">Unverified</Badge></span></Tooltip> : null}
+      {r ? <ClashBadge with="Rule" tip={`Clashes with ${r.id}, a rule in DECISIONS.md`} /> : null}
+      {d.codeClash ? <ClashBadge with="Code" tip="Clashes with the code: the files it names say otherwise" /> : null}
       <Faint className="ml-auto"><When iso={d.date} />{n ? ` · ${(i ?? 0) + 1} of ${n}` : ''}</Faint>
     </span>
   );
@@ -454,9 +451,21 @@ function DecisionCard({ d, i, n, agent, rules, keys, wide, nav, compact, onJudge
       {d.change && d.change !== d.decision ? <><Label>Pattern</Label><dd className="text-muted">{sentence(d.decision)}</dd></> : null}
       {d.rejected.length ? <><Label>Rejected</Label><dd className="text-muted">{d.rejected.map((x) => <div key={x}>{sentence(x)}</div>)}</dd></> : null}
       {d.rationale ? <><Label>Why</Label><dd className="text-muted">{sentence(d.rationale)}</dd></> : null}
-      {r ? <><Label>Clashes</Label><dd><Id>{r.id}</Id> {sentence(r.decision)}</dd></> : null}
       {applies ? <><Label>Applies to</Label><dd className="text-muted">{applies}</dd></> : null}
       {d.ref ? <><Label>Ticket</Label><dd className="text-muted">{/^https?:\/\//i.test(d.ref) ? <a href={d.ref} target="_blank" rel="noreferrer" className="underline hover:text-fg">{d.ref}</a> : d.ref}</dd></> : null}
+      {/* What it clashes with, last, just above the buttons: the thing to weigh before choosing one. */}
+      {/* One Clashes row for both kinds, red like the pills (the flag is the pills' alone): the rule, then
+          each thing the files say otherwise, as they are now. */}
+      {r || d.codeClash ? (
+        <>
+          <dt className="text-[13px] text-bad">Clashes</dt>
+          <dd className="text-muted">
+            {/* The rule's id in the chip the code's text has, linking to it under Design rules; its words stay muted. */}
+            {r ? <div><Tooltip label={`${r.rationale ? `${sentence(r.rationale).replace(/\.$/, '')}. ` : ''}See it under Design rules.`}><a href={href('rules', { at: r.id })} className={`${CHIP} hover:border-border-strong`}>{r.id}</a></Tooltip> {sentence(r.decision)}</div> : null}
+            {(d.codeClash ?? []).map((f, k) => <div key={k}>{clashWords(f)}</div>)}
+          </dd>
+        </>
+      ) : null}
     </>
   );
 

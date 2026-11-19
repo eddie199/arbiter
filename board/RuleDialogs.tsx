@@ -1,8 +1,11 @@
+import { Fragment } from 'react';
 import { scopeWords, sentence } from '@/lib/board';
 import { Button, buttonClass } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip } from '@/components/ui/tooltip';
 import { href } from './route';
+import { CHIP } from './bits';
+import type { CodeCheck } from './types';
 
 /**
  * The questions Make it a rule can stop to ask, the same on a change's page and in the Review inbox: it
@@ -18,7 +21,7 @@ export interface Overlap { id: string; decision: string; sure: boolean; scope?: 
 /** A rule in DECISIONS.md, as the full dialog lists it. */
 export interface RuleLine { id: string; decision: string }
 /** A check of the code that failed, as the CLI sends it. */
-export interface FailedCheck { kind: 'exists' | 'present' | 'absent'; file: string; needle?: string; detail?: string }
+export type FailedCheck = CodeCheck;
 /** What a dialog is asking, when it's asking. */
 export type Ask =
   | { kind: 'overlap'; overlaps: Overlap[] }
@@ -115,32 +118,66 @@ export function FullDialog({ full, onReplace, ...shared }: Shared & { full: { ru
   );
 }
 
-/** One failed check in plain words: the file by its name (the whole path on hover), and what it does or doesn't have. */
-function Mismatch({ f }: { f: FailedCheck }) {
-  const name = f.file.split(/[\\/]/).pop() || f.file;
-  const line = /line (\d+)/.exec(f.detail ?? '')?.[1];
-  const what =
-    f.kind === 'exists' ? (f.detail === 'outside the project' ? 'is outside this project' : 'isn’t there any more')
-    : f.kind === 'present' ? <>doesn’t have “{f.needle}”</>
-    : <>still has “{f.needle}”{line ? `, on line ${line}` : ''}</>;
-  return <li className="px-4 py-2.5"><Tooltip label={f.file}><span className="font-mono text-[12px]">{name}</span></Tooltip> {what}</li>;
+/**
+ * A failed check as a plain sentence, the fact first: the file by its name, in a chip (the whole path on
+ * hover, when it has one), then what's in it now ("billing.css is missing var(--brand)", "billing.css still has
+ * #3B7BE0"), so what's wrong is the second word you read. No "The agent said": the Clashes label and the
+ * Code Clash pill already say the files disagree with the agent. The same words on a Code Clash card and in
+ * this dialog.
+ */
+export function clashWords(f: FailedCheck): React.ReactNode {
+  const one = (p: string) => {
+    const name = p.split(/[\\/]/).pop() || p;
+    // In the chip the code has: the file and what's in it read as the two things, the words between stay muted.
+    return name === p ? <span className={CHIP}>{name}</span> : <Tooltip label={p}><span className={CHIP}>{name}</span></Tooltip>;
+  };
+  // A `present` check that failed names every file it looked in, and none of them has it.
+  const paths = f.file.split(', ');
+  const list = (join: string) => paths.map((p, k) => <Fragment key={p}>{k ? (k === paths.length - 1 ? join : ', ') : null}{one(p)}</Fragment>);
+  const pattern = f.needle?.startsWith('regex:');
+  if (f.kind === 'exists') {
+    return f.detail === 'outside the project'
+      ? <>{list(' and ')} {paths.length > 1 ? 'are' : 'is'} outside this project, so Arbiter can’t check it</>
+      : <>{list(' and ')} {paths.length > 1 ? 'aren’t' : 'isn’t'} in the project any more</>;
+  }
+  if (f.kind === 'present') {
+    const what = pattern ? 'what the agent named' : <Code text={f.needle ?? ''} />;
+    if (paths.length === 1) return pattern ? <>{list('')} doesn’t have {what}</> : <>{list('')} is missing {what}</>;
+    return paths.length === 2 ? <>Neither {one(paths[0])} nor {one(paths[1])} has {what}</> : <>None of {list(' or ')} has {what}</>;
+  }
+  const text = pattern ? f.found : f.needle;
+  return <>{list(' and ')} still {paths.length > 1 ? 'have' : 'has'} {text ? <Code text={text} /> : 'what the agent named'}</>;
 }
 
 /**
- * The code no longer matches what it says: Arbiter checked the files it names. Record it anyway, marked
- * Unverified, or leave it waiting while your agent fixes the code.
+ * Code in a clash line, as a small chip in the board's mono, so it reads apart from the words. A hex
+ * colour gets a swatch of itself in front: "#3B7BE0" means little until you see the blue.
+ */
+function Code({ text }: { text: string }) {
+  const colour = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(text) ? text : null;
+  return (
+    <span className={CHIP}>
+      {colour ? <span aria-hidden="true" className="mr-[5px] inline-block size-[9px] rounded-[2px] shadow-[inset_0_0_0_1px_rgb(0_0_0/0.12)]" style={{ background: colour }} /> : null}
+      {text}
+    </span>
+  );
+}
+
+/**
+ * A Code Clash: Arbiter checked the files it names and they say otherwise. Record it anyway, or leave it
+ * waiting while your agent fixes the code.
  */
 export function MismatchDialog({ failed, anyway, onAnyway, ...shared }: Shared & { failed: FailedCheck[] | null; anyway: string; onAnyway: () => void }) {
   return (
     <AskDialog
       {...shared} open={failed !== null}
-      title="The code doesn’t match this"
-      description="Arbiter checked the files it names. You can record it anyway, marked Unverified, or leave it waiting and ask your agent to fix the code first."
+      title="This clashes with the code"
+      description="Arbiter checked the files it names, and they say otherwise. You can record it anyway, or leave it waiting and ask your agent to fix the code first."
       footer={<Button size="md" variant="secondary" type="button" onClick={onAnyway} disabled={shared.busy}>{anyway}</Button>}
     >
       <p className="mt-5 text-[12px] text-muted">What the files say</p>
       <ul className="mt-2 divide-y divide-border rounded-lg border border-border bg-surface text-[14px]">
-        {(failed ?? []).map((f, k) => <Mismatch key={k} f={f} />)}
+        {(failed ?? []).map((f, k) => <li key={k} className="px-4 py-2.5">{clashWords(f)}</li>)}
       </ul>
     </AskDialog>
   );

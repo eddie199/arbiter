@@ -398,9 +398,9 @@ Each question:
 
 **A clash** adds a line under `Applies to`, after a blank line like the others — `Clashes — D-0009 · Destructive actions undo instead of confirming` — and has its own three options:
 
-- `Follow D-0009` — *Change it back to match the rule.*
-- `Replace D-0009` — *This becomes the rule; D-0009 goes to the decision archive.*
-- `Keep as exception` — *Logged as a one-off here; D-0009 stands.*
+- `Keep as exception` — *This screen keeps it; D-0009 stays for everything else.*
+- `Follow D-0009` — *Changes it to match D-0009.*
+- `Make this the rule` — *Replaces D-0009, which moves to the decision archive.*
 
 ### Fallback: present as text
 
@@ -423,7 +423,7 @@ Settings build — 2 decisions
 4. Change:   Deleting a project now asks for confirmation in a dialog   [pattern]
    Pattern:  Destructive actions confirm in a dialog
    Clashes:  D-0009 · Destructive actions undo instead of confirming
-   → follow D-0009 · replace D-0009 · keep as exception
+   → keep as exception · follow D-0009 · make this the rule
 5. Change:   Settings is now one page with four tabs   [feature]
    …
 
@@ -441,9 +441,9 @@ Omit the `Rejected` line when there's nothing rejected. Never ask an open questi
 | Make it a rule | `rule` | Judge it. It enters `DECISIONS.md`. |
 | Other: `skip` (or "not a decision") | `skip` | Dropped from the queue, recorded nowhere. |
 | Other: a correction | `fix --to "…"` | Change the code to match, then judge it. What you did becomes a rejected alternative automatically. |
-| Follow D-0009 | `fix --to "<D-0009's decision>"` | Change the code back to match the rule, then judge it. |
-| Replace D-0009 | `rule --supersedes D-0009` | Judge it. The old rule moves to the archive. |
 | Keep as exception | `accept --against D-0009` | Judge it. The rule stands; this screen is the logged exception. |
+| Follow D-0009 | `fix --to "<D-0009's decision>"` | Change the code back to match the rule, then judge it. |
+| Make this the rule | `rule --supersedes D-0009` | Judge it. The old rule moves to the archive. |
 | Widget Skip button | — | Nothing. The queue waits. |
 
 Never judge anything before the user answers.
@@ -698,7 +698,7 @@ npx arbiter candidate add "Settings — single page" --feature settings
 npx arbiter candidate add "Settings — tabs" --feature settings
 ```
 
-Queue that direction's decisions with `--candidate C-0001` so they stay attached.
+Don't queue a direction's decisions yet. Until the user picks one, they're about a version that may not stay, and the board shows the set as not chosen yet.
 
 **Snapshot it.** A candidate without a picture is half a record. If you have a browser tool and the app is running, open the screen you built, take a screenshot, save it to a file, and attach it:
 
@@ -713,6 +713,8 @@ When the user picks one — "go with the single page", "the first one" — appro
 ```
 npx arbiter candidate C-0001 --state approved --why "tabs hid the danger zone"
 ```
+
+Then queue the chosen direction's decisions with `--candidate C-0001`, so they stay attached. The others' decisions are never queued: a direction that lost keeps its picture and the reason it lost. If they pick in a later session, read what the chosen one decided from its code, and queue that.
 
 When they reject one outright: `--state rejected --why "…"`. Then one line: `C-0001 approved · C-0002 superseded`. `npx arbiter board` shows all of it.
 

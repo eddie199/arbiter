@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react';
-import { conversation, decisionText, DIMENSION_LABEL, kindOptions, nameIn, scopeWords, sentence, STATE_LABEL, STATE_ORDER, verdictLabel, type BoardCandidate } from '@/lib/board';
+import { conversation, decisionText, DIMENSION_LABEL, kindOptions, nameIn, sameHead, scopeWords, sentence, statusOf, statusRank, verdictLabel, type BoardCandidate } from '@/lib/board';
 import { When } from '@/components/When';
 import { Badge } from '@/components/ui/badge';
-import { Button, buttonClass } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/input';
-import { errorsOf, post } from './api';
+import { buttonClass } from '@/components/ui/button';
 import { Screenshot } from '@/components/Screenshot';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Faint, Id, KeyValues, Label, Lede, Meta, PageTitle, Property, PropertyRow, SectionTitle } from '@/components/ui/type';
 import type { LocalBoard } from './types';
 import { go, href } from './route';
-import { areasOf, cap, PLANS, StateBadge, undecided, WaitingBadge } from './bits';
+import { areasOf, cap, CHIP, PLANS, StatusBadge, undecided, WaitingBadge } from './bits';
 import { CommentLine, DecisionThread } from './Comments';
 import { ChangeMenu } from './ChangeMenu';
 import { byVersion, VersionGroups, VersionRow } from './Versions';
@@ -40,9 +38,13 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
   const areaOf = areasOf(data);
   const area = areaOf(c);
   const short = nameIn(area, c.name);
-  // What replaced it, by the name its own card shows: without the area when that's the area it's in.
-  const label = c.state === 'superseded' && by ? `Replaced by ${nameIn(areaOf(by), by.name)}` : STATE_LABEL[c.state];
-  const siblings = c.work ? [] : cands.filter((x) => x.id !== c.id && !x.work && areaOf(x) === area).sort((a, b) => STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state));
+  const status = statusOf(c);
+  // The option approved over it, by the name its own card shows: without the area when that's the area it's in.
+  const instead = c.state === 'superseded' && by ? nameIn(areaOf(by), by.name) : null;
+  // The other options in its set: same area, names that start the same.
+  const siblings = c.work ? [] : cands.filter((x) => x.id !== c.id && !x.work && areaOf(x) === area && sameHead(x, c)).sort((a, b) => statusRank(a) - statusRank(b));
+  // An option approved in its set while this one is still proposed: this one came after the choice.
+  const keptOption = siblings.find((x) => x.state === 'approved');
   const approvedBy = liveApprovals.map((a) => a.author_name).join(', ');
   const earlierBy = staleApprovals.map((a) => a.author_name).join(', ');
   const ids = cands.map((x) => x.id);
@@ -74,12 +76,16 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
     const status = verdictLabel(d);
     // Copy takes the decision as it reads here, id first, to paste into a doc or a chat.
     const text = decisionText(d, where);
+    // About 54px apart, the same in a divided list and a version section: 20px above, and below it the faint
+    // Copy and Edit row and 8px (32px in an exported copy, which has no such row).
     return (
-      <li key={d.id} id={d.id} className="group/decision scroll-mt-20 py-5">
+      <li key={d.id} id={d.id} className={`group/decision scroll-mt-20 pt-5 ${data.live ? 'pb-2' : 'pb-8'}`}>
         <div className="mb-3 flex items-center gap-2">
           <Id className={at === d.id ? 'text-fg' : undefined}>{d.id}</Id>
           {dim ? <Badge>{dim}</Badge> : null}
-          {status === 'Retired' ? <Badge>Retired</Badge> : status === 'Rule' ? <Tooltip label="See it under Design rules"><a href={href('rules', { at: d.id })} className="inline-flex rounded-full hover:opacity-75"><Badge tone="ok">Rule</Badge></a></Tooltip> : status === 'Corrected' ? <Badge tone="warn">Corrected</Badge> : null}
+          {status === 'Retired' ? <Badge>Retired</Badge> : status === 'Rule' ? <Tooltip label="See it under Design rules"><a href={href('rules', { at: d.id })} className="inline-flex rounded-full hover:opacity-75"><Badge tone="ok">Rule</Badge></a></Tooltip> : null}
+          {/* An exception says so on its top line, as a clash does in the Review inbox; the Exception to row names the rule. */}
+          {d.against ? <Badge tone="warn">Exception</Badge> : null}
           <Faint className="ml-auto">{i + 1} of {ordered.length}</Faint>
         </div>
         <KeyValues>
@@ -88,6 +94,9 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
           {d.change && d.change !== d.decision ? <><Label>{d.verdict === 'rule' ? 'Rule' : 'Pattern'}</Label><dd className="text-muted">{sentence(d.decision)}</dd></> : null}
           {d.rejected.length ? <><Label>Rejected</Label><dd className="text-muted">{d.rejected.map((r) => <div key={r}>{sentence(r)}</div>)}</dd></> : null}
           {where ? <><Label>Applies to</Label><dd className="text-muted">{where}</dd></> : null}
+          {/* Last, like the inbox's Clashes row: the rule's id in the same chip, linking to it, its words muted. Grey,
+              not red: the call is made, nothing waits on you. */}
+          {d.against ? <><Label>Exception to</Label><dd className="text-muted"><Tooltip label={`${d.against.rationale ? `${sentence(d.against.rationale).replace(/\.$/, '')}. ` : ''}See it under Design rules.`}><a href={href('rules', { at: d.against.id })} className={`${CHIP} hover:border-border-strong`}>{d.against.id}</a></Tooltip> {sentence(d.against.decision)}</dd></> : null}
         </KeyValues>
         {data.live ? <DecisionActions d={d} copyText={text} last={!!c.work && c.decisions.length === 1} refresh={refresh} onRemoved={(r) => setRemoved((x) => ({ ...x, [d.id]: r }))} /> : null}
         <div className="pl-[calc(6rem+0.75rem)]"><DecisionThread decision={d.id} comments={comments} requests={requests} cards={ids} candidate={c.id} version={version} /></div>
@@ -110,19 +119,21 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
           <PageTitle className="min-w-0">{short}</PageTitle>
           {data.live ? <ChangeMenu c={c} area={area} short={short} areas={[...new Set(cands.map(areaOf))].sort((x, y) => x.localeCompare(y))} others={cands.filter((x) => x.work && x.id !== c.id).map((x) => ({ name: x.name, area: areaOf(x) }))} waiting={waiting} refresh={refresh} /> : null}
         </div>
-        {c.reason && <Lede className="max-w-3xl">“{sentence(c.reason)}”</Lede>}
-        {c.notes && <p className="mt-2 max-w-3xl">{c.notes}</p>}
+        {/* One line: the reason in quotes (why it won or lost), then the agent's few words on what it is. */}
+        {c.reason || c.notes ? <Lede className="max-w-3xl">{c.reason ? `“${sentence(c.reason)}”` : null}{c.reason && c.notes ? <span className="text-faint"> · </span> : null}{c.notes}</Lede> : null}
         <PropertyRow>
-          {/* Work with nothing judged has no state of its own: Waiting, or, once everything on it is skipped, none.
-              Work with something waiting is only Waiting, as on its card; an option keeps its state beside it.
-              What's waiting is judged in the Review inbox, which opens at this change. */}
-          {fresh && !waiting ? null : <Property label="Status">{waiting ? <WaitingBadge /> : null}{fresh || (waiting && c.work) ? null : <StateBadge state={c.state} label={label} />}{approvedBy && c.state === 'approved' ? <span className="text-muted">by {cap(approvedBy)}</span> : null}{waiting && data.live ? <a href={href('review', { at: c.id })} className="text-muted underline hover:text-fg">{waiting} to review</a> : null}</Property>}
+          {/* Work with nothing judged has no status of its own: Waiting, or, once everything on it is skipped, none.
+              Work with something waiting is only Waiting, as on its card; an option keeps Proposed, Approved or
+              Rejected beside it. Proposed says on hover how to choose: by telling your agent, not here.
+              Rejected because another was approved says which. Its own status comes first, then Waiting beside
+              its count, which opens the Review inbox at this change. */}
+          {fresh && !waiting ? null : <Property label="Status">{fresh || (waiting && c.work) ? null : <StatusBadge status={status} tip={status === 'proposed' ? (data.live ? 'Not chosen yet. Tell your agent which one to keep.' : 'Not chosen yet.') : undefined} />}{instead ? <span className="text-muted">{instead} was approved instead</span> : null}{approvedBy && c.state === 'approved' ? <span className="text-muted">by {cap(approvedBy)}</span> : null}{waiting ? <WaitingBadge /> : null}{waiting && data.live ? <a href={href('review', { at: c.id })} className="text-muted underline hover:text-fg">{waiting} to review</a> : null}</Property>}
           <Property label="Area"><a href={href('overview', { section: area })} className="hover:underline">{area}</a></Property>
-          {fresh ? null : <Property label="Decided by">{cap(c.author)}</Property>}
+          {/* Nothing is decided on an option until you approve or reject it, so it names no one till then. */}
+          {fresh || status === 'proposed' ? null : <Property label="Decided by">{cap(c.author)}</Property>}
           <Property label="Date"><When iso={c.date} time /></Property>
           {c.url ? <Property label="Live"><a href={c.url} target="_blank" rel="noreferrer" className="underline hover:text-fg">Open →</a></Property> : null}
         </PropertyRow>
-        {data.live && !c.work && (c.state === 'generated' || c.state === 'in_review') ? <OptionActions c={c} refresh={refresh} /> : null}
       </header>
 
       <div className="mt-6 min-w-0">
@@ -136,7 +147,7 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
               <a key={s.id} href={href(s.id)} className="group flex items-center gap-2 rounded-ui border border-border bg-surface py-1 pl-1 pr-2.5 hover:border-border-strong">
                 <span className="block aspect-[3/2] w-9 overflow-hidden rounded-[3px] bg-surface-2">{s.snapshot ? <img src={s.snapshot} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover object-top" /> : null}</span>
                 <span className="group-hover:underline">{nameIn(area, s.name)}</span>
-                <StateBadge state={s.state} label={STATE_LABEL[s.state]} />
+                <StatusBadge status={statusOf(s)} />
               </a>
             ))}
           </div>
@@ -157,6 +168,12 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
               </div>
               <a href={href('review', { at: c.id })} className={buttonClass('secondary', 'md')}>Review {waiting === 1 ? 'it' : 'them'}</a>
             </div>
+          ) : !c.decisions.length && status === 'proposed' && data.live ? (
+            // Proposed: the same shape, about the choice. No button: you choose by telling your agent, which keeps your reason.
+            <div className="rounded-lg border border-border bg-surface px-4 py-3">
+              <div className="font-semibold tracking-tight">{keptOption ? `${nameIn(area, keptOption.name)} is approved` : siblings.length ? `${siblings.length + 1} options, none chosen yet` : 'Not chosen yet'}</div>
+              <div className="mt-0.5 text-[13px] text-muted">{keptOption ? 'This one came later. Tell your agent if you’d rather keep it, and why.' : siblings.length ? 'Tell your agent which one to keep, and why. The other options become Rejected, with your reason.' : 'Tell your agent whether to keep it, and why.'}</div>
+            </div>
           ) : !c.decisions.length ? <p className="text-[13px] text-muted">{fresh && waiting ? 'Nothing decided yet. What the agent decided here is waiting for your review.' : 'No decisions recorded here yet.'}</p> : (
             versions.length > 1 ? <VersionGroups groups={byVersion(ordered, versions)} versions={versions} onShow={(i) => { pick(i); document.getElementById('picture')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }} item={item} />
               : <ol className="divide-y divide-border border-t border-border">{withRemoved.map(item)}</ol>
@@ -165,7 +182,9 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
 
         {/* An exported copy carries no comments, so it has no section for them. Comments come from a
             team board; without one, the title says so in a few faint words, and nothing more. */}
-        {data.live || comments.length ? <section className="mt-10 border-t border-border pt-6">
+        {/* After a list of decisions on the live board, closer: each decision already ends in its faint Copy and Edit
+            row, so 22px here puts Comments as far from the last one as decisions are from each other (about 56px). */}
+        {data.live || comments.length ? <section className={`${data.live && withRemoved.length ? 'mt-[22px]' : 'mt-10'} border-t border-border pt-6`}>
           <SectionTitle count={said || null} aside={onDecisions ? `${onDecisions} on decisions above` : null}>
             Comments
             {/* Smaller than the title, so it reads as a note, not part of the heading. */}
@@ -182,45 +201,5 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
         </section> : null}
       </div>
     </main>
-  );
-}
-
-/**
- * An option still open: pick it, turn it down, or mark it in review. Picking one replaces the
- * other options in its area, and the reason is kept on both, so it asks why first.
- */
-function OptionActions({ c, refresh }: { c: BoardCandidate; refresh: () => Promise<void> }) {
-  const [asking, setAsking] = useState<'approved' | 'rejected' | null>(null);
-  const [why, setWhy] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const send = async (state: string, reason?: string) => {
-    setBusy(true);
-    const res = await post('/api/candidate', { id: c.id, state, why: reason || undefined });
-    setBusy(false);
-    if (res.exitCode !== 0) return setError(errorsOf(res));
-    setAsking(null);
-    await refresh();
-  };
-  return (
-    <div className="mt-4">
-      {asking ? (
-        <form className="max-w-xl" onSubmit={(e) => { e.preventDefault(); void send(asking, why.trim()); }}>
-          <p className="mb-2 text-[13px] text-muted">{asking === 'approved' ? 'Why this one? It’s kept on the options it replaces too.' : 'Why not?'}</p>
-          <Textarea autoFocus value={why} onChange={(e) => setWhy(e.target.value)} placeholder="One line" rows={2} />
-          <div className="mt-2 flex items-center gap-1.5">
-            <Button size="sm" variant="primary" disabled={busy}>{asking === 'approved' ? 'Approve' : 'Reject'}</Button>
-            <Button size="sm" variant="ghost" type="button" onClick={() => setAsking(null)}>Cancel</Button>
-          </div>
-        </form>
-      ) : (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Button size="sm" variant="primary" onClick={() => { setWhy(''); setAsking('approved'); }}>Approve</Button>
-          <Button size="sm" onClick={() => { setWhy(''); setAsking('rejected'); }}>Reject</Button>
-          {c.state === 'generated' ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => send('in_review')}>Mark in review</Button> : null}
-        </div>
-      )}
-      {error ? <p className="mt-2 text-[13px] text-bad">{error}</p> : null}
-    </div>
   );
 }

@@ -59,7 +59,8 @@ export function Rules({ data, at, cap, refresh, query }: { data: LocalBoard; at:
       <div className="mb-2 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <PageTitle>Design rules</PageTitle>
-          <Meta className={`mt-0.5 block ${cap && cap - rules.length <= 5 ? 'text-warn' : ''}`}>
+          {/* Muted like every page's subline, however near the limit: amber is for pills only. */}
+          <Meta className="mt-0.5 block">
             {/* A read-only copy speaks to whoever it was sent to, as its guide does: the rules aren't theirs. */}
             {!data.live ? `${rules.length} rule${rules.length === 1 ? '' : 's'} this project’s designs follow.`
               : rules.length ? `${rules.length} rule${rules.length === 1 ? '' : 's'} you’ve saved in DECISIONS.md. Everything new follows ${rules.length === 1 ? 'it' : 'them'}.` : 'The rules you save in DECISIONS.md. Everything new follows them.'}

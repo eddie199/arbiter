@@ -23,6 +23,23 @@ export const headOf = (name: string): string | null => {
   const head = name.split(/\s*[—–]\s*|\s+-\s+|:\s+/)[0].trim();
   return head && head !== name.trim() ? head : null;
 };
+/**
+ * Two options are in one set, the versions of one thing to choose between, when they share their feature
+ * (the area) and what their names start with: "Empty state — illustration" and "Empty state — checklist"
+ * are one set; "Row layout — compact", in the same area, is another. Names with no head share one set.
+ * The board groups by it, and approving one supersedes only the rest of its set.
+ */
+export const sameHead = (a: { name: string }, b: { name: string }): boolean =>
+  (headOf(a.name) ?? '').toLowerCase() === (headOf(b.name) ?? '').toLowerCase();
+
+/**
+ * A set's name: what its options' names start with ("Empty state", in Projects), or its area when the names
+ * only say that ("Project card — compact" in Project card, "Card — compact" in Card component).
+ */
+export const setName = (area: string, c: { name: string }): string => {
+  const head = headOf(c.name);
+  return head && !area.toLowerCase().startsWith(head.toLowerCase()) ? head : area;
+};
 const everywhere = (c: Areable) => c.decisions.length > 0 && c.decisions.every((d) => d.scope === 'global');
 /** `name` starts with the area `k` at a word boundary: "reports filters", "reports—x", "reports: x" — not "reportsx". */
 const under = (name: string, k: string) => name === k || (name.startsWith(k) && /^[\s:—–]/.test(name.slice(k.length)));

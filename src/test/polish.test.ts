@@ -59,6 +59,17 @@ test('drift counts accepts and rule breaks per screen', () => {
   assert.ok(drift({ cwd }).includes('1 rule broken'));
 });
 
+test('approving an option supersedes only its own set: another thing explored in the same area stays open', () => {
+  const cwd = tmp();
+  const o = { cwd, author: 'test' };
+  addCandidate('Empty state — illustration', { ...o, feature: 'Projects' });
+  addCandidate('Empty state — checklist', { ...o, feature: 'Projects' });
+  addCandidate('Row layout — compact', { ...o, feature: 'Projects' });
+  updateCandidate('C-0001', { ...o, state: 'approved', why: 'Friendlier for a new team' });
+  const states = Object.fromEntries(readCandidates(resolvePaths(cwd)).map((c) => [c.id, c.state]));
+  assert.deepEqual(states, { 'C-0001': 'approved', 'C-0002': 'superseded', 'C-0003': 'generated' });
+});
+
 test('review page serves candidates, snapshots, and candidate actions', async () => {
   const cwd = tmp();
   const o = { cwd, author: 'test' };

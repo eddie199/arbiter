@@ -26,7 +26,7 @@ export function nameIn(area: string, name: string): string {
 }
 
 /** How a change finds its area: shared with the CLI, so `arbiter areas` and the board agree. */
-export { FOUNDATIONS, areasFor } from '../../src/area-names';
+export { FOUNDATIONS, areasFor, sameHead, setName } from '../../src/area-names';
 
 /** `pattern:compact-card-actions` → "Compact card actions, anywhere"; `file:app/x.tsx` → "x.tsx"; `global` → "Everywhere". */
 export function scopeWords(scope?: string): string | null {
@@ -51,26 +51,49 @@ export function conversation(notes: { id: string; kind: string; author_name: str
   return said.sort((x, y) => Date.parse(x.at) - Date.parse(y.at));
 }
 
-export const STATE_ORDER: CandidateState[] = ['approved', 'in_review', 'generated', 'recorded', 'rejected', 'superseded'];
-/** In a designer's words. The record keeps its own (`generated`, `superseded`, `recorded`); only the board says these. */
-export const STATE_LABEL: Record<CandidateState, string> = { approved: 'Approved', in_review: 'In review', generated: 'Draft', recorded: 'Decided', rejected: 'Rejected', superseded: 'Replaced' };
-/** A decision's state as its pill says it: Rule, Retired or Corrected; none for one only confirmed. */
+/**
+ * A change's status in the local board's own words, four in all with Waiting (what's in the Review inbox,
+ * beside it): Proposed for an option the agent built that you haven't chosen between yet (you choose by
+ * telling your agent); Approved once you've signed it off, work once everything on it is judged, an option
+ * once you chose it over the others; Rejected for an option that lost (whether you turned it down or
+ * approved another, the word DECISIONS.md uses for an alternative that lost). The record keeps its own six
+ * states (`generated`, `in_review`, `approved`, `rejected`, `superseded`, `recorded`); only the board says these.
+ */
+export type Status = 'proposed' | 'approved' | 'rejected';
+/**
+ * The statuses a card can be filtered by, in this order, after Waiting: Proposed (a set with none chosen
+ * yet), Approved. Rejected is never a card of its own, so the Overview leaves it out.
+ */
+export const STATUS_ORDER: Status[] = ['proposed', 'approved', 'rejected'];
+export const STATUS_LABEL: Record<Status, string> = { proposed: 'Proposed', approved: 'Approved', rejected: 'Rejected' };
+export const statusOf = (c: { work?: boolean; state: CandidateState }): Status =>
+  c.work || c.state === 'approved' ? 'approved' : c.state === 'rejected' || c.state === 'superseded' ? 'rejected' : 'proposed';
+/** Order on a page: the option you approved, options still proposed, approved work, then what you rejected. */
+export const statusRank = (c: { work?: boolean; state: CandidateState }): number => {
+  const s = statusOf(c);
+  return c.work ? 2 : s === 'approved' ? 0 : s === 'proposed' ? 1 : 3;
+};
+/**
+ * A decision's state as its pill says it: Rule or Retired. None for one confirmed or fixed: a fix already
+ * shows in its Rejected row, the agent's words "corrected by" you.
+ */
 export const verdictLabel = (d: { verdict: string; active?: boolean }): string | null =>
-  d.verdict === 'rule' ? (d.active === false ? 'Retired' : 'Rule') : d.verdict === 'fix' ? 'Corrected' : null;
+  d.verdict === 'rule' ? (d.active === false ? 'Retired' : 'Rule') : null;
 
 /**
  * A decision as text, the way its change's page shows it: id, type and state, then Change, Rule or
  * Pattern, Rejected and Applies to. What Copy puts on the clipboard, on a change's page and on Design
  * rules alike, so one copied from either reads the same.
  */
-export function decisionText(d: Pick<BoardDecision, 'id' | 'change' | 'decision' | 'rejected' | 'verdict' | 'dimension' | 'active'>, applies: string | null): string {
+export function decisionText(d: Pick<BoardDecision, 'id' | 'change' | 'decision' | 'rejected' | 'verdict' | 'dimension' | 'active' | 'against'>, applies: string | null): string {
   const dim = d.dimension ? DIMENSION_LABEL[d.dimension] ?? d.dimension : null;
   return [
-    [d.id, dim, verdictLabel(d)].filter(Boolean).join(' · '),
+    [d.id, dim, verdictLabel(d), d.against ? 'Exception' : null].filter(Boolean).join(' · '),
     `Change: ${sentence(d.change ?? d.decision)}`,
     d.change && d.change !== d.decision ? `${d.verdict === 'rule' ? 'Rule' : 'Pattern'}: ${sentence(d.decision)}` : null,
     d.rejected.length === 1 ? `Rejected: ${sentence(d.rejected[0])}` : d.rejected.length ? ['Rejected:', ...d.rejected.map((r) => `- ${sentence(r)}`)].join('\n') : null,
     applies ? `Applies to: ${applies}` : null,
+    d.against ? `Exception to: ${d.against.id} ${sentence(d.against.decision)}` : null,
   ].filter(Boolean).join('\n');
 }
 
