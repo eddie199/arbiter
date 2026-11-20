@@ -385,7 +385,8 @@ function Rail({ route, data, sections, rules, waiting, refresh }: Nav) {
   const groups: { key: string; title?: string; items: Item[] }[] = [
     { key: 'all', items: [{ href: href('overview', { view }), label: 'Overview', hint: String(overviewCards(data.board.candidates, areasOf(data)).length), icon: OverviewIcon, on: onOverview && !section && !route.query.get('folder') }] },
     { key: 'sections', title: 'Areas', items: sections.map((s) => ({ href: href('overview', { section: s.name, view }), label: s.name, hint: String(s.count), on: onOverview && section === s.name })) },
-    { key: 'rules', items: rules ? [{ href: href('rules'), label: 'Design rules', hint: String(rules), icon: RulesIcon, on: route.page === 'rules' }] : [] },
+    // On the live board it's always there, even with none: right after the last is removed, its Undo is on that page.
+    { key: 'rules', items: rules || data.live ? [{ href: href('rules'), label: 'Design rules', hint: rules ? String(rules) : undefined, icon: RulesIcon, on: route.page === 'rules' }] : [] },
     {
       key: 'review',
       items: data.live ? [{ href: href('review'), label: 'Review inbox', hint: waiting ? String(waiting) : undefined, icon: ReviewIcon, on: route.page === 'review' }] : [],
@@ -442,7 +443,7 @@ function Chips({ route, data, sections, rules, waiting }: Nav) {
       {layoutOf(sections.map((s) => s.name), data.arrangement).filter((e) => data.live || e.kind !== 'folder' || e.areas.some((a) => sections.some((s) => s.name === a))).map((e) => e.kind === 'folder'
         ? <a key={`f-${e.id}`} href={href('overview', { folder: e.id })} className={chip(onBoard && route.query.get('folder') === e.id)}>{e.name} <span className="opacity-60">{e.areas.reduce((n, a) => n + (sections.find((s) => s.name === a)?.count ?? 0), 0)}</span></a>
         : <a key={e.name} href={href('overview', { section: e.name })} className={chip(onBoard && section === e.name)}>{e.name} <span className="opacity-60">{sections.find((s) => s.name === e.name)?.count}</span></a>)}
-      {rules ? <a href={href('rules')} className={chip(route.page === 'rules')}>Design rules</a> : null}
+      {rules || data.live ? <a href={href('rules')} className={chip(route.page === 'rules')}>Design rules</a> : null}
       {data.live ? <a href={href('review')} className={chip(route.page === 'review')}>Review inbox{waiting ? <span className="opacity-60"> {waiting}</span> : null}</a> : null}
       {data.live && data.settings ? <a href={href('preferences')} className={chip(route.page === 'preferences')}>Preferences</a> : null}
     </div>

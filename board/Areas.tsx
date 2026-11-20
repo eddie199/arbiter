@@ -7,6 +7,7 @@ import { arrangementOf, keyOf, layoutOf, type Entry } from '../src/area-names';
 import { errorsOf, post } from './api';
 import { href, type Route } from './route';
 import { Tooltip } from '@/components/ui/tooltip';
+import { saveKeys } from './keys';
 
 /**
  * Areas in the side nav, with folders you make: name one, drag areas into it, drag rows to reorder.
@@ -102,11 +103,13 @@ const keepOpen = (s: Set<string>) => { try { localStorage.setItem(OPEN, JSON.str
 
 const Chevron = ({ open }: { open: boolean }) => <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}><path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 
-/** "⋯", and a menu under it. Shown on a row's hover or focus, and kept while its menu is open. */
-function Dots({ label, className = '', back, children }: { label: string; className?: string; back: () => boolean; children: React.ReactNode }) {
+/** "⋯", and a menu under it. Shown on a row's hover or focus, and kept while its menu is open. Named on hover. */
+function Dots({ label, tip, className = '', back, children }: { label: string; tip: string; className?: string; back: () => boolean; children: React.ReactNode }) {
   return (
     <Menu.Root>
-      <Menu.Trigger aria-label={label} className={`flex h-6 w-6 items-center justify-center rounded-ui text-faint hover:bg-surface-2 hover:text-fg data-[popup-open]:bg-surface-2 data-[popup-open]:text-fg ${className}`}>{DOTS}</Menu.Trigger>
+      <Tooltip label={tip}>
+        <Menu.Trigger aria-label={label} className={`flex h-6 w-6 items-center justify-center rounded-ui text-faint hover:bg-surface-2 hover:text-fg data-[popup-open]:bg-surface-2 data-[popup-open]:text-fg ${className}`}>{DOTS}</Menu.Trigger>
+      </Tooltip>
       <Menu.Portal>
         <Menu.Positioner sideOffset={4} align="start" className="z-50">
           <Menu.Popup className={POPUP} finalFocus={back}>{children}</Menu.Popup>
@@ -130,10 +133,7 @@ function NameInput({ value, onDone }: { value: string; onDone: (name: string | n
     <input
       ref={input} autoFocus defaultValue={value} maxLength={60} aria-label="Folder name" placeholder="Folder name"
       onFocus={(e) => e.currentTarget.select()}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') { e.preventDefault(); finish(e.currentTarget.value); }
-        if (e.key === 'Escape') { e.preventDefault(); finish(null); }
-      }}
+      onKeyDown={saveKeys(() => finish(input.current?.value ?? ''), () => finish(null))}
       onBlur={(e) => finish(e.currentTarget.value)}
       className="h-7 min-w-0 flex-1 rounded-ui border border-border-strong bg-bg px-2 text-[14px] text-fg outline-none placeholder:text-faint"
     />
@@ -280,7 +280,7 @@ export function AreasNav({ data, names, counts, route, view, folded, onFold, ref
           {hint(counts.get(name), on)}
         </a>
         {live ? (
-          <Dots label={`${name}: options`} className={rowDots} back={back}>
+          <Dots label={`${name}: options`} tip="Move to a folder and more" className={rowDots} back={back}>
             <Menu.SubmenuRoot>
               <Menu.SubmenuTrigger className={ITEM}><ItemLabel icon={Icon.moveTo}>Move to</ItemLabel><Chevron open={false} /></Menu.SubmenuTrigger>
               <Menu.Portal>
@@ -310,7 +310,7 @@ export function AreasNav({ data, names, counts, route, view, folded, onFold, ref
           {folded && activeInside ? <Tooltip label="Current page is in here"><span className="ml-auto h-1.5 w-1.5 rounded-full bg-fg" /></Tooltip> : null}
         </button>
         {live ? (
-          <Dots label="Areas: options" className="mr-0.5" back={back}>
+          <Dots label="Areas: options" tip="New folder and more" className="mr-0.5" back={back}>
             <Item icon={Icon.folderPlus} onClick={() => { if (folded) onFold(); newFolder(); }}>New folder</Item>
             <Item icon={Icon.sort} onClick={() => void save(sortedAZ(entries))}>Sort A to Z</Item>
           </Dots>
@@ -330,16 +330,18 @@ export function AreasNav({ data, names, counts, route, view, folded, onFold, ref
             return (
               <li key={id} className={drag?.kind === 'folder' && drag.id === e.id ? 'opacity-40' : ''}>
                 <div className={`group/row relative ${row(on)} ${mark(id)} pr-2.5`} {...dropProps({ kind: 'top', key: id }, id, true)}>
-                  <button type="button" onClick={() => toggle(e.id)} aria-expanded={opened} aria-label={`${opened ? 'Close' : 'Open'} ${e.name || 'folder'}`} className="flex h-8 w-[26px] shrink-0 items-center justify-center text-faint hover:text-fg">
-                    <Chevron open={opened} />
-                  </button>
+                  <Tooltip label={opened ? 'Close folder' : 'Open folder'}>
+                    <button type="button" onClick={() => toggle(e.id)} aria-expanded={opened} aria-label={`${opened ? 'Close' : 'Open'} ${e.name || 'folder'}`} className="flex h-8 w-[26px] shrink-0 items-center justify-center text-faint hover:text-fg">
+                      <Chevron open={opened} />
+                    </button>
+                  </Tooltip>
                   {editing?.id === e.id ? <NameInput value={e.name} onDone={(n) => named(e.id, n)} /> : <>
                     <a href={href('overview', { folder: e.id, view })} aria-current={on ? 'page' : undefined} {...dragProps({ kind: 'folder', id: e.id })} className="flex h-8 min-w-0 flex-1 items-center pr-2">
                       <span className="truncate">{e.name}</span>
                     </a>
                     {hint(count, on)}
                     {live ? (
-                      <Dots label={`${e.name} folder: options`} className={rowDots} back={back}>
+                      <Dots label={`${e.name} folder: options`} tip="Rename and more" className={rowDots} back={back}>
                         <Item icon={Icon.pencil} onClick={() => startNaming(e.id, false)}>Rename</Item>
                         <Item icon={Icon.up} disabled={i === 0} onClick={() => void save(nudged(entries, id, -1))}>Move up</Item>
                         <Item icon={Icon.down} disabled={i === entries.length - 1} onClick={() => void save(nudged(entries, id, 1))}>Move down</Item>
@@ -359,7 +361,7 @@ export function AreasNav({ data, names, counts, route, view, folded, onFold, ref
           })}
         </ul>
       )}
-      {error ? <p className="mt-1 px-1.5 text-[12px] text-bad">{error}</p> : null}
+      {error ? <p role="alert" className="mt-1 px-1.5 text-[12px] text-bad">{error}</p> : null}
     </div>
   );
 }

@@ -145,9 +145,11 @@ function Viewer({ src, alt }: { src: string; alt: string }) {
           <Tooltip label="Back to the starting size (0)"><button type="button" onClick={() => go(() => BASE)} className="h-7 min-w-14 rounded-ui px-2 text-[13px] tabular-nums text-muted hover:bg-surface-2 hover:text-fg">{pct ? `${pct}%` : '—'}</button></Tooltip>
           <ZoomButton label="Zoom in" disabled={step === ZOOMS.length - 1} onClick={() => go((s) => s + 1)}><path d="M3 7h8M7 3v8" /></ZoomButton>
           <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-          <DialogClose aria-label="Close" className="flex h-7 w-7 items-center justify-center rounded-ui text-muted hover:bg-surface-2 hover:text-fg">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7" /></svg>
-          </DialogClose>
+          <Tooltip label="Close (Esc)">
+            <DialogClose aria-label="Close" className="flex h-7 w-7 items-center justify-center rounded-ui text-muted hover:bg-surface-2 hover:text-fg">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7" /></svg>
+            </DialogClose>
+          </Tooltip>
         </div>
       </div>
       <div ref={box} className="min-h-0 flex-1 overflow-auto bg-surface-2 p-4 sm:p-8">

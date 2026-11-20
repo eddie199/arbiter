@@ -6,6 +6,7 @@ import { Tooltip, TooltipProvider } from '@/components/ui/tooltip';
 import { Faint, Meta, PageTitle, SectionTitle } from '@/components/ui/type';
 import type { BoardSettings, LocalBoard } from './types';
 import { errorsOf, post } from './api';
+import { saveKeys } from './keys';
 
 type Key = keyof BoardSettings;
 
@@ -25,6 +26,8 @@ export function Preferences({ data, refresh }: { data: LocalBoard; refresh: () =
   const [saved, setSaved] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // A field typed in again, or put back as it was, no longer says what was wrong with it.
+  const clear = (k: Key) => setErrors((e) => Object.fromEntries(Object.entries(e).filter(([x]) => x !== k)));
   const save = async (patch: Partial<BoardSettings>): Promise<boolean> => {
     const keys = Object.keys(patch) as Key[];
     setShown((x) => ({ ...x, ...patch }));
@@ -86,13 +89,13 @@ export function Preferences({ data, refresh }: { data: LocalBoard; refresh: () =
 
       <Group title="Rules and pictures" about="How many rules the agent keeps, and the pictures on each change.">
         <Row label="Design rules" hint={`DECISIONS.md has ${s.rules} now. When it’s full, a new rule has to replace one. More rules is more for the agent to read before every change.`}>
-          <Cap value={shown.cap} min={Math.max(1, s.rules)} onSave={(cap) => save({ cap })} />
+          <Cap value={shown.cap} min={Math.max(1, s.rules)} onSave={(cap) => save({ cap })} onEdit={() => clear('cap')} />
           <FieldError text={errors.cap} />
         </Row>
         <Row kind="switch" label="Pictures" hint="One picture of a screen when work on it settles, for its card.">
           <Switch checked={shown.pictures} onChange={(on) => void save({ pictures: on })} tip="When work on a screen settles, the agent opens the app and takes one picture of it for that change's card. Off: no pictures, and nothing says one is missing.">Take a picture when a screen changes</Switch>
           <FieldError text={errors.pictures} />
-          {shown.pictures ? <App value={s.app} onSave={(app) => save({ app })} error={errors.app} /> : null}
+          {shown.pictures ? <App value={s.app} onSave={(app) => save({ app })} onEdit={() => clear('app')} error={errors.app} /> : null}
         </Row>
         <Row kind="switch" label="Folders" hint="Offered once a session, when eight or more areas sit outside a folder.">
           <Switch checked={shown.suggestFolders} onChange={(on) => void save({ suggestFolders: on })} tip="When eight or more areas sit outside a folder, the agent offers once a session to group them. It only saves folders you say yes to.">Suggest folders when areas pile up</Switch>
@@ -142,12 +145,13 @@ function FieldError({ text }: { text?: string }) {
 }
 
 /** The most rules DECISIONS.md holds. Saved on Enter or on leaving the field; Escape puts it back. */
-function Cap({ value, min, onSave }: { value: number; min: number; onSave: (n: number) => Promise<boolean> }) {
+function Cap({ value, min, onSave, onEdit }: { value: number; min: number; onSave: (n: number) => Promise<boolean>; onEdit: () => void }) {
   const [text, setText] = useState(String(value));
   useEffect(() => setText(String(value)), [value]);
+  const back = () => { setText(String(value)); onEdit(); };
   const commit = () => {
     const n = Number(text);
-    if (text.trim() === '' || n === value) { setText(String(value)); return; }
+    if (text.trim() === '' || n === value) return back();
     void onSave(n).then((ok) => { if (!ok) setText(String(value)); });
   };
   return (
@@ -155,8 +159,8 @@ function Cap({ value, min, onSave }: { value: number; min: number; onSave: (n: n
       <Tooltip label={`The most rules DECISIONS.md can hold, up to 100. It can’t go below the ${min} you have. Press Enter to save.`}>
         <Input
           type="number" inputMode="numeric" min={min} max={100} value={text} aria-label="The most design rules DECISIONS.md holds" className="w-20! tabular-nums"
-          onChange={(e) => setText(e.target.value)} onBlur={commit}
-          onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setText(String(value)); }}
+          onChange={(e) => { setText(e.target.value); onEdit(); }} onBlur={commit}
+          onKeyDown={saveKeys(commit, back)}
         />
       </Tooltip>
       <span className="text-muted">at most, in DECISIONS.md</span>
@@ -165,7 +169,7 @@ function Cap({ value, min, onSave }: { value: number; min: number; onSave: (n: n
 }
 
 /** Where the app runs, so the agent has an address to open. Saved on Enter or on leaving the field; empty takes it off. */
-function App({ value, onSave, error }: { value: string | null; onSave: (url: string) => Promise<boolean>; error?: string }) {
+function App({ value, onSave, onEdit, error }: { value: string | null; onSave: (url: string) => Promise<boolean>; onEdit: () => void; error?: string }) {
   const [text, setText] = useState(value ?? '');
   useEffect(() => setText(value ?? ''), [value]);
   const commit = () => { if (text.trim() !== (value ?? '')) void onSave(text.trim()); };
@@ -175,8 +179,8 @@ function App({ value, onSave, error }: { value: string | null; onSave: (url: str
       <Tooltip label="Where your app runs while you work on it, like http://localhost:3000. The agent opens it here to take pictures. Press Enter to save.">
         <Input
           id="app-address" aria-label="App address" value={text} placeholder="http://localhost:3000" spellCheck={false} className="mt-1.5 max-w-xs"
-          onChange={(e) => setText(e.target.value)} onBlur={commit}
-          onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setText(value ?? ''); }}
+          onChange={(e) => { setText(e.target.value); onEdit(); }} onBlur={commit}
+          onKeyDown={saveKeys(commit, () => { setText(value ?? ''); onEdit(); })}
         />
       </Tooltip>
       {error ? <FieldError text={error} /> : <p className="mt-1.5 text-[13px] text-muted">Where the agent opens the app to take them. Leave it empty and the agent asks.</p>}

@@ -6,6 +6,7 @@ import { errorsOf, post } from './api';
 import { RemoveDialog } from './RemoveDialog';
 import { FullDialog, OverlapDialog, type Overlap, type RuleLine } from './RuleDialogs';
 import { go, href } from './route';
+import { saveKeys } from './keys';
 
 /** A decision as the change page has it. `active` is false for a rule since retired or replaced. */
 export interface ActionDecision { id: string; change: string | null; decision: string; verdict: string; active?: boolean; against?: { id: string } | null }
@@ -83,11 +84,8 @@ export function DecisionActions({ d, copyText, last, onRemoved, refresh }: { d: 
   const copy = async () => {
     try { await navigator.clipboard.writeText(copyText); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {}
   };
-  // One line each: Enter saves, Escape puts it back as it was.
-  const keys = (go: () => Promise<void>) => (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') { e.preventDefault(); close(); }
-    else if (e.key === 'Enter') { e.preventDefault(); void go(); }
-  };
+  // Enter saves, Shift+Enter adds a line, Escape puts it back as it was.
+  const keys = (go: () => Promise<void>) => saveKeys(() => void go(), close);
 
   return (
     <div className="pl-[calc(6rem+0.75rem)]">
@@ -145,8 +143,8 @@ export function RemovedDecision({ r, onUndone, refresh }: { r: Removal; onUndone
       <div className="min-w-0 flex-1 opacity-60">
         <span className="font-mono text-xs text-muted">{r.d.id}</span>
         <p className="mt-1 text-[14px]">{sentence(r.d.change ?? r.d.decision)}</p>
-        <p className="mt-0.5 text-[13px] text-muted">{r.kind === 'rule' ? `No longer a rule · ${sentence(r.why ?? '')}` : 'Removed from the record'}</p>
-        {error ? <p className="mt-1 text-[13px] text-bad">{error}</p> : null}
+        <p className="mt-0.5 text-[13px] text-muted">{r.kind === 'rule' ? `Retired · ${sentence(r.why ?? '')}` : 'Removed from the record'}</p>
+        {error ? <p role="alert" className="mt-1 text-[13px] text-bad">{error}</p> : null}
       </div>
       <button type="button" disabled={busy} onClick={() => void undo()} className="pt-0.5 text-[13px] font-medium text-fg hover:underline disabled:opacity-40">Undo</button>
     </li>

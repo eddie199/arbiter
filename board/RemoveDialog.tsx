@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/input';
+import { saveKeys } from './keys';
 
 /**
  * Remove, confirmed in a dialog: what it removes and what happens, then Remove or Cancel. A rule asks why
@@ -28,7 +29,7 @@ export function RemoveDialog({ open, onOpenChange, title, body, why, onWhy, busy
         {asks ? (
           <Textarea autoFocus aria-label="Why it’s removed" value={why} placeholder="One line" rows={2} className="mt-4 min-h-14"
             onChange={(e) => onWhy?.(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (ready && !busy) onRemove(); } }} />
+            onKeyDown={saveKeys(() => { if (ready && !busy) onRemove(); })} />
         ) : null}
         {error ? <p role="alert" className="mt-3 text-[13px] text-bad">{error}</p> : null}
         <div className="mt-5 flex justify-end gap-2">

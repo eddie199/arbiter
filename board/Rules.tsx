@@ -14,6 +14,7 @@ import type { LocalBoard } from './types';
 import { errorsOf, post } from './api';
 import { areasOf, CHIP, TRAY } from './bits';
 import { RemoveDialog } from './RemoveDialog';
+import { saveKeys } from './keys';
 import { go, href } from './route';
 
 /**
@@ -172,10 +173,10 @@ function RulesFilter({ data, rules, kinds, q }: { data: LocalBoard; rules: Board
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2 border-b border-border pb-3">
       <MultiSelect icon label="Type" values={kinds} options={options} onChange={(v) => to({ kind: v })} />
-      {kinds.length || q ? <Button variant="ghost" size="sm" onClick={() => to({ kind: [], q: '' })}>Clear</Button> : null}
+      {kinds.length || q ? <Button variant="ghost" size="sm" onClick={() => to({ kind: [], q: '' })}>Clear filters</Button> : null}
       {/* Search, as an icon at the bar's right end, opening into a field; then "⋯" for the file itself. */}
       <div className="ml-auto flex items-center gap-2">
-        <SearchButton value={q} label="Search rules" placeholder={`Search ${rules.length} rules…`} onSearch={(text) => to({ q: text })} />
+        <SearchButton value={q} label="Search rules" placeholder={`Search ${rules.length} rule${rules.length === 1 ? '' : 's'}…`} onSearch={(text) => to({ q: text })} />
         <RulesMenu data={data} rules={rules} />
       </div>
     </div>
@@ -264,11 +265,8 @@ function useRuleActions(r: { id: string; decision: string }, refresh: () => Prom
     setBusy(false);
     close();
   };
-  // One line each: Enter saves, Escape puts it back as it was.
-  const keys = (go: () => Promise<void>) => (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') { e.preventDefault(); close(); }
-    else if (e.key === 'Enter') { e.preventDefault(); void go(); }
-  };
+  // Enter saves, Shift+Enter adds a line, Escape puts it back as it was.
+  const keys = (go: () => Promise<void>) => saveKeys(() => void go(), close);
   return { id: r.id, mode, text, setText, busy, error, open, close, save, remove, keys };
 }
 type RuleActions = ReturnType<typeof useRuleActions>;
@@ -310,7 +308,7 @@ function RuleRow({ r, at, from, live, copyText, onRemoved, refresh }: { r: Board
             <button type="button" onClick={() => a.open('remove')} className="hover:text-bad">Remove</button>
           </div>
         ) : null}
-        {a.error && a.mode !== 'remove' ? <p className="mt-2 text-[13px] text-bad">{a.error}</p> : null}
+        {a.error && a.mode !== 'remove' ? <p role="alert" className="mt-2 text-[13px] text-bad">{a.error}</p> : null}
         <RemoveDialog
           open={a.mode === 'remove'} onOpenChange={(o) => { if (!o) a.close(); }} busy={a.busy} error={a.error} onRemove={() => void a.remove()}
           title={`Remove ${r.id}?`} body="Why remove this rule? Your agent will stop following it."
@@ -391,8 +389,8 @@ function RemovedRow({ r, why, onUndo }: { r: BoardRule; why: string; onUndo: (id
       <Id className="pt-0.5 opacity-60">{r.id}</Id>
       <div className="min-w-0 max-w-[40rem]">
         <div className="opacity-60">{sentence(r.decision)}</div>
-        <div className="mt-0.5 text-[13px] text-muted opacity-60">Removed · {sentence(why)}</div>
-        {error ? <p className="mt-1 text-[13px] text-bad">{error}</p> : null}
+        <div className="mt-0.5 text-[13px] text-muted opacity-60">Retired · {sentence(why)}</div>
+        {error ? <p role="alert" className="mt-1 text-[13px] text-bad">{error}</p> : null}
       </div>
       <button type="button" disabled={busy} onClick={() => void undo()} className="self-start pt-0.5 text-[13px] font-medium text-fg hover:underline disabled:opacity-40">Undo</button>
     </li>

@@ -41,7 +41,7 @@ export function Toolbar({ q, section, folder, status, view, sections, statuses, 
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           {chosenStatus.map((o) => <FilterPill key={`s-${o.value}`} label={o.label} tone={o.tone} onRemove={() => to({ status: status.filter((x) => x !== o.value) })} />)}
           {chosenArea.map((o) => <FilterPill key={`a-${o.value}`} prefix="Area" label={o.label} onRemove={() => to({ section: section.filter((x) => x !== o.value) })} />)}
-          <Button variant="ghost" size="sm" onClick={() => to({ q: '', section: [], status: [] })}>Clear all</Button>
+          <Button variant="ghost" size="sm" onClick={() => to({ q: '', section: [], status: [] })}>Clear filters</Button>
         </div>
       ) : null}
     </div>

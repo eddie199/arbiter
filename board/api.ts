@@ -44,5 +44,8 @@ export const sayBye = () => {
 /** When the agent makes a code change you ask for here. */
 export const whenAgent = (agent: Agent) => (agent === 'waiting' ? 'when you close the board' : agent === 'next-message' ? 'with your next message' : 'at the next /arbiter');
 
-/** The server's errors, in one line. */
-export const errorsOf = (r: Reply) => (r.errors as string[] | undefined)?.join(' · ') ?? (r.message as string | undefined) ?? 'Something went wrong';
+/** The server's errors, in one line, starting with a capital as every line on the board does. */
+export const errorsOf = (r: Reply) => {
+  const text = (r.errors as string[] | undefined)?.join(' · ') ?? (r.message as string | undefined) ?? 'Something went wrong';
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};

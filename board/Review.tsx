@@ -341,7 +341,7 @@ function Undo({ id, onUndo, keys }: { id: string; onUndo: (id: string) => Promis
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
-  if (error) return <span className="text-bad">{error}</span>;
+  if (error) return <span role="alert" className="text-bad">{error}</span>;
   return (
     <button type="button" disabled={busy} onClick={() => void run()} aria-keyshortcuts={keys ? 'Z' : undefined} className="inline-flex items-baseline gap-1.5 font-medium text-fg hover:underline disabled:opacity-40">
       Undo{keys ? <kbd className="font-mono text-[11px] opacity-60">Z</kbd> : null}

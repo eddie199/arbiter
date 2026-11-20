@@ -71,7 +71,7 @@ function RenameDialog({ open, onOpenChange, name, area, short, areas, refresh }:
     setBusy(true);
     const r = await post('/api/rename', { from: name, to: next });
     setBusy(false);
-    if (r.exitCode) { const e = errorsOf(r); setError(e.charAt(0).toUpperCase() + e.slice(1)); return; }
+    if (r.exitCode) return setError(errorsOf(r));
     onOpenChange(false);
     await refresh();
     const to = (r.card as { to?: string } | undefined)?.to;
@@ -79,7 +79,8 @@ function RenameDialog({ open, onOpenChange, name, area, short, areas, refresh }:
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    // Not closed while it's saving: closed mid-rename, the page would still move to the new name.
+    <Dialog open={open} onOpenChange={(o) => { if (!busy) onOpenChange(o); }}>
       <DialogContent>
         <DialogTitle className="font-semibold tracking-tight">Rename</DialogTitle>
         <DialogDescription className="mt-1.5 text-[13px] text-muted">Its decisions, picture and comments move with it, and the agent uses the new name from now on.</DialogDescription>
@@ -123,7 +124,7 @@ function MergeDialog({ open, onOpenChange, name, area, others, refresh }: { open
     setBusy(true);
     const r = await post('/api/rename', { from: name, to: into, merge: true });
     setBusy(false);
-    if (r.exitCode) { const e = errorsOf(r); setError(e.charAt(0).toUpperCase() + e.slice(1)); return; }
+    if (r.exitCode) return setError(errorsOf(r));
     onOpenChange(false);
     await refresh();
     const to = (r.card as { to?: string } | undefined)?.to;
@@ -131,7 +132,7 @@ function MergeDialog({ open, onOpenChange, name, area, others, refresh }: { open
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => { if (!busy) onOpenChange(o); }}>
       <DialogContent>
         <DialogTitle className="font-semibold tracking-tight">Merge into another change</DialogTitle>
         <DialogDescription className="mt-1.5 text-[13px] text-muted">Use merge when this work is part of another change. It moves everything here into the change you pick.</DialogDescription>

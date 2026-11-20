@@ -23,7 +23,7 @@ export function VersionRow({ versions, shown, onShow }: { versions: BoardVersion
       <Meta className="mr-1">Versions</Meta>
       <TooltipProvider delay={300}>
         {versions.map((v, i) => (
-          <Tooltip key={v.src} label={`V${i + 1} · ${takenAt(v)}${i === versions.length - 1 ? ' · now' : ''}`}>
+          <Tooltip key={v.src} label={`Version ${i + 1} · ${takenAt(v)}${i === versions.length - 1 ? ' · now' : ''}`}>
             <button type="button" onClick={() => onShow(i)} aria-pressed={i === shown} aria-label={`Version ${i + 1}, from ${takenAt(v)}`}
               className={`relative block aspect-[3/2] w-12 overflow-hidden rounded-[4px] border bg-surface-2 ${i === shown ? 'border-fg ring-1 ring-fg' : 'border-border hover:border-border-strong'}`}>
               <img src={v.src} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover object-top" />
