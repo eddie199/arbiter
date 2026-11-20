@@ -79,10 +79,10 @@ test('init keeps .arbiter/.gitignore whole: the token, the handoff, and lines so
   write(cwd, '.arbiter/.gitignore', 'hosted.token\nlast-review.json\nmy-notes.md\n');
   await init({ cwd, yes: true, skipInstall: true, author: 'test' });
   const lines = fs.readFileSync(path.join(cwd, '.arbiter/.gitignore'), 'utf8').split('\n').filter(Boolean);
-  assert.deepEqual(lines, ['hosted.token', 'last-review.json', 'my-notes.md']);
+  assert.deepEqual(lines, ['hosted.token', 'last-review.json', 'my-notes.md', 'last-review.seen.json', '.lock']);
 
   const fresh = tmp();
   fs.mkdirSync(path.join(fresh, '.claude'));
   await init({ cwd: fresh, yes: true, skipInstall: true, author: 'test' });
-  assert.deepEqual(fs.readFileSync(path.join(fresh, '.arbiter/.gitignore'), 'utf8').split('\n').filter(Boolean), ['hosted.token', 'last-review.json']);
+  assert.deepEqual(fs.readFileSync(path.join(fresh, '.arbiter/.gitignore'), 'utf8').split('\n').filter(Boolean), ['hosted.token', 'last-review.json', 'last-review.seen.json', '.lock']);
 });

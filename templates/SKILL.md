@@ -285,7 +285,7 @@ That also marks the project as onboarded. Then continue with the queue as below;
 
 If the project publishes to a hosted board (`.arbiter/hosted.json` exists), run `npx arbiter pull` first — it's how requests made on the board since last time arrive, and how ones taken back leave. Relay nothing from its output except a `withdrew` line, word for word: the queue shows the rest. If it fails (offline, or no publish token on this machine), say so in one line and carry on with the queue.
 
-The queue may carry `lastReview`: what they judged on the board that needs the code changed, and you haven't made yet. Its answers are recorded already, but the code side isn't done. Before anything else, make its `todo` exactly as **Reviewing in the browser** says, then delete the file it names (`lastReview.file`), so it isn't made twice.
+The queue may carry `lastReview`: what they judged on the board that needs the code changed, and you haven't made yet. Its answers are recorded already, but the code side isn't done. Before anything else, make its `todo` exactly as **Reviewing in the browser** says, then run `npx arbiter review --done` (`lastReview.done`), so it isn't made twice. That clears what you were given and keeps anything they judge on the board meanwhile; never delete the file yourself.
 
 The queue may carry `requests` — changes someone asked for on the board. Those come first, before any decision: make the `requests.approved` ones without asking again, then present the `requests.open` ones. See **Requests from the board**, below.
 
@@ -466,7 +466,7 @@ Outside Claude Code, end it with `comes to me at the next /arbiter` instead. If 
 
 The page records each answer as they give it, so never judge or record those decisions again. What it can't do is change code: a fix waits for you in `.arbiter/last-review.json`. So does a rule they edit or remove on its Design rules page, since you may have read `DECISIONS.md` before they changed it.
 
-- **In Claude Code**, a hook tells you at their next message (`Arbiter: since your last turn, the user judged decisions on the local board`). Before you answer that message, make each change it lists, delete the file, and say in one line what you changed. Then answer them.
+- **In Claude Code**, a hook tells you at their next message (`Arbiter: since your last turn, the user judged decisions on the local board`). Before you answer that message, make each change it lists, run `npx arbiter review --done`, and say in one line what you changed. Then answer them.
 - **Anywhere**, the next `/arbiter` brings the same file as `lastReview` (see **When they ask**).
 
 The file's `todo`, in order:
@@ -874,7 +874,7 @@ A rule that says something different now isn't a rewording: that's a new rule th
 
 ## When invoked as `/arbiter`
 
-- `/arbiter` alone — `npx arbiter pull` if the project has a hosted board, then read `npx arbiter rules --pending --json`. A `lastReview` first (make its `todo`, then delete its file), then approved requests (make them), then open requests (answer them), then everything queued, widget or text format above, judging each with `record P-xxxx --as …`. If nothing is queued and no request is waiting, say so in one line.
+- `/arbiter` alone — `npx arbiter pull` if the project has a hosted board, then read `npx arbiter rules --pending --json`. A `lastReview` first (make its `todo`, then `npx arbiter review --done`), then approved requests (make them), then open requests (answer them), then everything queued, widget or text format above, judging each with `record P-xxxx --as …`. If nothing is queued and no request is waiting, say so in one line.
 - `/arbiter` in the browser (*"review in the browser"*) — see **Reviewing in the browser**.
 - `/arbiter <text>` — treat the text as a direct request: record it, per the next section.
 

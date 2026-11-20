@@ -228,11 +228,11 @@ Git stays the source of truth. The service only holds the latest board and its c
 A comment is just input. **Request change** is different: someone wants something changed, so it gets a proper answer.
 
 1. `npx arbiter pull` turns each request into `R-0001` in `.arbiter/requests.json`. Commit it so everyone sees the same answers.
-2. You answer in chat with `/arbiter`, or on the **Requests** tab of `arbiter review`:
+2. You answer in chat with `/arbiter`:
    - **Apply**: `record R-0001 --as apply`
    - **Apply, but…**: `record R-0001 --as apply --to "keep the tab, make the button red"`
    - **Decline**: `record R-0001 --as decline --why "…"` (a reason is required, since the requester reads it)
-3. The agent makes the change. Approving from chat makes it right away; approving from the review page makes it at the next `/arbiter`.
+3. The agent makes the change right away.
 4. `publish` sends the answer back. The requester sees *Open*, *Approved*, *Applied* (with what changed) or *Declined* (with the reason).
 
 > [!NOTE]
@@ -252,7 +252,7 @@ A comment is just input. **Request change** is different: someone wants somethin
 
 ### Other ways to share
 
-- **Static export.** `npx arbiter export` writes `arbiter-export/`: one `index.html` plus snapshots, no server, no JavaScript. Drop it on any static host. It's a read-only view: each screen, its state, who approved it, why the others lost, and what was decided in plain words.
+- **Static export.** `npx arbiter export` writes `arbiter-export/`: the same board as `arbiter review`, read-only, as a folder (`index.html`, the board's script and styles, and the pictures). No server: open it from disk or drop it on any static host. Each change with its picture and how it got there, what was decided in plain words, and with `--include-rules`, your design rules.
 - **GitHub Pages.** With `"destination": "git"` in `arbiter.json`, every candidate change also writes the export to `docs/arbiter/`. Turn on Pages for the `docs` folder once and the board lives at `https://<owner>.github.io/<repo>/arbiter/`. `npx arbiter publish --to pages` does the whole setup in one go.
 
 ## Screenshots
@@ -351,8 +351,9 @@ npx arbiter pull           # bring comments and requests back
 
 | Command | What it does |
 |---|---|
-| `arbiter review` | Your local board, in the browser: what's waiting for you to judge, requests from your team, every change with its picture, and your design rules. It keeps itself current while it's open, and stops when you close its tab. Nothing is uploaded. What still needs a code change reaches your agent with your next message in Claude Code (a hook `init` installs), or at the next `/arbiter`. |
+| `arbiter review` | Your local board, in the browser: what's waiting for you to judge, every change with its picture, and your design rules. It keeps itself current while it's open, and stops when you close its tab. Nothing is uploaded. What still needs a code change reaches your agent with your next message in Claude Code (a hook `init` installs), or at the next `/arbiter`. |
 | `arbiter review --json` | For an agent that waits on the board: when its last tab closes, hands over what you decided as JSON. |
+| `arbiter review --done` | For the agent, once it has made what the board handed it: clears that, and keeps anything you judged meanwhile. |
 | `arbiter rules [--dimension <name>] [--json]` | Active rules. |
 | `arbiter rules --pending` | The queue, plus requests waiting on an answer. |
 | `arbiter rules --archive` | Everything ever recorded. |
@@ -459,23 +460,9 @@ Run `npx arbiterdesign init` in the folder your agent works in, or ask the agent
 </details>
 
 <details>
-<summary><b>Do I have to write anything?</b></summary>
+<summary><b>Will it interrupt me, or bury me in reviews?</b></summary>
 
-No. The agent records what it decided and what it chose over. You confirm, make it a rule, or skip, in chat or on the review page. Mid-session you can also just say *"make that a rule"* and it's recorded without a question.
-
-</details>
-
-<details>
-<summary><b>Does it interrupt me while I'm iterating?</b></summary>
-
-No. A screen you redesign six times is one piece of work, not six prompts. Decisions queue silently and surface in one line when you move on. You judge them when you want, or never.
-
-</details>
-
-<details>
-<summary><b>Will I be reviewing hundreds of tiny decisions?</b></summary>
-
-No. Every decision is sized as feature, pattern or polish. Feature and pattern items get a card each. Polish is one line per piece of work with a single **Confirm all**. A 7px height fix and a new settings architecture don't get the same treatment.
+No. Decisions queue silently while you iterate and surface in one line when you move on. Only features and patterns are queued, a card each; small one-off fixes aren't recorded at all. You judge them when you want, or never.
 
 </details>
 
@@ -508,23 +495,16 @@ Good. Arbiter records decisions, not tokens. Rules can name your components and 
 </details>
 
 <details>
-<summary><b>Which agents does it work with?</b></summary>
+<summary><b>Is this like ADRs?</b></summary>
 
-Claude Code and Cursor get the whole loop: the agent reads your rules before UI work and records what it decides. Other agents that read a project's instructions file, like Codex, Copilot and Gemini CLI, follow the rules but don't record.
-
-</details>
-
-<details>
-<summary><b>Who installs it, and what does the rest of the team need?</b></summary>
-
-Whoever has the repo runs one command. Everyone else gets a link to the board. To comment or say "looks good", they sign in with an email link. No account to create, nothing to install.
+Yes, same idea: a call, what it beat, and why. ADRs (architecture decision records) are for engineering: the stack, the data model, the API. Arbiter is for design: layout, flow, copy and states. And no one writes it up. The agent records each call as it works and you approve in seconds.
 
 </details>
 
 <details>
-<summary><b>Will it slow the agent down?</b></summary>
+<summary><b>Doesn't Claude have memory now?</b></summary>
 
-No. Active rules are capped at 40 and read once, before UI work, not on every turn. The archive of everything ever decided is never loaded.
+Yes, but memory is what the agent learned. Arbiter is what your team decided. Claude Code's auto memory is notes Claude keeps for itself: nobody approves them, and they stay on one machine. Arbiter's rules are ones you approved, kept in the repo for every teammate, and each one records what it beat and what it replaced.
 
 </details>
 

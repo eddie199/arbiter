@@ -5,13 +5,16 @@
  * "Follow D-0009" and an approved request wait on the agent, in .arbiter/last-review.json, added to
  * as you go. So does a rule edited or removed on Design rules, since the agent may have read
  * DECISIONS.md before you changed it. The agent takes it with your next message in Claude Code (a
- * hook tells it: see templates/hooks), at the next /arbiter anywhere, and deletes the file once
- * it's made. An agent waiting on the page (`review --json`) gets it when the last tab closes instead.
+ * hook tells it: see templates/hooks), or at the next /arbiter anywhere. What it was told is kept
+ * beside it (last-review.seen.json), and once it's made, `arbiter review --done` clears just that:
+ * anything you judged while it worked stays for next time. An agent waiting on the page
+ * (`review --json`) gets it when the last tab closes instead.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Paths } from './store';
+import { writeAtomic } from './lock';
 
 /** One answer the page gave, as the server saw it go through. */
 export type Answer =
@@ -56,11 +59,13 @@ export interface Handoff {
   renamed?: { from: string; to: string }[];
   todo: Todo[];
   next: string;
-  /** The Claude Code hook has told the agent about this. A new answer rewrites the file without it, so the hook speaks again. */
+  /** Written by Arbiter before 0.1.9: the hook had told the agent. What it was told is in SEEN now. */
   told?: boolean;
 }
 
 export const FILE = 'last-review.json';
+/** What the agent was told, as it was told it: what `review --done` clears, and nothing judged since. */
+export const SEEN = 'last-review.seen.json';
 
 export function summarize(answers: Answer[], finished: Handoff['finished'], at = new Date().toISOString()): Handoff {
   const h: Handoff = { finished, at, confirmed: [], rules: [], fixed: [], skipped: [], declined: [], options: [], reworded: [], removed: [], renamed: [], todo: [], next: '' };
@@ -173,10 +178,61 @@ export function mergeHandoffs(earlier: Handoff | null, h: Handoff): Handoff {
  */
 export function saveHandoff(paths: Paths, h: Handoff): void {
   fs.mkdirSync(paths.archiveDir, { recursive: true });
-  fs.writeFileSync(path.join(paths.archiveDir, FILE), JSON.stringify(h, null, 2) + '\n');
+  writeAtomic(path.join(paths.archiveDir, FILE), JSON.stringify(h, null, 2) + '\n');
   const gi = path.join(paths.archiveDir, '.gitignore');
-  const lines = (fs.existsSync(gi) ? fs.readFileSync(gi, 'utf8') : '').split('\n').filter(Boolean);
-  if (!lines.includes(FILE)) fs.writeFileSync(gi, [...lines, FILE].join('\n') + '\n');
+  const lines = (fs.existsSync(gi) ? fs.readFileSync(gi, 'utf8') : '').split(/\r?\n/).filter(Boolean);
+  const missing = [FILE, SEEN].filter((x) => !lines.includes(x));
+  if (missing.length) fs.writeFileSync(gi, [...lines, ...missing].join('\n') + '\n');
+}
+
+/**
+ * What's waiting, handed to the agent: kept as it was given (SEEN), so `review --done` clears that and
+ * no more. The Claude Code hook keeps the same copy when it speaks.
+ */
+export function takeHandoff(paths: Paths): Handoff | null {
+  const h = readHandoff(paths);
+  if (h) writeAtomic(path.join(paths.archiveDir, SEEN), JSON.stringify(h, null, 2) + '\n');
+  return h;
+}
+
+/**
+ * The agent has made what it was told: that comes out of the file. Anything judged on the board since
+ * stays, for the hook to say at the next message. Nothing handed over yet: nothing is cleared.
+ */
+export function handoffDone(paths: Paths): { status: 'done' | 'nothing' | 'not-taken'; left: number; errors?: string[] } {
+  const h = readHandoff(paths);
+  const seenFile = path.join(paths.archiveDir, SEEN);
+  let seen: Handoff | null = null;
+  try { seen = JSON.parse(fs.readFileSync(seenFile, 'utf8')) as Handoff; } catch { /* never handed over */ }
+  if (!h) {
+    fs.rmSync(seenFile, { force: true });
+    return { status: 'nothing', left: 0 };
+  }
+  if (!seen) return { status: 'not-taken', left: h.todo.length, errors: ['Nothing was handed over yet, so nothing was cleared: read it first with npx arbiter rules --pending --json'] };
+  const key = (x: unknown) => JSON.stringify(x);
+  const minus = <T>(now: T[] | undefined, was: T[] | undefined): T[] => {
+    const gone = new Set((was ?? []).map(key));
+    return (now ?? []).filter((x) => !gone.has(key(x)));
+  };
+  const { told: _told, ...rest } = h;
+  const left: Handoff = {
+    ...rest,
+    confirmed: minus(h.confirmed, seen.confirmed),
+    rules: minus(h.rules, seen.rules),
+    fixed: minus(h.fixed, seen.fixed),
+    skipped: minus(h.skipped, seen.skipped),
+    declined: minus(h.declined, seen.declined),
+    options: minus(h.options, seen.options),
+    reworded: minus(h.reworded, seen.reworded),
+    removed: minus(h.removed, seen.removed),
+    renamed: minus(h.renamed, seen.renamed),
+    todo: minus(h.todo, seen.todo),
+  };
+  left.next = nextStep(left);
+  if (decidedAnything(left)) saveHandoff(paths, left);
+  else clearHandoff(paths);
+  fs.rmSync(seenFile, { force: true });
+  return { status: 'done', left: left.todo.length };
 }
 
 /**
@@ -225,6 +281,7 @@ export function withdrawRemoval(paths: Paths, id: string): boolean {
 /** Handed over: the agent has it, so the next /arbiter mustn't make it a second time. */
 export function clearHandoff(paths: Paths): void {
   fs.rmSync(path.join(paths.archiveDir, FILE), { force: true });
+  fs.rmSync(path.join(paths.archiveDir, SEEN), { force: true });
 }
 
 export function readHandoff(paths: Paths): Handoff | null {

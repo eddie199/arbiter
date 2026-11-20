@@ -22,6 +22,7 @@ import { judge, judgeAll, JudgeAction, Judgement, retire, reword, unjudge, unret
 import { updateCandidate } from './candidate';
 import { candidatesDir, readCandidates } from '../candidates';
 import { findRoot, readActive, readArchive, readPending, resolvePaths } from '../store';
+import { withLock, withLockAsync } from '../lock';
 import { autoPublish } from '../autopublish';
 import { historyFile, workDir } from '../work';
 import { liveBoard, reviewState } from '../localboard';
@@ -140,9 +141,17 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
   };
 
   return new Promise((resolve) => {
+    // One write at a time: the board's own in the order they came, and each against any `arbiter`
+    // command the agent runs meanwhile (.arbiter/.lock), so neither writes over the other.
+    let writing: Promise<unknown> = Promise.resolve();
     const server = http.createServer(async (req, res) => {
       try {
-        await handle(req, res);
+        if (req.method === 'POST' && fromHere(req) && req.url !== '/api/bye') {
+          await readBody(req); // read before its turn: the handler gets the same body back
+          const turn = writing.then(() => withLockAsync(paths, () => handle(req, res)));
+          writing = turn.catch(() => {});
+          await turn;
+        } else await handle(req, res);
       } catch (e) {
         // A broken requests.json, say: the page shows the message instead of the server dying.
         if (!res.headersSent) json(res, 500, { exitCode: 1, errors: [(e as Error).message] });
@@ -514,11 +523,13 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
         // An agent waiting on the page gets everything waiting for it, this sitting's and any before,
         // so it's not kept for later as well. Stopped any other way, it may not have been there to
         // read it: it stays. Nobody waiting: the terminal hears about this sitting, and it all stays.
-        const waiting = readHandoff(paths);
-        if (opts.json && waiting) {
-          if (how === 'done') clearHandoff(paths);
-          resolve({ ...waiting, finished: how });
-        } else resolve(summarize(answers, how));
+        const waiting = withLock(paths, () => {
+          const h = readHandoff(paths);
+          if (opts.json && h && how === 'done') clearHandoff(paths);
+          return h;
+        });
+        if (opts.json && waiting) resolve({ ...waiting, finished: how });
+        else resolve(summarize(answers, how));
       });
       server.closeAllConnections();
     };
@@ -593,13 +604,20 @@ function json(res: http.ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
+/** A request's body, read once: the write queue reads it before its turn, the handler after. */
+const bodies = new WeakMap<http.IncomingMessage, Promise<string>>();
 function readBody(req: http.IncomingMessage): Promise<string> {
-  return new Promise((resolve) => {
-    let data = '';
-    req.setEncoding('utf8');
-    req.on('data', (c) => (data += c));
-    req.on('end', () => resolve(data));
-  });
+  let body = bodies.get(req);
+  if (!body) {
+    body = new Promise((resolve) => {
+      let data = '';
+      req.setEncoding('utf8');
+      req.on('data', (c) => (data += c));
+      req.on('end', () => resolve(data));
+    });
+    bodies.set(req, body);
+  }
+  return body;
 }
 
 function openBrowser(url: string): void {

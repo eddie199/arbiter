@@ -9,6 +9,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { Decision } from './schema';
 import { activeHeader, archiveHeader, formatEntry, formatGrouped, parseEntries, pendingHeader } from './format';
+import { writeAtomic } from './lock';
 
 export const ACTIVE_CAP = 40;
 
@@ -89,7 +90,7 @@ export function readConfig(paths: Paths): Config | null {
 }
 
 export function writeConfig(paths: Paths, config: Config): void {
-  fs.writeFileSync(paths.config, JSON.stringify(config, null, 2) + '\n');
+  writeAtomic(paths.config, JSON.stringify(config, null, 2) + '\n');
 }
 
 export function readActive(paths: Paths): Decision[] {
@@ -99,7 +100,7 @@ export function readActive(paths: Paths): Decision[] {
 
 /** Rewrites DECISIONS.md in full. Entries are re-serialized, so hand edits survive. */
 export function writeActive(paths: Paths, decisions: Decision[], cap: number = ACTIVE_CAP): void {
-  fs.writeFileSync(paths.decisions, activeHeader(decisions.length, cap) + '\n' + formatGrouped(decisions));
+  writeAtomic(paths.decisions, activeHeader(decisions.length, cap) + '\n' + formatGrouped(decisions));
 }
 
 export function readArchive(paths: Paths): Decision[] {
@@ -122,7 +123,7 @@ export function appendArchive(paths: Paths, d: Decision): void {
  */
 export function writeArchive(paths: Paths, decisions: Decision[]): void {
   fs.mkdirSync(paths.archiveDir, { recursive: true });
-  fs.writeFileSync(paths.archive, archiveHeader() + '\n' + decisions.map(formatEntry).join('\n'));
+  writeAtomic(paths.archive, archiveHeader() + '\n' + decisions.map(formatEntry).join('\n'));
 }
 
 export function readPending(paths: Paths): Decision[] {
@@ -133,7 +134,7 @@ export function readPending(paths: Paths): Decision[] {
 /** Rewrites pending.md in full. */
 export function writePending(paths: Paths, decisions: Decision[]): void {
   fs.mkdirSync(paths.archiveDir, { recursive: true });
-  fs.writeFileSync(paths.pending, pendingHeader() + '\n' + decisions.map(formatEntry).join('\n'));
+  writeAtomic(paths.pending, pendingHeader() + '\n' + decisions.map(formatEntry).join('\n'));
 }
 
 /** Next P- id. Pending ids are never reused within the file but may repeat once it empties. */

@@ -106,7 +106,8 @@ test('the hook tells the agent once, and again only when something new arrives',
   assert.equal(said.hookEventName, 'UserPromptSubmit');
   assert.match(said.additionalContext, /One change waits for you/);
   assert.match(said.additionalContext, /D-0002: they corrected it\. The code still does "Save moved to the bottom right"; make it do "Save stays at the top"\./);
-  assert.match(said.additionalContext, /delete \.arbiter\/last-review\.json/);
+  assert.match(said.additionalContext, /npx arbiter review --done/);
+  assert.doesNotMatch(said.additionalContext, /delete \.arbiter\/last-review\.json/, 'the agent never deletes the file: it may hold answers given since');
   assert.equal(runHook(cwd), '', 'told once');
 
   saveAnswer(paths, { kind: 'decision', pending: 'P-0003', as: 'rule', id: 'D-0003' });

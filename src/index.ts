@@ -18,13 +18,14 @@ import { setup } from './commands/setup';
 import { rules } from './commands/rules';
 import { checkinHandoff, init } from './commands/init';
 import { review } from './commands/review';
-import { handoffLine } from './handoff';
+import { handoffDone, handoffLine } from './handoff';
 import { update } from './commands/update';
 import { remove, removeSnapshot, unlink } from './commands/remove';
 import { autoPublish } from './autopublish';
 import { ADMIN_ENV } from './hosted';
 import { findRoot, readConfig, resolvePaths } from './store';
 import { hookInstalled } from './hook';
+import { withLock } from './lock';
 
 const program = new Command();
 
@@ -59,31 +60,31 @@ program
   .action(async (arg: string | undefined, opts) => {
     let result;
     if (opts.retire) {
-      result = retire(opts.retire, opts.why, opts);
+      result = locked(opts.cwd, () => retire(opts.retire, opts.why, opts));
     } else if (opts.reword) {
-      result = reword(opts.reword, opts.to, opts);
+      result = locked(opts.cwd, () => reword(opts.reword, opts.to, opts));
     } else if (opts.findings) {
-      result = queueFindings(opts.findings, opts);
+      result = locked(opts.cwd, () => queueFindings(opts.findings, opts));
     } else if (opts.all) {
       const as = opts.as as JudgeAction | undefined;
       if (!as || !['accept', 'rule', 'skip'].includes(as)) {
         result = { exitCode: 1 as const, output: { status: 'invalid', errors: ['--all needs --as accept | rule | skip'] } };
       } else {
-        result = judgeAll({ ...opts, as });
+        result = locked(opts.cwd, () => judgeAll({ ...opts, as }));
       }
     } else if (arg && /^P-\d{4,}$/.test(arg)) {
       const as = opts.as as JudgeAction | undefined;
       if (!as || !['accept', 'rule', 'skip', 'fix'].includes(as)) {
         result = { exitCode: 1 as const, output: { status: 'invalid', errors: ['judging a pending id needs --as accept | rule | skip | fix'] } };
       } else {
-        result = judge(arg, { ...opts, as });
+        result = locked(opts.cwd, () => judge(arg, { ...opts, as }));
       }
     } else if (arg && /^R-\d{4,}$/.test(arg)) {
       const as = opts.as as RequestAction | undefined;
       if (!as || !['apply', 'decline'].includes(as)) {
         result = { exitCode: 1 as const, output: { status: 'invalid', errors: ['answering a request needs --as apply (Apply, but…: add --to "<instead>") | decline --why "<reason>"'] } };
       } else {
-        result = judgeRequest(arg, { ...opts, as });
+        result = locked(opts.cwd, () => judgeRequest(arg, { ...opts, as }));
       }
     } else {
       let input = arg ?? (await readStdin());
@@ -92,7 +93,7 @@ program
         process.stdout.write(JSON.stringify({ status: 'invalid', errors: ['no input — pass JSON as an argument or on stdin'] }, null, 2) + '\n');
         process.exit(1);
       }
-      result = oneOffGate(input) ?? (opts.pending ? queue(input, opts) : record(input, opts));
+      result = oneOffGate(input) ?? locked(opts.cwd, () => (opts.pending ? queue(input, opts) : record(input, opts)));
     }
     process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
     // Queueing never reaches the board — work cards are built from judged decisions.
@@ -145,7 +146,7 @@ program
   .option('--author <name>', 'author for queued items')
   .option('--json', 'machine-readable output')
   .action((id: string, opts) => {
-    const r = sweepCommand(id, opts);
+    const r = opts.queue ? locked(opts.cwd, () => sweepCommand(id, opts)) : sweepCommand(id, opts);
     process.stdout.write(r.text + '\n');
   });
 
@@ -155,7 +156,7 @@ program
   .option('--checkin <mode>', 'feature | quiet | every')
   .option('--app <url>', 'where the app runs, for screenshots: http://localhost:3000 or a staging address (on its own, saves only this)')
   .action((opts) => {
-    const result = setup(opts);
+    const result = locked(opts.cwd, () => setup(opts));
     process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
     process.exit(result.exitCode);
   });
@@ -166,7 +167,7 @@ program
   .option('--file <image>', 'screenshot to keep beside the work')
   .option('--capture', 'macOS: drag-select a region of the screen')
   .action(async (work: string, opts) => {
-    const result = snapshotWork(work, opts);
+    const result = locked(opts.cwd, () => snapshotWork(work, opts));
     process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
     if (result.exitCode === 0) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
@@ -185,7 +186,7 @@ program
   .option('--keep-others', "approving doesn't supersede sibling directions")
   .option('--author <name>', 'override the author')
   .action(async (idOrAdd: string, name: string | undefined, opts) => {
-    const result = idOrAdd === 'add' ? addCandidate(name ?? '', opts) : updateCandidate(idOrAdd, opts);
+    const result = locked(opts.cwd, () => (idOrAdd === 'add' ? addCandidate(name ?? '', opts) : updateCandidate(idOrAdd, opts)));
     process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
     if (result.exitCode === 0) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
@@ -256,7 +257,7 @@ program
   .option('--json', 'print it as JSON')
   .option('--save <json>', 'replace the folders: {"folders":[{"name":"Local board","areas":["Review inbox","Change page"]}]}')
   .action((opts: { json?: boolean; save?: string }) => {
-    const result = areasCommand({ json: opts.json, save: opts.save });
+    const result = opts.save ? locked(undefined, () => areasCommand({ json: opts.json, save: opts.save })) : areasCommand({ json: opts.json, save: opts.save });
     process.stdout.write(result.exitCode !== 0 || opts.json ? JSON.stringify(result.output, null, 2) + '\n' : `${result.text}\n`);
     process.exit(result.exitCode);
   });
@@ -266,7 +267,7 @@ program
   .description('Rename a piece of work everywhere the record keeps it. Its comments on the board follow it at the next publish.')
   .option('--merge', 'the new name is a piece of work that already exists: this one joins it, decisions, pictures and comments')
   .action(async (work: string, newName: string, opts) => {
-    const result = renameWork(work, newName, opts);
+    const result = locked(opts.cwd, () => renameWork(work, newName, opts));
     process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
     if (result.exitCode === 0) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
@@ -285,7 +286,13 @@ program
   .option('--port <n>', "port (default: the same one each time for this project, or the next free one; if this project's board is already running, it opens that one)", (v) => Number(v))
   .option('--no-open', "print the URL, don't open a browser")
   .option('--json', "for an agent waiting on the page: when the last tab closes, print what was decided, and what's left to change in the code, as JSON")
+  .option('--done', 'for the agent, once it has made what it was handed from the board: clears that from .arbiter/last-review.json, keeping anything judged since')
   .action(async (opts) => {
+    if (opts.done) {
+      const r = locked(opts.cwd, () => handoffDone(resolvePaths(findRoot(opts.cwd))));
+      process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+      process.exit(r.status === 'not-taken' ? 1 : 0);
+    }
     const handoff = await review(opts);
     if (opts.json) process.stdout.write(JSON.stringify(handoff, null, 2) + '\n');
     else {
@@ -300,7 +307,7 @@ program
   .option('--snapshot <work>', 'remove the picture attached to a piece of work or a screen, keeping the record')
   .option('--force', 'with a screen: unlink the decisions on it rather than refusing')
   .action(async (id: string | undefined, opts) => {
-    const result = opts.snapshot ? removeSnapshot(opts.snapshot, opts) : remove(id ?? '', opts);
+    const result = locked(opts.cwd, () => (opts.snapshot ? removeSnapshot(opts.snapshot, opts) : remove(id ?? '', opts)));
     process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
     if (result.exitCode === 0) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
@@ -310,7 +317,7 @@ program
   .command('unlink <ids...>')
   .description('Detach decisions from the screen they were recorded against. The decisions stay exactly as they are.')
   .action(async (ids: string[], opts) => {
-    const result = unlink(ids, opts);
+    const result = locked(opts.cwd, () => unlink(ids, opts));
     process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
     if (result.exitCode === 0) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
@@ -353,6 +360,14 @@ program.parseAsync(process.argv).catch((e: Error) => {
   process.stderr.write(`arbiter: ${e.message}\n`);
   process.exit(1);
 });
+
+/**
+ * One write at a time: the agent's commands, several at once perhaps, and the board's clicks take turns
+ * on the record (.arbiter/.lock), so none writes over another.
+ */
+function locked<T>(cwd: string | undefined, fn: () => T): T {
+  return withLock(resolvePaths(findRoot(cwd)), fn);
+}
 
 /** `publish` and `unpublish` report one line per step: name, outcome, why. */
 function printSteps(steps: { step: string; outcome: string; note?: string }[]): void {
