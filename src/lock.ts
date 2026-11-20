@@ -13,25 +13,19 @@ import path from 'node:path';
 import type { Paths } from './store';
 
 export const LOCK = '.lock';
-/** Older than any write takes: left by a process that died holding it. */
-const STALE = 30_000;
+/**
+ * Older than any write takes, by far: left by a process that died holding it, so it's cleared. Age is
+ * the only sign trusted. Asking whether the holder is still running isn't: by the time the answer comes,
+ * it may have finished and another taken the lock, and clearing that one lets two writes in at once.
+ */
+const STALE = 10_000;
 /** How long a write waits its turn before it gives up and says why. */
-const WAIT = 20_000;
+const WAIT = 25_000;
 
 /** Held by this process: a write inside another one (judging that records) doesn't wait on itself. */
 let held = 0;
 
 const pause = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-
-const alive = (pid: number): boolean => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    // EPERM: it's there, run by someone else.
-    return (e as NodeJS.ErrnoException).code === 'EPERM';
-  }
-};
 
 /** The lock, taken: waits while another process holds it, and clears one left by a process that died. */
 function acquire(paths: Paths): void {
@@ -45,14 +39,14 @@ function acquire(paths: Paths): void {
       fs.closeSync(fd);
       return;
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+      // EPERM, EACCES: Windows, while the last holder's file is still being deleted. Its turn is ending.
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== 'EEXIST' && code !== 'EPERM' && code !== 'EACCES') throw e;
     }
     try {
-      const pid = Number(fs.readFileSync(file, 'utf8').trim());
-      const old = Date.now() - fs.statSync(file).mtimeMs > STALE;
-      if (old || (pid > 0 && pid !== process.pid && !alive(pid))) { fs.rmSync(file, { force: true }); continue; }
+      if (Date.now() - fs.statSync(file).mtimeMs > STALE) { fs.rmSync(file, { force: true }); continue; }
     } catch {
-      continue; // gone between the two looks: try again at once
+      continue; // gone since: try again at once
     }
     if (Date.now() - start > WAIT) {
       throw new Error(`another arbiter command has held .arbiter/${LOCK} for ${Math.round(WAIT / 1000)}s. If none is running, delete that file and try again.`);

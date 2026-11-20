@@ -40,9 +40,25 @@ test('a lock left by a process that died is cleared, and the write goes ahead', 
   const cwd = tmp();
   fs.writeFileSync(path.join(cwd, 'arbiter.json'), JSON.stringify({ version: 1, destination: 'local' }));
   fs.mkdirSync(path.join(cwd, '.arbiter'));
-  fs.writeFileSync(path.join(cwd, '.arbiter', '.lock'), '999999\n'); // no such process
+  const lock = path.join(cwd, '.arbiter', '.lock');
+  fs.writeFileSync(lock, '999999\n');
+  const minuteAgo = new Date(Date.now() - 60_000);
+  fs.utimesSync(lock, minuteAgo, minuteAgo); // held a minute: no write takes that long
   const out = JSON.parse(await run(cwd, ['record', '--pending', item(1)]));
   assert.equal(out.id, 'P-0001');
+});
+
+test('a lock held now is waited for, never taken: the write goes once it is let go', async () => {
+  const cwd = tmp();
+  fs.writeFileSync(path.join(cwd, 'arbiter.json'), JSON.stringify({ version: 1, destination: 'local' }));
+  fs.mkdirSync(path.join(cwd, '.arbiter'));
+  const lock = path.join(cwd, '.arbiter', '.lock');
+  fs.writeFileSync(lock, '999999\n'); // fresh, whoever wrote it
+  const writing = run(cwd, ['record', '--pending', item(1)]);
+  await new Promise((r) => setTimeout(r, 700));
+  assert.ok(!fs.existsSync(path.join(cwd, '.arbiter', 'pending.md')), 'still waiting its turn');
+  fs.rmSync(lock);
+  assert.equal(JSON.parse(await writing).id, 'P-0001');
 });
 
 test('the board and the agent writing at once: every click and every command lands', async () => {
