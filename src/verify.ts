@@ -15,6 +15,8 @@ export interface Check {
   needle?: string;
   ok: boolean;
   detail?: string;
+  /** For a `regex:` needle found where it shouldn't be: the text it matched, to say in plain words. */
+  found?: string;
 }
 
 export interface VerifyResult {
@@ -59,7 +61,9 @@ export function verify(root: string, files: string[], expect: Evidence | null): 
   for (const needle of expect?.absent ?? []) {
     for (const [f, text] of contents) {
       const line = lineOf(text, needle);
-      if (line !== null) checks.push({ kind: 'absent', file: f, needle, ok: false, detail: `found at line ${line}` });
+      if (line === null) continue;
+      const found = needle.startsWith('regex:') ? new RegExp(needle.slice(6)).exec(text)?.[0] : undefined;
+      checks.push({ kind: 'absent', file: f, needle, ok: false, detail: `found at line ${line}`, ...(found !== undefined && { found }) });
     }
     if (!checks.some((c) => c.kind === 'absent' && c.needle === needle && !c.ok)) {
       checks.push({ kind: 'absent', file: files.join(', '), needle, ok: true });

@@ -16,6 +16,7 @@ import { Paths, readActive, readArchive, readConfig } from './store';
 import type { Decision } from './schema';
 import { readRenames, workId, workSnapshot } from './work';
 import { cardOf, readRequests } from './requests';
+import { readComments, writeComments, type PulledComment } from './comments';
 
 export interface HostedLink {
   url: string;        // service base url
@@ -37,24 +38,11 @@ export function readLinkOrNull(paths: Paths): HostedLink | null {
   }
 }
 
-export interface PulledComment {
-  id: string;
-  candidate_id: string;
-  decision_id: string | null;
-  /** `request` — "Request change" on the board: it becomes a request (R-0001) the owner answers. */
-  kind: 'comment' | 'approve' | 'request';
-  author_name: string;
-  /** The board sends it; it's never kept. comments.json is committed, and a public repo would publish it. */
-  author_email?: string;
-  body: string;
-  created_at: string;
-  /** The board's published_at when this was written. Differs from the current one after a republish. */
-  board_version?: string | null;
-}
+// Pulled comments live in their own module; pull writes them, and these names stay here for it.
+export { readComments, writeComments, type PulledComment } from './comments';
 
 const LINK_FILE = 'hosted.json';
 const TOKEN_FILE = 'hosted.token';
-const COMMENTS_FILE = 'comments.json';
 export const TOKEN_ENV = 'ARBITER_PUBLISH_TOKEN';
 export const ADMIN_ENV = 'ARBITER_ADMIN_TOKEN';
 const IMAGE_TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
@@ -95,17 +83,6 @@ export function writeToken(paths: Paths, token: string): void {
   fs.writeFileSync(gi, lines.join('\n') + '\n');
 }
 
-export function readComments(paths: Paths): PulledComment[] {
-  const f = path.join(paths.archiveDir, COMMENTS_FILE);
-  return fs.existsSync(f) ? (JSON.parse(fs.readFileSync(f, 'utf8')) as PulledComment[]) : [];
-}
-
-/** Every comment on file, minus email addresses: nothing here needs them, and the file is committed. */
-export function writeComments(paths: Paths, comments: PulledComment[]): void {
-  const kept = comments.map(({ author_email: _email, ...c }) => c);
-  fs.writeFileSync(path.join(paths.archiveDir, COMMENTS_FILE), JSON.stringify(kept, null, 2) + '\n');
-}
-
 export const publishable = (d: Decision) => d.verdict !== 'pending' && d.verdict !== 'retire' && d.level !== 'polish';
 const wire = (d: Decision) => ({ id: d.id, change: d.change, decision: d.decision, rejected: d.rejected, verdict: d.verdict, dimension: d.dimension, scope: d.scope, ref: d.ref });
 
@@ -114,6 +91,8 @@ const wire = (d: Decision) => ({ id: d.id, change: d.change, decision: d.decisio
  * candidate rides with that screen; the rest are grouped by the piece of work they came from
  * (`trigger`) and become a card each — no picture, state `recorded`. Most work is one direction,
  * iterated; the board shouldn't be empty for it.
+ *
+ * Only for the team board. The local board builds its own from the same files (src/localboard.ts).
  */
 export function buildManifest(paths: Paths, opts: { includeRules?: boolean } = {}): { manifest: Record<string, unknown>; skipped: string[] } {
   const skipped: string[] = [];
@@ -163,7 +142,7 @@ export function buildManifest(paths: Paths, opts: { includeRules?: boolean } = {
       // Work has no product area of its own; it joins one only when the trigger names an existing one.
       id, name: trigger, feature: areas.get(trigger.toLowerCase()) ?? null, state: 'recorded', work: true,
       author: last.author, date: last.date, reason: null, notes: '', supersededBy: null, url: null, snapshot,
-      decisions: ds.map(wire),
+      decisions: ds.filter(publishable).map(wire),
     });
   }
   // The day each became a rule, for the board's Design rules page.

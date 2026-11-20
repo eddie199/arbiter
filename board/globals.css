@@ -1,0 +1,42 @@
+/* The local board's tokens, dark mode and base type. Copied from the site's hosted/app/globals.css
+   (site bff92c0, 4 Nov 2026), without the front page's animations. The local board owns it now:
+   change it here, and the team board isn't touched. */
+@import "tailwindcss";
+
+/* Arbiter tokens — cool, flat greys; colour only when it means something. */
+:root {
+  color-scheme: light;
+  --bg: #ffffff; --surface: #fafafa; --surface-2: #f2f2f2;
+  --fg: #171717; --muted: #666666; --faint: #8f8f8f;
+  --border: #ebebeb; --border-strong: #c2c2c2;
+  --accent: #171717; --accent-fg: #ffffff;
+  --ok: #0f7b3f; --warn: #a15c00; --bad: #d4111f; --info: #0060d0;
+  --ok-bg: #e8f5ee; --warn-bg: #fff4e0; --bad-bg: #fdecec;
+  --radius: 6px;
+}
+/* Dark only when chosen: the page loads light whatever the system says, and the toggle remembers. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #000000; --surface: #0a0a0a; --surface-2: #141414;
+  --fg: #ededed; --muted: #a1a1a1; --faint: #6f6f6f;
+  --border: #262626; --border-strong: #454545;
+  --accent: #ededed; --accent-fg: #000000;
+  --ok: #3ecf8e; --warn: #f5a623; --bad: #ff6166; --info: #52a8ff;
+  --ok-bg: #062b1a; --warn-bg: #2a1c00; --bad-bg: #2a0a0d;
+}
+@theme inline {
+  --color-bg: var(--bg); --color-surface: var(--surface); --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg); --color-muted: var(--muted); --color-faint: var(--faint);
+  --color-border: var(--border); --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent); --color-accent-fg: var(--accent-fg);
+  --color-ok: var(--ok); --color-warn: var(--warn); --color-bad: var(--bad); --color-info: var(--info);
+  --color-ok-bg: var(--ok-bg); --color-warn-bg: var(--warn-bg); --color-bad-bg: var(--bad-bg);
+  --radius-ui: var(--radius);
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+/* Room for the scrollbar always, whether a page scrolls or not: a short area page and a long
+   Overview then line up, instead of everything jumping sideways where scrollbars take up width (Windows). */
+html { scrollbar-gutter: stable; background: var(--bg); }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }

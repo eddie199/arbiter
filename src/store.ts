@@ -9,6 +9,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { Decision } from './schema';
 import { activeHeader, archiveHeader, formatEntry, formatGrouped, parseEntries, pendingHeader } from './format';
+import { writeAtomic } from './lock';
 
 export const ACTIVE_CAP = 40;
 
@@ -33,6 +34,16 @@ export interface Config {
   onboarded?: string;
   /** Where the app runs, so the agent has an address to open for screenshots. Set by `arbiter setup --app`. */
   app?: { url: string };
+  /**
+   * What `record --pending` queues, from Preferences on the board. `level`: the smallest call queued,
+   * "pattern" (features and patterns, the default) or "feature" (features only). `agent: false`: only
+   * what the person asked for or corrected; the agent's own calls aren't queued. A clash always is.
+   */
+  record?: { level?: 'pattern' | 'feature'; agent?: boolean };
+  /** False: no pictures. Nothing asks for one, and replies to `record` say `pictures: false`. */
+  pictures?: boolean;
+  /** False: the agent doesn't offer to group areas into folders. `arbiter areas` says so. */
+  suggestFolders?: boolean;
   /** Project words too common to signal overlap: ["audit", "journey"]. */
   overlap?: { ignore?: string[] };
   /** Globs never swept: ["app/globals.css", "design-reference/**", "docs/**"]. */
@@ -79,7 +90,7 @@ export function readConfig(paths: Paths): Config | null {
 }
 
 export function writeConfig(paths: Paths, config: Config): void {
-  fs.writeFileSync(paths.config, JSON.stringify(config, null, 2) + '\n');
+  writeAtomic(paths.config, JSON.stringify(config, null, 2) + '\n');
 }
 
 export function readActive(paths: Paths): Decision[] {
@@ -89,7 +100,7 @@ export function readActive(paths: Paths): Decision[] {
 
 /** Rewrites DECISIONS.md in full. Entries are re-serialized, so hand edits survive. */
 export function writeActive(paths: Paths, decisions: Decision[], cap: number = ACTIVE_CAP): void {
-  fs.writeFileSync(paths.decisions, activeHeader(decisions.length, cap) + '\n' + formatGrouped(decisions));
+  writeAtomic(paths.decisions, activeHeader(decisions.length, cap) + '\n' + formatGrouped(decisions));
 }
 
 export function readArchive(paths: Paths): Decision[] {
@@ -112,7 +123,7 @@ export function appendArchive(paths: Paths, d: Decision): void {
  */
 export function writeArchive(paths: Paths, decisions: Decision[]): void {
   fs.mkdirSync(paths.archiveDir, { recursive: true });
-  fs.writeFileSync(paths.archive, archiveHeader() + '\n' + decisions.map(formatEntry).join('\n'));
+  writeAtomic(paths.archive, archiveHeader() + '\n' + decisions.map(formatEntry).join('\n'));
 }
 
 export function readPending(paths: Paths): Decision[] {
@@ -123,7 +134,7 @@ export function readPending(paths: Paths): Decision[] {
 /** Rewrites pending.md in full. */
 export function writePending(paths: Paths, decisions: Decision[]): void {
   fs.mkdirSync(paths.archiveDir, { recursive: true });
-  fs.writeFileSync(paths.pending, pendingHeader() + '\n' + decisions.map(formatEntry).join('\n'));
+  writeAtomic(paths.pending, pendingHeader() + '\n' + decisions.map(formatEntry).join('\n'));
 }
 
 /** Next P- id. Pending ids are never reused within the file but may repeat once it empties. */

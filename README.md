@@ -142,8 +142,8 @@ flowchart TB
 
 1. **You ask for a screen.** The agent reads `DECISIONS.md` first. After a sizeable piece of work it names up to three rules that shaped it, like *Following D-0001 (removing asks first, no undo bar)*, so you can see the record working.
 2. **You iterate.** The agent says nothing about decisions while you're going back and forth. Each version you move past becomes a rejected alternative on the one that replaced it.
-3. **You move on.** The agent queues the design calls it made, sized as `feature`, `pattern` or `polish`. When 5 are waiting (then 10, 15…) it asks if you want to review them. Polish doesn't count toward that. Only real choices get queued: things you asked for, things you corrected, and options the agent actually weighed. Its habits don't.
-4. **You judge them when you want.** In chat with `/arbiter`, or in the browser with `npx arbiter review`.
+3. **You move on.** The agent queues the design calls it made, sized as `feature` or `pattern` (a small one-off fix isn't recorded at all). When 5 are waiting (then 10, 15…) it asks if you want to review them. Only real choices get queued: things you asked for, things you corrected, and options the agent actually weighed. Its habits don't.
+4. **You judge them when you want.** In chat with `/arbiter`, or on your local board: answer "yes, in the browser" when it asks, or open it yourself with `npx arbiter review`. Keep it open while you work: it shows what the agent records as it records it, and in Claude Code the fixes you ask for there reach the agent with your next message. Elsewhere they come at the next `/arbiter`. Close the tab when you're done with it.
 5. **Rules go into `DECISIONS.md`.** Everything you judged goes into the archive. Skipped items disappear. The next session reads the new rules.
 6. **You share it.** `npx arbiter publish` puts the board online, so your team can see each screen, what was decided and why. They can comment or request a change, and `npx arbiter pull` brings that back for you to answer. More in [Share it with your team](#share-it-with-your-team).
 
@@ -173,7 +173,7 @@ Each item reads as **Change** (what happened), **Pattern** (the rule) and **Reje
 | **Skip** | Thrown away. |
 | **Fix** | Type a correction and it's recorded your way. |
 
-Polish items come as one line per group with a single **Confirm all**. If an item goes against an existing rule, Arbiter says so (*Clashes with D-0009*) and asks which one wins: **Follow D-0009**, **Replace D-0009**, or **Keep as exception**.
+Small one-off fixes never reach the queue, so each item is a real call. If an item goes against an existing rule, Arbiter says so (*Clashes with D-0009*) and asks which one wins: **Follow D-0009**, **Replace D-0009**, or **Keep as exception**.
 
 > [!TIP]
 > Too chatty? `npx arbiter setup --checkin quiet` turns off the check-ins. `--checkin every` does the opposite and mentions a rule every time one changed something.
@@ -228,11 +228,11 @@ Git stays the source of truth. The service only holds the latest board and its c
 A comment is just input. **Request change** is different: someone wants something changed, so it gets a proper answer.
 
 1. `npx arbiter pull` turns each request into `R-0001` in `.arbiter/requests.json`. Commit it so everyone sees the same answers.
-2. You answer in chat with `/arbiter`, or on the **Requests** tab of `arbiter review`:
+2. You answer in chat with `/arbiter`:
    - **Apply**: `record R-0001 --as apply`
    - **Apply, but…**: `record R-0001 --as apply --to "keep the tab, make the button red"`
    - **Decline**: `record R-0001 --as decline --why "…"` (a reason is required, since the requester reads it)
-3. The agent makes the change. Approving from chat makes it right away; approving from the review page makes it at the next `/arbiter`.
+3. The agent makes the change right away.
 4. `publish` sends the answer back. The requester sees *Open*, *Approved*, *Applied* (with what changed) or *Declined* (with the reason).
 
 > [!NOTE]
@@ -252,7 +252,7 @@ A comment is just input. **Request change** is different: someone wants somethin
 
 ### Other ways to share
 
-- **Static export.** `npx arbiter export` writes `arbiter-export/`: one `index.html` plus snapshots, no server, no JavaScript. Drop it on any static host. It's a read-only view: each screen, its state, who approved it, why the others lost, and what was decided in plain words.
+- **Static export.** `npx arbiter export` writes `arbiter-export/`: the same board as `arbiter review`, read-only, as a folder (`index.html`, the board's script and styles, and the pictures). No server: open it from disk or drop it on any static host. Each change with its picture and how it got there, what was decided in plain words, and with `--include-rules`, your design rules.
 - **GitHub Pages.** With `"destination": "git"` in `arbiter.json`, every candidate change also writes the export to `docs/arbiter/`. Turn on Pages for the `docs` folder once and the board lives at `https://<owner>.github.io/<repo>/arbiter/`. `npx arbiter publish --to pages` does the whole setup in one go.
 
 ## Screenshots
@@ -260,7 +260,7 @@ A comment is just input. **Request change** is different: someone wants somethin
 The agent takes one picture per piece of work, when the work settles and it changed how a specific screen looks.
 
 - **Gets a picture:** layout, wording or visual changes to one screen. Even a small pattern change counts.
-- **Doesn't:** font or token changes (no single screen to show), motion and behaviour (a still can't show it), and polish (it never reaches the board).
+- **Doesn't:** font or token changes (no single screen to show), motion and behaviour (a still can't show it), and small one-off fixes (they aren't recorded).
 
 The agent renders pictures with a headless browser. If it can't (no browser, app not running, screen behind a login) it tells you once and says why. On macOS, `--capture` lets you drag-select a picture yourself; elsewhere, save one and pass `--file`.
 
@@ -339,7 +339,7 @@ npx arbiter pull           # bring comments and requests back
 | `arbiter record '<json>'` | Record now (what the agent calls). |
 | `arbiter record --pending '<json>'` | Queue for later. |
 | `arbiter record P-0003 --as rule` | Judge a queued item: `accept`, `rule`, `skip` or `fix --to "…"`. Add `--candidate C-0001` to link it, or `--against D-0009` to name the rule it goes against (with `accept`, it's logged as an exception to that rule). |
-| `arbiter record --all --as accept` | Judge every queued item. Narrow with `--level polish` or `--trigger "Settings build"`. |
+| `arbiter record --all --as accept` | Judge every queued item. Narrow with `--level pattern` or `--trigger "Settings build"`. |
 | `arbiter record --findings f.json` | Queue a scanner's findings for verdicts. |
 | `arbiter record --retire D-0003 --why "…"` | Drop a rule with no replacement. |
 | `arbiter record --reword D-0003 --to "…"` | Change a rule's wording. It keeps its id, and the old wording stays on the entry. |
@@ -351,7 +351,9 @@ npx arbiter pull           # bring comments and requests back
 
 | Command | What it does |
 |---|---|
-| `arbiter review` | Judge the queue, screens and requests in a browser page. |
+| `arbiter review` | Your local board, in the browser: what's waiting for you to judge, every change with its picture, and your design rules. It keeps itself current while it's open, and stops when you close its tab. Nothing is uploaded. What still needs a code change reaches your agent with your next message in Claude Code (a hook `init` installs), or at the next `/arbiter`. |
+| `arbiter review --json` | For an agent that waits on the board: when its last tab closes, hands over what you decided as JSON. |
+| `arbiter review --done` | For the agent, once it has made what the board handed it: clears that, and keeps anything you judged meanwhile. |
 | `arbiter rules [--dimension <name>] [--json]` | Active rules. |
 | `arbiter rules --pending` | The queue, plus requests waiting on an answer. |
 | `arbiter rules --archive` | Everything ever recorded. |
@@ -407,7 +409,7 @@ npx arbiter pull           # bring comments and requests back
 | `date` | ISO 8601. |
 | `author` | Who decided. |
 | `class` | `mechanical` (checkable in code) or `judgment`. |
-| `level` | `feature`, `pattern` or `polish`. How big a call it is. Polish is never reviewed one by one. |
+| `level` | `feature` or `pattern`. How big a call it is. A `polish` one-off fix isn't recorded: `record` answers `not-recorded` and writes nothing. |
 | `dimension` | `structure`, `interaction`, `states`, `content`, `visual`, `motion` or `access`. |
 | `change` | What happened, in plain words. What the reviewer reads. |
 | `decision` | The same call written as a rule. What future sessions read. |
@@ -460,7 +462,7 @@ Run `npx arbiterdesign init` in the folder your agent works in, or ask the agent
 <details>
 <summary><b>Will it interrupt me, or bury me in reviews?</b></summary>
 
-No. Decisions queue silently while you iterate and surface in one line when you move on. Each is sized: feature and pattern get a card, polish is one line per piece of work with a single **Confirm all**. You judge them when you want, or never.
+No. Decisions queue silently while you iterate and surface in one line when you move on. Only features and patterns are queued, a card each; small one-off fixes aren't recorded at all. You judge them when you want, or never.
 
 </details>
 

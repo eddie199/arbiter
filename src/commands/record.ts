@@ -26,6 +26,7 @@ import { Decision, DecisionInput, DECISION_ID, DIMENSIONS, PENDING_ID, validateI
 import {
   ACTIVE_CAP,
   appendArchive,
+  type Config,
   currentAuthor,
   currentCommit,
   findRoot,
@@ -42,7 +43,8 @@ import {
   writeArchive,
   writePending,
 } from '../store';
-import { findOverlaps } from '../overlap';
+import { explainOverlaps, findOverlaps } from '../overlap';
+import { readCandidates } from '../candidates';
 import { checkable, verify } from '../verify';
 import { sweep, summarize } from '../sweep';
 import { parseFindings, toDecisionInput } from '../findings';
@@ -52,8 +54,9 @@ import { refreshCandidates } from './candidate';
 import { updateNotice } from './update';
 import { missingPictures, pictureHint } from '../pictures';
 import { markApplied, requestGate, withRequest } from './request';
-import type { ChangeRequest } from '../requests';
+import { readRequests, type ChangeRequest } from '../requests';
 import { unclearLines } from '../wording';
+import { placement } from './areas';
 
 export interface RecordOptions {
   supersedes?: string;
@@ -124,13 +127,34 @@ function plainWords(input: DecisionInput): RecordResult | null {
   };
 }
 
+/**
+ * One-off fixes to a single screen aren't recorded, for now: nobody needs to judge matching two heights,
+ * and they made the review long. `record` and `record --pending` turn `level: polish` away and write
+ * nothing; the agent is told so, and carries on. Old polish already in a queue is still judged as before.
+ */
+export function oneOffGate(rawJson: string): RecordResult | null {
+  let level: unknown;
+  try { level = (JSON.parse(rawJson) as { level?: unknown })?.level; } catch { return null; }
+  if (level !== 'polish') return null;
+  return {
+    exitCode: 0,
+    output: {
+      status: 'not-recorded',
+      reason: "One-off fixes to a single screen aren't recorded. Nothing was written. Record it as a pattern only if it would apply to other screens too.",
+    },
+  };
+}
+
 export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
   if (opts.request) return fail([`--request records a change made for an approved request, directly: drop --pending. Nothing is queued for a request.`]);
   const parsed = parse(rawJson, { pending: true });
   if (!parsed.ok) return parsed.result;
+  const paths = resolvePaths(findRoot(opts.cwd));
+  // Before the wording check: there's no point rewording a line Preferences keep out anyway.
+  const off = notRecorded(readConfig(paths), parsed.input);
+  if (off) return { exitCode: 0, output: { status: 'not-recorded', reason: off } };
   const unclear = plainWords(parsed.input);
   if (unclear) return unclear;
-  const paths = resolvePaths(findRoot(opts.cwd));
   const bad = againstError(paths, parsed.input);
   if (bad) return bad;
   const pending = readPending(paths);
@@ -167,10 +191,30 @@ export function queue(rawJson: string, opts: RecordOptions = {}): RecordResult {
       ...(opts.dryRun ? {} : askToReview(before, waiting, checkin)),
       review: 'npx arbiter review',
       ...picture(paths, entry),
+      // Pictures off in Preferences: the agent takes none, and says nothing about them.
+      ...(readConfig(paths)?.pictures === false ? { pictures: false } : {}),
+      // Where the work sits on the board, and whether it started an area of its own.
+      ...(opts.dryRun ? {} : placement(paths, entry, pending)),
       // Present only when the project's skill file is from an older Arbiter than this one.
       ...updateNotice(paths),
     },
   };
+}
+
+/**
+ * What Preferences on the board keep out of the queue: patterns, when only features are recorded, and the
+ * agent's own calls, when only what the person asked for or corrected is. A clash is always queued:
+ * someone has to say which one wins. "Record that" records directly, so it's never stopped here.
+ */
+function notRecorded(config: Config | null, input: DecisionInput): string | null {
+  if (input.against) return null;
+  if (config?.record?.level === 'feature' && (input.level ?? 'pattern') !== 'feature') {
+    return 'This project records features only (Preferences, on the board). Nothing was written.';
+  }
+  if (config?.record?.agent === false && input.call === 'agent') {
+    return "This project records only what the person asked for or corrected, not the agent's own calls (Preferences, on the board). Nothing was written.";
+  }
+  return null;
 }
 
 /** Ask once each time the waiting count reaches another multiple of this. */
@@ -180,10 +224,13 @@ export const REVIEW_EVERY = 5;
  * At 5, 10, 15 changes waiting, the agent asks whether to review now. A "no" just waits for the
  * next multiple, and judging brings the count down, so the next ask comes when it climbs back.
  * Quiet means quiet: someone who chose "Nothing until I ask" is never asked.
+ * "In the browser" opens the Review Board and waits for Done; "here" is the review in chat.
  */
+export const REVIEW_ANSWERS = '(yes, in the browser / yes, here / no)';
+
 function askToReview(before: number, after: number, checkin: string): { ask?: string } {
   if (checkin === 'quiet' || Math.floor(after / REVIEW_EVERY) <= Math.floor(before / REVIEW_EVERY)) return {};
-  return { ask: `You have ${after} changes waiting in Arbiter. Review them now? (yes / no)` };
+  return { ask: `You have ${after} changes waiting in Arbiter. Review them now? ${REVIEW_ANSWERS}` };
 }
 
 /** Queue one pending decision per finding in a scanner's JSON output. */
@@ -269,6 +316,27 @@ export function retire(ruleId: string, why: string | undefined, opts: RecordOpti
     supersedes: rule.id,
   };
   return recordInput(input, opts);
+}
+
+/**
+ * Undo for a retire, for a misclick on the board: the rule is back in DECISIONS.md as it was, and
+ * the retire entry leaves the record. Only while DECISIONS.md has room and nothing has built on it since.
+ */
+export function unretire(r: { rule: Decision; id: string }, opts: { cwd?: string } = {}): RecordResult {
+  const paths = resolvePaths(findRoot(opts.cwd));
+  const archive = readArchive(paths);
+  if (!archive.some((d) => d.id === r.id)) return fail([`${r.id} is no longer in the record`]);
+  const active = readActive(paths);
+  if (active.some((d) => d.id === r.rule.id)) return fail([`${r.rule.id} is a rule already`]);
+  const later = archive.find((d) => (d.id !== r.id && d.supersedes === r.rule.id) || d.supersedes === r.id);
+  if (later) return fail([`${later.id} has changed ${r.rule.id} since, so it can't come back`]);
+  const cap = readConfig(paths)?.activeCap ?? ACTIVE_CAP;
+  if (active.length >= cap) return fail([`DECISIONS.md is full (${cap} rules), so ${r.rule.id} can't come back until one goes`]);
+
+  writeArchive(paths, archive.filter((d) => d.id !== r.id));
+  writeActive(paths, [...active, r.rule], cap);
+  if (r.rule.candidate) refreshCandidates(paths);
+  return { exitCode: 0, output: { status: 'restored', id: r.rule.id, removed: r.id, active: `${active.length + 1} of ${cap}` } };
 }
 
 // ── Reword a rule ──────────────────────────────────────────────────────────
@@ -389,6 +457,60 @@ export function judgeAll(opts: JudgeOptions & { level?: string; trigger?: string
   };
 }
 
+// ── Take a judgement back ──────────────────────────────────────────────────
+
+/** What judging a queued item did, kept by whoever judged it so it can be taken back. */
+export interface Judgement {
+  /** The item as it was queued, and where it sat in the queue. */
+  item: Decision;
+  at: number;
+  /** The decision it was recorded as; none for a skip. */
+  id?: string;
+  /** The rule it replaced, and where that sat in DECISIONS.md. */
+  replaced?: { rule: Decision; at: number };
+}
+
+/**
+ * Undo, for a misclick: the decision leaves the record, a rule it replaced is a rule again, and the
+ * item waits where it was, with its id. Only while nothing has built on it since: a later rule
+ * replacing it, or a request answered by it.
+ */
+export function unjudge(j: Judgement, opts: { cwd?: string } = {}): RecordResult {
+  const paths = resolvePaths(findRoot(opts.cwd));
+  const pending = readPending(paths);
+  if (pending.some((d) => d.id === j.item.id)) return fail([`${j.item.id} is already waiting`]);
+
+  let reinstated: string | undefined;
+  const id = j.id;
+  if (id) {
+    const archive = readArchive(paths);
+    const entry = archive.find((d) => d.id === id);
+    if (!entry) return fail([`${id} is no longer in the record`]);
+    const later = archive.find((d) => d.supersedes === id);
+    if (later) return fail([`${later.id} has replaced ${id} since, so it can't be taken back`]);
+    const asked = readRequests(paths).find((r) => r.decision === id || r.decisions.includes(id));
+    if (asked) return fail([`${asked.id} is about ${id} now, so it can't be taken back`]);
+
+    writeArchive(paths, archive.filter((d) => d.id !== id));
+    const active = readActive(paths);
+    let next = active.filter((d) => d.id !== id);
+    const r = j.replaced;
+    // Back where it was, unless something else has made it a rule again or taken it out since.
+    if (r && !next.some((d) => d.id === r.rule.id) && archive.some((d) => d.id === r.rule.id) && !archive.some((d) => d.id !== id && d.supersedes === r.rule.id)) {
+      next = [...next.slice(0, r.at), r.rule, ...next.slice(r.at)];
+      reinstated = r.rule.id;
+    }
+    if (next.length !== active.length || reinstated) writeActive(paths, next, readConfig(paths)?.activeCap ?? ACTIVE_CAP);
+    if (entry.candidate) refreshCandidates(paths);
+  }
+
+  writePending(paths, [...pending.slice(0, j.at), j.item, ...pending.slice(j.at)]);
+  return {
+    exitCode: 0,
+    output: { status: 'undone', id: j.item.id, ...(id && { removed: id }), ...(reinstated && { reinstated }), pending: pending.length + 1 },
+  };
+}
+
 // ── Core ───────────────────────────────────────────────────────────────────
 
 export function recordInput(input: DecisionInput, opts: RecordOptions = {}): RecordResult {
@@ -448,13 +570,15 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
     } else if (!opts.keepBoth) {
       const overlaps = findOverlaps(input, active, { ignore: config?.overlap?.ignore });
       if (overlaps.length) {
+        // Each also says why in plain words (sure: what both apply to; a guess: the words they share), for the board.
+        const why = explainOverlaps(input, overlaps, active, new Map(readCandidates(paths).map((c) => [c.id, c.name])));
         return keepRequest({
           exitCode: 2,
           output: {
             status: 'overlap',
             message: `This rule overlaps ${overlaps.length} active rule${overlaps.length === 1 ? '' : 's'}. Nothing was written. Ask the user which it replaces, then re-run.`,
             candidate: input,
-            overlaps,
+            overlaps: overlaps.map((o, i) => ({ ...o, ...why[i] })),
             options: [
               ...overlaps.map((o) => ({
                 flag: `--supersedes ${o.id}${again}`,
@@ -472,6 +596,7 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
         exitCode: 3,
         output: {
           status: 'cap',
+          cap,
           message: `DECISIONS.md holds ${nextActive.length} of ${cap} rules. Nothing was written. Supersede an existing rule with --supersedes <id> to make room.`,
           candidate: input,
           active: nextActive.map((d) => ({ id: d.id, decision: d.decision, scope: d.scope })),

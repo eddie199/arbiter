@@ -82,7 +82,7 @@ function significantWords(d: Pick<Decision, 'decision' | 'scope'>, ignore: Set<s
 }
 
 /** Crude suffix stripping so "modals" ~ "modal", "confirms" ~ "confirm". */
-function stem(w: string): string {
+export function stem(w: string): string {
   return w.replace(/(ing|ed|es|s)$/, '');
 }
 
@@ -94,3 +94,30 @@ function fileContains(a: string, b: string): boolean {
 const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '');
 const narrower = (a: string, b: string) => (norm(a).length >= norm(b).length ? a : b);
 const wider = (a: string, b: string) => (norm(a).length >= norm(b).length ? b : a);
+
+/**
+ * An overlap as people read it, for the board. A sure one says what both apply to: its scope (the narrower,
+ * where one file holds the other) and, for a file, the change it was made on, as Applies to names it. A
+ * guess says the words both share, as the new rule writes them ("prices", not "pric").
+ */
+export interface OverlapWhy { id: string; decision: string; sure: boolean; scope?: string; change?: string; words: string[] }
+
+export function explainOverlaps(
+  entry: { decision: string; scope: string; trigger: string; candidate?: string | null },
+  overlaps: Overlap[],
+  active: Decision[],
+  changeNames: Map<string, string>,
+): OverlapWhy[] {
+  const changeOf = (d: { trigger: string; candidate?: string | null }) => (d.candidate ? changeNames.get(d.candidate) : undefined) ?? d.trigger;
+  return overlaps.map((o) => {
+    if (o.confidence !== 'exact') return { id: o.id, decision: o.decision, sure: false, words: asWritten(entry.decision, (o.reason.split('shares: ')[1] ?? '').split(', ').filter(Boolean)) };
+    const narrow = o.scope.length >= entry.scope.length ? (active.find((d) => d.id === o.id) ?? entry) : entry;
+    return { id: o.id, decision: o.decision, sure: true, scope: narrow.scope, ...(narrow.scope.startsWith('file:') ? { change: changeOf(narrow) } : {}), words: [] };
+  });
+}
+
+/** The shared words as the decision writes them, not as the overlap check trims them ("prices", not "pric"). */
+function asWritten(text: string, stems: string[]): string[] {
+  const words = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+  return stems.map((s) => words.find((w) => stem(w) === s) ?? s);
+}

@@ -100,7 +100,7 @@ test('review server: state, judge, done', async () => {
   const cwd = tmp();
   queue(input(), { cwd, author: 'test' });
   const port = 47000 + Math.floor(Math.random() * 1000);
-  const done = review({ cwd, port, open: false });
+  const done = review({ cwd, port, open: false, grace: 0 });
   await new Promise((r) => setTimeout(r, 200));
 
   const state = await get(port, '/api/state');
@@ -112,7 +112,7 @@ test('review server: state, judge, done', async () => {
   assert.equal(judged.id, 'D-0001');
   assert.equal((await get(port, '/api/state')).pending.length, 0);
 
-  await post(port, '/api/done', {});
+  await post(port, '/api/bye', { page: 't' });
   await done;
 });
 

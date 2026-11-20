@@ -206,7 +206,7 @@ Design work is iterative. A screen redesigned six times is one piece of work, no
 npx arbiter record --pending '<json>'
 ```
 
-(JSON shape below). The output carries `checkin`, the user's answer to the check-in question; `waiting`, how many changes are waiting for them (polish isn't counted, since they're never asked about it); sometimes `ask`; and sometimes `picture`, a screen this changed that has no picture yet (see **Screenshots**).
+(JSON shape below). The output carries `checkin`, the user's answer to the check-in question; `waiting`, how many changes are waiting for them; sometimes `ask`; and sometimes `picture`, a screen this changed that has no picture yet (see **Screenshots**).
 
 - `feature` (default) — **only if the piece of work included a `feature`-level decision**, add one line to your reply carrying its Change line, not a count.
 - `quiet` — say nothing. Ever. They run `/arbiter` when they want it. `ask` never comes back.
@@ -221,18 +221,18 @@ Arbiter saved: Settings is now a tab row with four pages. Type /arbiter to revie
 **`ask` means the waiting count just reached 5, 10, 15…** If any `record --pending` call for this piece of work returned it, the line ends in a question instead, with the last `waiting` you got:
 
 ```
-Arbiter saved: Settings is now a tab row with four pages. You have 5 waiting. Review them now? (yes / no)
+Arbiter saved: Settings is now a tab row with four pages. You have 5 waiting. Review them now? (yes, in the browser / yes, here / no)
 ```
 
 With no line to merge into (small work under `feature`), use the `ask` text as it came:
 
 ```
-You have 5 changes waiting in Arbiter. Review them now? (yes / no)
+You have 5 changes waiting in Arbiter. Review them now? (yes, in the browser / yes, here / no)
 ```
 
-Plain text, never the widget. **yes**: start the review below, as if they'd typed `/arbiter`. **no**: say "Okay" and carry on; don't raise it again until another `ask` comes back. Anything else means they've moved on, so carry on.
+Plain text, never the widget. **yes, in the browser**: open their board and carry on (see **Reviewing in the browser**). **yes, here**, or a plain **yes**: start the review below, as if they'd typed `/arbiter`. **no**: say "Okay" and carry on; don't raise it again until another `ask` comes back. Anything else means they've moved on, so carry on.
 
-A count on every reply gets ignored; a sentence about what changed, only after something big, gets read; a question only when enough has piled up to be worth a sitting. Otherwise queue silently, since the user knows the queue exists. Under `feature`, if the work was only patterns and polish and no `ask` came back, say nothing. Do not list the decisions. The queue lives in `.arbiter/pending.md`, so it survives the session; the user can judge it here, in the review page, or never.
+A count on every reply gets ignored; a sentence about what changed, only after something big, gets read; a question only when enough has piled up to be worth a sitting. Otherwise queue silently, since the user knows the queue exists. Under `feature`, if the work was only patterns and no `ask` came back, say nothing. Do not list the decisions. The queue lives in `.arbiter/pending.md`, so it survives the session; the user can judge it here, in the review page, or never.
 
 The output may also carry `update` — this skill file was written by an older Arbiter than the one installed (`update.skill` vs `update.cli`), so the protocol you're following is behind. Once per session, add one line, whatever `checkin` says:
 
@@ -285,9 +285,11 @@ That also marks the project as onboarded. Then continue with the queue as below;
 
 If the project publishes to a hosted board (`.arbiter/hosted.json` exists), run `npx arbiter pull` first — it's how requests made on the board since last time arrive, and how ones taken back leave. Relay nothing from its output except a `withdrew` line, word for word: the queue shows the rest. If it fails (offline, or no publish token on this machine), say so in one line and carry on with the queue.
 
+The queue may carry `lastReview`: what they judged on the board that needs the code changed, and you haven't made yet. Its answers are recorded already, but the code side isn't done. Before anything else, make its `todo` exactly as **Reviewing in the browser** says, then run `npx arbiter review --done` (`lastReview.done`), so it isn't made twice. That clears what you were given and keeps anything they judge on the board meanwhile; never delete the file yourself.
+
 The queue may carry `requests` — changes someone asked for on the board. Those come first, before any decision: make the `requests.approved` ones without asking again, then present the `requests.open` ones. See **Requests from the board**, below.
 
-The decisions come back grouped by piece of work (`groups[].trigger`), feature and pattern items in `items`, polish in `polish`, and the active rules in `rules`. Present the feature and pattern items (below), checking each against `rules` for a clash; polish is never presented individually. Judge each answer with:
+The decisions come back grouped by piece of work (`groups[].trigger`), the items in `items`, and the active rules in `rules`. Present the items (below), checking each against `rules` for a clash. A queue from an older Arbiter may also carry one-off fixes in `polish`: skip them all with `npx arbiter record --all --as skip --level polish`, without asking. Judge each answer with:
 
 ```
 npx arbiter record P-0003 --as accept      # Confirm
@@ -303,7 +305,6 @@ If the decision belongs to a screen you tracked as a candidate, add `--candidate
 Bulk answers are one command, not a loop:
 
 ```
-npx arbiter record --all --as accept --level polish                  # "confirm all polish"
 npx arbiter record --all --as accept                                 # "confirm all"
 npx arbiter record --all --as rule --level pattern                   # "rule the patterns…"
 npx arbiter record --all --as accept --level feature                 # "…confirm the rest"
@@ -332,7 +333,7 @@ For each decision, note what it was chosen **over**. Rejected alternatives come 
 2. **Options you weighed and didn't build.** You considered tabs, went with a single page. Tabs are rejected, with your reason.
 3. **Corrections.** Whatever you did that the user then changed is rejected; what they asked for is the decision.
 
-**A visual change the user asked for or corrected counts too**: colour, spacing, type, radii, icons, what's shown or hidden. That holds even when no alternative was weighed. The version it replaced is the rejected alternative. A visual change that would repeat on other screens is a `pattern`. A one-off is `polish`.
+**A visual change the user asked for or corrected counts too**: colour, spacing, type, radii, icons, what's shown or hidden. That holds even when no alternative was weighed. The version it replaced is the rejected alternative. A visual change that would repeat on other screens is a `pattern`. A one-off fix to one screen isn't recorded at all (below).
 
 **Only real choices.** Queue something only if someone actually chose it, and set `call` to say who:
 
@@ -352,9 +353,12 @@ Skip mechanical necessities (imports, prop plumbing, file placement), and non-vi
 |---|---|---|---|
 | `feature` | A new surface, flow, or structure | Settings split into four tabs; a second card on Audit; a back link that knows which step you came from | Always presented |
 | `pattern` | A reusable call that could apply elsewhere | Icon-only buttons on half-width cards; "Status" not "Health"; save buttons bottom-right | Presented; "make it a rule" is the likely answer |
-| `polish` | A one-off fix to one screen | Match heights at `h-9`; drop a chevron; remove a pill | **Never presented.** Queued, then logged automatically when the group is reviewed |
 
-An `agent` call is yours, not the user's, so Confirm is its likely answer, not a rule. Polish still gets queued — it's part of the record — but the user never gets a question about it; they see "+6 polish logged" in the summary. Rules only ever come from `feature` or `pattern`. When unsure between `pattern` and `polish`, ask: would this apply on a screen that doesn't exist yet? If yes, `pattern`. There's no cap on polish; keep feature + pattern to seven per piece of work.
+**One-off fixes aren't recorded.** A fix to one screen that wouldn't matter anywhere else, like matching two heights, dropping a chevron or removing a pill, is too small to ask anyone about: don't record it. `record` turns `level: polish` away with `status: "not-recorded"` and writes nothing. When unsure whether something is a pattern or a one-off, ask: would this apply on a screen that doesn't exist yet? If yes, record it as a `pattern`. If no, leave it out.
+
+An `agent` call is yours, not the user's, so Confirm is its likely answer, not a rule. Keep it to seven decisions per piece of work.
+
+**Preferences can narrow what's recorded.** On the board's Preferences page the person can choose features only, or leave out your own calls (`call: agent`). `record --pending` then turns those away with `status: "not-recorded"` and a reason, and writes nothing. Carry on and say nothing about it. A clash (`against`) is always queued, and *"record that"* always records.
 
 ### Clashes with a rule
 
@@ -364,7 +368,7 @@ An item with `against` goes against that rule for certain: it was queued that wa
 
 ### Present with the selection widget
 
-Only when asked (see above). If you have a question tool that presents options (in Claude Code, `AskUserQuestion`), use it. Up to four questions per call, in queue order; the heading inside each question names its piece of work, so a call may span more than one. Before the call, one line: `Queued across 2 pieces of work — Rescan button (1), Settings (2) · +5 polish logged`.
+Only when asked (see above). If you have a question tool that presents options (in Claude Code, `AskUserQuestion`), use it. Up to four questions per call, in queue order; the heading inside each question names its piece of work, so a call may span more than one. Before the call, one line: `Queued across 2 pieces of work — Rescan button (1), Settings (2)`.
 
 Each question:
 
@@ -394,16 +398,16 @@ Each question:
 
 **A clash** adds a line under `Applies to`, after a blank line like the others — `Clashes — D-0009 · Destructive actions undo instead of confirming` — and has its own three options:
 
-- `Follow D-0009` — *Change it back to match the rule.*
-- `Replace D-0009` — *This becomes the rule; D-0009 goes to the decision archive.*
-- `Keep as exception` — *Logged as a one-off here; D-0009 stands.*
+- `Keep as exception` — *This screen keeps it; D-0009 stays for everything else.*
+- `Follow D-0009` — *Changes it to match D-0009.*
+- `Make this the rule` — *Replaces D-0009, which moves to the decision archive.*
 
 ### Fallback: present as text
 
 If no selection widget is available, use exactly this shape — grouped by piece of work, three labelled lines per item, Change first:
 
 ```
-Audit page — 3 decisions, +2 polish
+Audit page — 3 decisions
 
 1. Change:   The Audit page now has a second card, Health check, beside the score   [feature]
    Pattern:  Audit shows score and health as two half-width cards
@@ -414,20 +418,20 @@ Audit page — 3 decisions, +2 polish
 3. Change:   The health card says Status, not Health   [pattern]
    Pattern:  Card headings name the thing shown, not the concept
 
-Settings build — 2 decisions, +4 polish
+Settings build — 2 decisions
 
 4. Change:   Deleting a project now asks for confirmation in a dialog   [pattern]
    Pattern:  Destructive actions confirm in a dialog
    Clashes:  D-0009 · Destructive actions undo instead of confirming
-   → follow D-0009 · replace D-0009 · keep as exception
+   → keep as exception · follow D-0009 · make this the rule
 5. Change:   Settings is now one page with four tabs   [feature]
    …
 
 Reply per number — confirm · rule · skip · or type what it should be
-or in bulk — "confirm all" · "confirm all polish" · "rule the patterns, confirm the rest"
+or in bulk — "confirm all" · "rule the patterns, confirm the rest"
 ```
 
-Omit the `Rejected` line when there's nothing rejected. Never ask an open question — present what was decided and ask for a selection. Map bulk replies to `record --all` (above). Items they don't address are skipped. Polish isn't listed; it's logged with the group unless they say "skip polish".
+Omit the `Rejected` line when there's nothing rejected. Never ask an open question — present what was decided and ask for a selection. Map bulk replies to `record --all` (above). Items they don't address are skipped.
 
 ## Reading the answer
 
@@ -437,12 +441,49 @@ Omit the `Rejected` line when there's nothing rejected. Never ask an open questi
 | Make it a rule | `rule` | Judge it. It enters `DECISIONS.md`. |
 | Other: `skip` (or "not a decision") | `skip` | Dropped from the queue, recorded nowhere. |
 | Other: a correction | `fix --to "…"` | Change the code to match, then judge it. What you did becomes a rejected alternative automatically. |
-| Follow D-0009 | `fix --to "<D-0009's decision>"` | Change the code back to match the rule, then judge it. |
-| Replace D-0009 | `rule --supersedes D-0009` | Judge it. The old rule moves to the archive. |
 | Keep as exception | `accept --against D-0009` | Judge it. The rule stands; this screen is the logged exception. |
+| Follow D-0009 | `fix --to "<D-0009's decision>"` | Change the code back to match the rule, then judge it. |
+| Make this the rule | `rule --supersedes D-0009` | Judge it. The old rule moves to the archive. |
 | Widget Skip button | — | Nothing. The queue waits. |
 
 Never judge anything before the user answers.
+
+## Reviewing in the browser
+
+When they answer **yes, in the browser**, or ask for it (*"review in the browser"*, *"open the board"*), open their local board and carry on. Don't wait for them: the board stays open beside the work, and keeps itself current as you record.
+
+```
+npx arbiter review
+```
+
+Run it in the background (in Claude Code, `run_in_background`): it runs until they close its tab. Say one line, then carry on with whatever they ask:
+
+```
+Opened your board. Judge whenever you like: anything you ask me to change there comes to me with your next message.
+```
+
+Outside Claude Code, end it with `comes to me at the next /arbiter` instead. If you can't run a command in the background, don't open it yourself: give them `npx arbiter review` to run in a terminal. Their answers reach you the same way.
+
+The page records each answer as they give it, so never judge or record those decisions again. What it can't do is change code: a fix waits for you in `.arbiter/last-review.json`. So does a rule they edit or remove on its Design rules page, since you may have read `DECISIONS.md` before they changed it.
+
+- **In Claude Code**, a hook tells you at their next message (`Arbiter: since your last turn, the user judged decisions on the local board`). Before you answer that message, make each change it lists, run `npx arbiter review --done`, and say in one line what you changed. Then answer them.
+- **Anywhere**, the next `/arbiter` brings the same file as `lastReview` (see **When they ask**).
+
+The file's `todo`, in order:
+
+| `kind` | What it means | What you do |
+|---|---|---|
+| `fix` | They corrected `id`: the code still does `change` | Make it do `to` |
+| `follow` | They chose the rule `rule` over this change | Change the code back so it does `to` |
+| `request` | An approved request from the board | Make `do`, then record it with `--request <id>`, as **Requests from the board** says |
+
+`confirmed`, `fixed`, `skipped`, `declined` and `options` are what they decided; they need nothing from you. `rules` are new rules in `DECISIONS.md`: read them before your next UI change. `reworded` are rules they edited: each `id` now says `to`, so follow that, not the words you read before. `removed` are rules they took out, with `why`: stop following them. Neither needs the code changed unless they ask. `renamed` is work they renamed on a change's page, `from` and `to`: use `to` as the `trigger` from now on, so new decisions land on the same card. The line, as **After recording**:
+
+```
+Made from your board: D-0012 (Save stays at the top), D-0014 (back to D-0009)
+```
+
+When the background command ends, they closed the board: there's nothing to do. Its last line only repeats what's waiting, which reaches you as above.
 
 ## The JSON shape
 
@@ -504,9 +545,9 @@ If the work belongs to a candidate (below), add `"candidate": "C-0001"` or pass 
 If the session mentioned a ticket — a Linear or Jira key like `ENG-123`, a GitHub issue, a pasted tracker link — add `"ref": "<url or key>"` or pass `--ref`. It's how the board links each decision to the work it came from. Never ask for one; leave it out when nothing was mentioned. `--ref` on a bulk `--all` stamps every item.
 
 - `change` — what happened, in plain words. One line, 20 words or fewer. Required. This is what the person judging reads.
-- `decision` — the same call as a rule someone could follow. Present tense. One line. It's the rule's title in `DECISIONS.md`, and with many rules a future session picks what to read from titles alone. So name the exact thing and where it applies: `Reply pills on the guest list are filled`, not `Pills are filled`; `Form errors go in one box at the top of the form`, not `Errors go at the top`. A vague title gets skipped, or looks like it clashes with a rule about something else. For `polish` it can repeat `change`.
-- `level` — `feature | pattern | polish` (table above). Default is `pattern`; set it every time.
-- `trigger` — the thing the user was working on, named the way they'd say it, at the grain they worked at: `Rescan button`, `Delete flow`, `Settings`, `Billing page`. Every decision from the same piece of work gets the **same** trigger — it's the grouping key and the heading they see.
+- `decision` — the same call as a rule someone could follow. Present tense. One line. It's the rule's title in `DECISIONS.md`, and with many rules a future session picks what to read from titles alone. So name the exact thing and where it applies: `Reply pills on the guest list are filled`, not `Pills are filled`; `Form errors go in one box at the top of the form`, not `Errors go at the top`. A vague title gets skipped, or looks like it clashes with a rule about something else.
+- `level` — `feature | pattern` (table above). Default is `pattern`; set it every time.
+- `trigger` — the thing the user was working on, named the way they'd say it, at the grain they worked at: `Rescan button`, `Delete flow`, `Settings`, `Billing page`. Every decision from the same piece of work gets the **same** trigger — it's the grouping key and the heading they see. Its first part is the area it lands in on the board: `Settings — billing` is in Settings. Name it into an area that's already there (see **Where work goes on the board**).
 - `rationale` — why it won. One line. Required.
 - `rejected` — each alternative as `<option> — <why it lost>`. One line each. Empty array if there were none.
 - `scope` — `pattern:<kebab-name>` for a recurring UI pattern (`destructive-confirm`, `empty-state`, `sheet-actions`) — this is the usual case. `file:<path>` only when it's genuinely about one screen. `global` when it applies everywhere.
@@ -524,6 +565,35 @@ The command prints JSON and exits:
 - `2` — **overlap**. Nothing was written. See below.
 - `3` — `DECISIONS.md` is at its cap. Tell the user, and ask which existing rule this replaces.
 - `4` — **contradicted**. The files don't match the claim. Nothing was written. Fix the code or the claim.
+
+## Where work goes on the board
+
+The board nests four levels: **Folder → Area → Change → Decision**. A change is one piece of work (one `trigger`, one card). Its area comes from the first part of its name: `Review inbox — Sorting` sits in Review inbox. Folders are the level above, made by the person or proposed by you. Without care every piece of work becomes an area of its own, and the side nav turns into a long list of areas with one change each.
+
+**Once per session, before the first `record --pending`, run `npx arbiter areas`.** It lists the folders, the areas in them and the changes in each. Then name each piece of work by these rules:
+
+1. **Sort by where a person sees it**, not when or how it was built: a screen, the chat, setup, a shared board.
+2. **An area is a screen, or part of one, named the way a designer would say it:** `Review inbox`, not `To review`.
+3. **Reuse an area before making one.** Name the work `<Area> — <what changed>`: `Review inbox — Sorting`, `Change page — Comments`. Make a new area only when nothing there fits.
+4. **Foundations** is only for work that truly sits on every screen: type, colour, spacing, voice.
+5. **Continue a change rather than start one.** Before naming new work, look at the changes already in its area. If the work is still about the thing one of them names, reuse that name exactly: its decisions join that change, and the picture you take when it settles becomes the change's next version, so the board shows how it got there. Start a new name only for a different thing on the same screen: another part of the page, a different feature, or a title that would need "and" to cover both. The person's words help ("the cards again", "fix that date" point back), and time doesn't decide: a continuation can come days later.
+
+   | Work | Name |
+   |---|---|
+   | Card titles, then card dates, then card status | `Overview page — Cards`, three times: one change, three versions |
+   | The list view's rows, after the cards | `Overview page — List rows`: a different element on the same screen |
+
+The reply to `record --pending` says where the work landed (`area`, and `folder` when it's in one). When it also has `newArea: true`, the work started an area of its own and `areas` lists the ones already there. If one fits, rename the work into it straight away, before more decisions land on it: `npx arbiter rename "<trigger>" "<Area> — <what changed>"`. Use the new name as the `trigger` from then on. If none fits, leave it: it's a new area.
+
+When it has `newChange: true` instead, the work started a new change in an area that already has some, listed in `changes`. If it continues one of them (rule 5), merge it into that one straight away: `npx arbiter rename "<trigger>" "<that change>" --merge`. Its decisions take that name, and its pictures and comments join that change. Use that name as the `trigger` from then on. If it's really a different thing, leave it. The person can also merge a change on the board, from its page's "⋯", and you hear of it as a rename.
+
+**Folders.** When eight or more areas sit outside any folder, offer once per session to group them, unless `npx arbiter areas` says folder suggestions are off. Propose three to six folders by where a person sees the work, each with the areas it would hold, as a short plain-text list, and ask `Group them like this? (yes / no)`. Only on yes, save it:
+
+```
+npx arbiter areas --save '{"folders":[{"name":"Local board","areas":["Review inbox","Change page"]},{"name":"In chat","areas":["Check-ins"]}]}'
+```
+
+It replaces the folders there were, so keep the person's own: start from what `npx arbiter areas` shows and add to it, never drop a folder they made. Areas left out stay where they are. Never save folders nobody said yes to. Renaming work that's already recorded, to tidy old areas, is the same: propose the list of renames, and run them only on yes.
 
 ## Overlap
 
@@ -557,7 +627,9 @@ Judgment rules never sweep. Don't offer it for them.
 
 **When a piece of work settles and it changed how a specific screen looks, take one picture of that screen.** Not after every iteration — once, when the work settles. Without asking.
 
-Size is not the test. A small pattern change on one screen deserves a picture; a feature-level change is often systemic and may not have one. The test is: **can you point at a screen where this shows?** One thing does rule a picture out: polish never reaches the board, so work that is only polish has no card for the picture to go on. Take one only when the piece of work has at least one `feature` or `pattern` decision.
+**Unless pictures are off.** When a `record --pending` reply carries `pictures: false`, the person turned them off in Preferences: take none, and never say a picture is missing.
+
+Size is not the test. A small pattern change on one screen deserves a picture; a feature-level change is often systemic and may not have one. The test is: **can you point at a screen where this shows?**
 
 - **No single screen to point at** — a font, a token, a global rule — no picture. The rule statement is the record, and `scope` already says how far it reaches. The exception is a change that alters how everything looks, like a spacing scale, a palette, or a nav that appears on every page: take one screen, set `scope` to `global` or `pattern:<name>` so the record says where it applies, and open the `change` line with "Across every screen," so nobody reads the picture as the whole story.
 - **A still can't carry it** — motion, transitions, focus order, anything behavioural — no picture.
@@ -590,6 +662,8 @@ npx arbiter snapshot "Settings — billing" --file /abs/path/shot.png
 ```
 
 Delete the temporary file afterwards. Never attach a picture of a blank page, a spinner, or an error screen — no picture is better than a wrong one.
+
+**Each new picture keeps the one before it.** A piece of work that already has a picture keeps the old one as an earlier version, and the board shows them in order, with the decisions made between them and a before and after to compare. That is what makes one picture per settled piece of work matter: a picture per iteration would fill the history with in-between states. The same picture attached twice adds nothing.
 
 ### When you can't
 
@@ -624,7 +698,7 @@ npx arbiter candidate add "Settings — single page" --feature settings
 npx arbiter candidate add "Settings — tabs" --feature settings
 ```
 
-Queue that direction's decisions with `--candidate C-0001` so they stay attached.
+Don't queue a direction's decisions yet. Until the user picks one, they're about a version that may not stay, and the board shows the set as not chosen yet.
 
 **Snapshot it.** A candidate without a picture is half a record. If you have a browser tool and the app is running, open the screen you built, take a screenshot, save it to a file, and attach it:
 
@@ -640,6 +714,8 @@ When the user picks one — "go with the single page", "the first one" — appro
 npx arbiter candidate C-0001 --state approved --why "tabs hid the danger zone"
 ```
 
+Then queue the chosen direction's decisions with `--candidate C-0001`, so they stay attached. The others' decisions are never queued: a direction that lost keeps its picture and the reason it lost. If they pick in a later session, read what the chosen one decided from its code, and queue that.
+
 When they reject one outright: `--state rejected --why "…"`. Then one line: `C-0001 approved · C-0002 superseded`. `npx arbiter board` shows all of it.
 
 Don't register a candidate for ordinary single-direction work. Candidates are for exploration, where the rejected branches are worth keeping. Ordinary work still gets a screenshot — see above — and still reaches the board, as a card named for the piece of work.
@@ -652,7 +728,7 @@ If the user points you at a design-lint or drift scanner's JSON output, don't ac
 npx arbiter record --findings <file.json> --tool <scanner name>
 ```
 
-Each finding becomes a pending item with a verdict to attach. Then one line: `12 findings queued — /arbiter to review, or npx arbiter review.` If the output has `ask`, end on the question instead: `12 findings queued. You have 15 changes waiting in Arbiter. Review them now? (yes / no)`
+Each finding becomes a pending item with a verdict to attach. Then one line: `12 findings queued — /arbiter to review, or npx arbiter review.` If the output has `ask`, end on the question instead: `12 findings queued. You have 15 changes waiting in Arbiter. Review them now? (yes, in the browser / yes, here / no)`
 
 ## Publishing a board
 
@@ -740,7 +816,7 @@ npx arbiter record R-0001 --as decline --why "<their reason>"     # Decline
 
    Use `screenName` as the `trigger` so it lands on the card the request was made on; a request on a candidate links to it without being told. Write `change` as what you actually did — it's the answer the requester reads. After Apply, but…, what they asked goes into `rejected` by itself.
 
-   The verdict: `polish` is `accept`, no question. `feature` or `pattern` gets one widget question first — `Confirm` / `Make it a rule`, exactly as a queued decision. A change someone had to ask for is often the rule the next screen needs.
+   The verdict: one widget question first — `Confirm` / `Make it a rule`, exactly as a queued decision. If the change was a one-off fix to one screen, it isn't recorded; the request is still made, and its answer reaches the board with your next decision on that screen. A change someone had to ask for is often the rule the next screen needs.
 
 Recording it applies the request. A change that took several decisions: record each with the same `--request`. If `record` writes nothing (an overlap, the rules cap, a claim that didn't check out), its reply says so; the re-run carries `--request` too, or the request stays approved and gets made again.
 
@@ -776,6 +852,8 @@ Removal is for the record being false, not for the user disliking what it says. 
 
 *"Be quieter about decisions"*, *"stop telling me"*, *"stop asking me to review"*, *"tell me after everything"* — run `npx arbiter setup --checkin quiet|feature|every` and confirm in a few words. No question. Only `quiet` stops the review question, and it stops the line after big work too; if they only asked about the question, the confirmation says so: `Quiet now: no lines, no questions.`
 
+The same choice, and the rest of how Arbiter works in the project (what gets recorded, pictures, folder suggestions, how many rules `DECISIONS.md` holds), is on the board's **Preferences** page (`npx arbiter review`). It saves to `arbiter.json`; never ask the person to edit that file by hand.
+
 ## Retiring or rewording a rule
 
 If the user says a rule is dead with nothing replacing it — *"we don't need the empty-state rule any more"* — retire it, reason in their words:
@@ -796,7 +874,8 @@ A rule that says something different now isn't a rewording: that's a new rule th
 
 ## When invoked as `/arbiter`
 
-- `/arbiter` alone — `npx arbiter pull` if the project has a hosted board, then read `npx arbiter rules --pending --json`. Approved requests first (make them), then open requests (answer them), then everything queued, widget or text format above, judging each with `record P-xxxx --as …`. If nothing is queued and no request is waiting, say so in one line.
+- `/arbiter` alone — `npx arbiter pull` if the project has a hosted board, then read `npx arbiter rules --pending --json`. A `lastReview` first (make its `todo`, then `npx arbiter review --done`), then approved requests (make them), then open requests (answer them), then everything queued, widget or text format above, judging each with `record P-xxxx --as …`. If nothing is queued and no request is waiting, say so in one line.
+- `/arbiter` in the browser (*"review in the browser"*) — see **Reviewing in the browser**.
 - `/arbiter <text>` — treat the text as a direct request: record it, per the next section.
 
 ## When the user asks directly
@@ -816,7 +895,7 @@ If it overlaps, follow the overlap flow above.
 One line:
 
 ```
-Recorded D-0010 (accept), D-0011 (rule), +3 polish · DECISIONS.md: 6 of 40
+Recorded D-0010 (accept), D-0011 (rule) · DECISIONS.md: 6 of 40
 ```
 
 ## Never
@@ -827,7 +906,7 @@ Recorded D-0010 (accept), D-0011 (rule), +3 polish · DECISIONS.md: 6 of 40
 - Make a change someone asked for on the board before the owner approved it, or write a decline's reason for them.
 - Ask the user to write a rationale. Draft it; they correct it.
 - Re-try an alternative that `DECISIONS.md` lists as rejected.
-- Ask about polish. It's logged with the group.
+- Record a one-off fix to a single screen. Nobody needs to judge it.
 - Edit `DESIGN.md`, the design system's docs, or the shared components to fit a rule without asking.
 - Ask about the same clash twice. Every answer is recorded so it doesn't come back.
 - Add a warning or an opinion to a clash. Facts, one question, the options.

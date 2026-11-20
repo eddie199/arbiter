@@ -6,7 +6,7 @@
  *   candidate C-0002 --state rejected --why "…"
  *   candidate C-0002 --snapshot new.png
  *
- * Approving one direction supersedes its siblings (same feature, still open)
+ * Approving one direction supersedes its siblings (same set: feature and name head, still open)
  * with the reason retained — the rejected branches are the point.
  */
 
@@ -19,6 +19,7 @@ import {
 } from '../candidates';
 import { currentCommit, findRoot, gitUserName, now, readConfig, resolvePaths } from '../store';
 import { deliver, DeliveryResult } from '../destination';
+import { sameHead } from '../area-names';
 
 export interface CandidateOptions {
   feature?: string;
@@ -94,7 +95,8 @@ export function updateCandidate(id: string, opts: CandidateOptions = {}): Candid
     if (opts.why !== undefined) c.reason = opts.why.trim() || null;
     if (state === 'approved' && !opts.keepOthers && c.feature) {
       for (const sib of all) {
-        if (sib.id === c.id || sib.feature !== c.feature) continue;
+        // Only its own set: another thing explored in the same area stays open.
+        if (sib.id === c.id || sib.feature !== c.feature || !sameHead(sib, c)) continue;
         if (sib.state !== 'generated' && sib.state !== 'in_review') continue;
         sib.state = 'superseded';
         sib.supersededBy = c.id;

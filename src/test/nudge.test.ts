@@ -16,7 +16,7 @@ const o = (cwd: string) => ({ cwd, author: 'test' });
 let n = 0;
 const change = (over: Record<string, unknown> = {}) =>
   JSON.stringify({ decision: `Decision ${++n}`, rationale: 'r', trigger: 'Settings', scope: 'pattern:settings', class: 'judgment', dimension: 'interaction', level: 'pattern', ...over });
-const ASK5 = 'You have 5 changes waiting in Arbiter. Review them now? (yes / no)';
+const ASK5 = 'You have 5 changes waiting in Arbiter. Review them now? (yes, in the browser / yes, here / no)';
 
 test('every 5 changes waiting, the queue asks whether to review now; polish is not counted', () => {
   const cwd = tmp();
@@ -36,7 +36,7 @@ test('every 5 changes waiting, the queue asks whether to review now; polish is n
 
   // A "no" just waits: nothing again until 10.
   for (let i = 6; i <= 9; i++) assert.equal(queue(change(), o(cwd)).output.ask, undefined, `nothing at ${i}`);
-  assert.equal(queue(change(), o(cwd)).output.ask, 'You have 10 changes waiting in Arbiter. Review them now? (yes / no)');
+  assert.equal(queue(change(), o(cwd)).output.ask, 'You have 10 changes waiting in Arbiter. Review them now? (yes, in the browser / yes, here / no)');
 });
 
 test('judging brings the count down, and it asks again when the count climbs back to 5', () => {
@@ -61,7 +61,7 @@ test('a dry run never asks; scanner findings count toward the question', () => {
   fs.writeFileSync(path.join(cwd, 'lint.json'), JSON.stringify([{ file: 'a.tsx', rule: 'no-hex', message: 'Raw hex colour' }, { file: 'b.tsx', rule: 'no-hex', message: 'Raw hex colour' }]));
   const found = queueFindings('lint.json', o(cwd));
   assert.equal(found.output.waiting, 6, 'from 4 to 6 passes 5');
-  assert.equal(found.output.ask, 'You have 6 changes waiting in Arbiter. Review them now? (yes / no)');
+  assert.equal(found.output.ask, 'You have 6 changes waiting in Arbiter. Review them now? (yes, in the browser / yes, here / no)');
 });
 
 test('someone who chose "Nothing until I ask" is never asked', () => {

@@ -224,6 +224,8 @@ Still only `publish` and `pull` touch the network, and `hosted.auto` is a commit
 
 **Tiered decisions on a card.** Parked on `archive/tiered-cards` (6e42c05). #2 increases decisions per piece of work, which makes this more relevant, not less.
 
+**A rule's own page on the local board.** Parked on 4 Nov on `local-board-rule-page` in both repos (CLI 697b95b, site 28002bb). Each branch is two commits: a snapshot of the then-uncommitted `local-board-live` work, then the page. Clicking a rule on Design rules opened `#/rules/D-0005`: the rule and its reason, Status, Kind, From, Decided by, Date, Copy / Edit / Remove, then what it rejected and replaced, its exceptions, clashes waiting for review, earlier wordings, and what replaced or removed it. It worked, but the layout looked off, so rework the layout before bringing it back. Its queued decision, P-0095, went with it. Bring it back by cherry-picking the second commit once `local-board-live` is committed.
+
 ---
 
 ## Settled

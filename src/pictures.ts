@@ -14,7 +14,7 @@
 import { readCandidates, type Candidate } from './candidates';
 import { isFinding } from './findings';
 import type { Decision, Dimension } from './schema';
-import type { Paths } from './store';
+import { readConfig, type Paths } from './store';
 import { workId, workSnapshot } from './work';
 
 const PICTURED: readonly Dimension[] = ['structure', 'content', 'visual'];
@@ -36,6 +36,8 @@ export interface MissingPicture {
  * A rejected or replaced direction is gone from the app, so nothing asks for its picture.
  */
 export function missingPictures(paths: Paths, decisions: Decision[], candidates: Candidate[] = readCandidates(paths)): MissingPicture[] {
+  // Pictures turned off in Settings: none is missing, so nothing asks for one.
+  if (readConfig(paths)?.pictures === false) return [];
   const byId = new Map(candidates.map((c) => [c.id, c]));
   const out = new Map<string, MissingPicture>();
   for (const d of decisions) {

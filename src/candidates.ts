@@ -93,6 +93,12 @@ export function formatCandidate(c: Candidate, decisions: Decision[]): string {
 
 const HEADING = /^# (C-\d{4,}) · (.*)$/;
 const IMG = /^!\[.*?\]\((.+?)\)$/;
+/**
+ * The only pictures a card has: the ones `candidate` copies in, named by its id. Anything else in the
+ * file (`../hosted.token`, a path out of the project) is no picture, so export, the board and remove
+ * never read, copy or delete outside the candidates folder.
+ */
+const PICTURE = /^C-\d{4,}\.(png|jpe?g|webp|gif|svg)$/;
 const FIELD = /\*\*([A-Za-z ]+):\*\* (.*?)(?=\s·\s\*\*|$)/g;
 
 export function parseCandidate(md: string): Candidate {
@@ -115,7 +121,7 @@ export function parseCandidate(md: string): Candidate {
     if (section !== 'head') continue;
 
     const img = IMG.exec(line);
-    if (img) { c.snapshot = img[1]; continue; }
+    if (img) { c.snapshot = PICTURE.test(img[1]) ? img[1] : null; continue; }
     if (!line.startsWith('- **')) continue;
     for (const m of line.slice(2).matchAll(FIELD)) {
       const key = m[1].toLowerCase();
