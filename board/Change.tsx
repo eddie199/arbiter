@@ -8,7 +8,7 @@ import { MultiSelect } from '@/components/ui/multi-select';
 import { Faint, Id, KeyValues, Label, Lede, Meta, PageTitle, Property, PropertyRow, SectionTitle } from '@/components/ui/type';
 import type { LocalBoard } from './types';
 import { go, href } from './route';
-import { areasOf, cap, CHIP, PLANS, StatusBadge, undecided, WaitingBadge } from './bits';
+import { areasOf, cap, CHIP, endedWords, PLANS, StatusBadge, undecided, WaitingBadge } from './bits';
 import { CommentLine, DecisionThread } from './Comments';
 import { ChangeMenu } from './ChangeMenu';
 import { byVersion, VersionGroups, VersionRow } from './Versions';
@@ -83,7 +83,8 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
         <div className="mb-3 flex items-center gap-2">
           <Id className={at === d.id ? 'text-fg' : undefined}>{d.id}</Id>
           {dim ? <Badge>{dim}</Badge> : null}
-          {status === 'Retired' ? <Badge>Retired</Badge> : status === 'Rule' ? <Tooltip label="See it under Design rules"><a href={href('rules', { at: d.id })} className="inline-flex rounded-full hover:opacity-75"><Badge tone="ok">Rule</Badge></a></Tooltip> : null}
+          {/* Out of DECISIONS.md: how it left, on hover, and a link to where Design rules keeps it (or the rule that replaced it). */}
+          {(status === 'Retired' || status === 'Replaced') ? <Tooltip label={`${d.ended ? `${endedWords(d.ended)}. ` : ''}See it under Design rules.`}><a href={href('rules', { at: d.ended?.kind === 'replaced' && d.ended.by ? d.ended.by.id : d.id })} className="inline-flex rounded-full hover:opacity-75"><Badge>{status}</Badge></a></Tooltip> : status === 'Rule' ? <Tooltip label="See it under Design rules"><a href={href('rules', { at: d.id })} className="inline-flex rounded-full hover:opacity-75"><Badge tone="ok">Rule</Badge></a></Tooltip> : null}
           {/* An exception says so on its top line, as a clash does in the Review inbox; the Exception to row names the rule. */}
           {d.against ? <Badge tone="warn">Exception</Badge> : null}
           <Faint className="ml-auto">{i + 1} of {ordered.length}</Faint>

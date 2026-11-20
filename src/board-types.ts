@@ -24,7 +24,12 @@ export interface BoardDecision {
   active?: boolean;
   /** The rule it's an exception to: what it goes against, kept here only. Its reason shows on hover. */
   against?: { id: string; decision: string; rationale?: string } | null;
+  /** A rule no longer in DECISIONS.md: how it left. */
+  ended?: RuleEnd | null;
 }
+
+/** How a rule left DECISIONS.md, and when: retired, with why, or replaced by a newer rule. */
+export interface RuleEnd { kind: 'retired' | 'replaced'; date: string; why?: string; by?: { id: string; decision: string } }
 
 /** One picture of a card, when it was taken. A card's versions run oldest first, the current picture last. */
 export interface BoardVersion { src: string; date: string }
@@ -59,7 +64,16 @@ export interface BoardRule {
   candidate?: string | null;
   /** The day it was made a rule, `yyyy-mm-dd`. */
   date?: string | null;
+  /** Where it doesn't hold: the decisions kept as exceptions to it. */
+  exceptions?: RuleLink[];
+  /** Decisions that go against it, waiting in the Review inbox. Never in an export, which carries no queue. */
+  waiting?: RuleLink[];
+  /** For a rule no longer in DECISIONS.md: how it left. */
+  ended?: RuleEnd | null;
 }
+
+/** A decision a rule's row points at: its id, the card it's on and that card's name, and its Change line. */
+export interface RuleLink { id: string; card: string; name: string; change: string }
 
 /** The owner's answer to a change request from the team board, matched to the request by its comment id. */
 export interface BoardRequest {
@@ -83,6 +97,8 @@ export interface Board {
   exported: string;
   candidates: BoardCandidate[];
   rules: BoardRule[] | null;
+  /** Rules taken out of DECISIONS.md, the latest to go first, each with how it left. Sent with the rules. */
+  retired?: BoardRule[] | null;
   requests?: BoardRequest[];
 }
 

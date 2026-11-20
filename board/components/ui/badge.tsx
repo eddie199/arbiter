@@ -1,7 +1,7 @@
 // Copied from the site's hosted/components/ui/badge.tsx (site bff92c0, 4 Nov 2026). The local board owns it now.
 import { cn } from './cn';
 
-type Tone = 'neutral' | 'ok' | 'warn' | 'bad' | 'info' | 'done';
+type Tone = 'neutral' | 'ok' | 'warn' | 'bad' | 'info' | 'done' | 'excepted';
 const tones: Record<Tone, string> = {
   neutral: 'bg-surface-2 text-muted',
   ok: 'bg-ok-bg text-ok',
@@ -10,6 +10,8 @@ const tones: Record<Tone, string> = {
   info: 'bg-surface-2 text-info',
   /** Decided, beside Waiting's `info`: the same grey pill, in green. */
   done: 'bg-surface-2 text-ok',
+  /** A rule's exceptions counted on Design rules, beside Waiting's `info`: the same grey pill, in amber. */
+  excepted: 'bg-surface-2 text-warn',
 };
 
 export function Badge({ tone = 'neutral', className, ...props }: React.HTMLAttributes<HTMLSpanElement> & { tone?: Tone }) {

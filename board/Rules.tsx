@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { decisionText, DIMENSION_LABEL, nameIn, scopeWords, sentence, type BoardRule } from '@/lib/board';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tooltip } from '@/components/ui/tooltip';
 import { Textarea } from '@/components/ui/input';
 import { SearchButton } from '@/components/ui/search-button';
 import { MultiSelect } from '@/components/ui/multi-select';
@@ -10,7 +12,7 @@ import { Id, Meta, PageTitle, SectionTitle } from '@/components/ui/type';
 import { When } from '@/components/When';
 import type { LocalBoard } from './types';
 import { errorsOf, post } from './api';
-import { areasOf } from './bits';
+import { areasOf, CHIP, TRAY } from './bits';
 import { RemoveDialog } from './RemoveDialog';
 import { go, href } from './route';
 
@@ -42,6 +44,12 @@ export function Rules({ data, at, cap, refresh, query }: { data: LocalBoard; at:
   const gone = (id: string) => !!removed[id] && !rules.some((r) => r.id === id);
   const all = [...rules, ...Object.values(removed).map((x) => x.rule).filter((r) => gone(r.id))];
   const shown = all.filter(fits);
+  // Rules taken out of DECISIONS.md, under Retired at the bottom: closed until you open it, a filter finds
+  // one there, or a link lands on one.
+  const retired = data.board.retired ?? [];
+  const retiredShown = retired.filter(fits);
+  const [retiredOpen, setRetiredOpen] = useState(false);
+  const showRetired = retiredOpen || (filtered && retiredShown.length > 0) || (!!at && retired.some((r) => r.id === at));
   useEffect(() => {
     if (at) document.getElementById(at)?.scrollIntoView({ block: 'start' });
     else window.scrollTo(0, 0);
@@ -64,12 +72,12 @@ export function Rules({ data, at, cap, refresh, query }: { data: LocalBoard; at:
             {/* A read-only copy speaks to whoever it was sent to, as its guide does: the rules aren't theirs. */}
             {!data.live ? `${rules.length} rule${rules.length === 1 ? '' : 's'} this project’s designs follow.`
               : rules.length ? `${rules.length} rule${rules.length === 1 ? '' : 's'} you’ve saved in DECISIONS.md. Everything new follows ${rules.length === 1 ? 'it' : 'them'}.` : 'The rules you save in DECISIONS.md. Everything new follows them.'}
-            {cap ? (rules.length >= cap ? ' Full: a new rule has to replace one.' : ` It holds ${cap} at most.`) : null}
+            {cap && rules.length >= cap ? ' Full: a new rule has to replace one.' : null}
           </Meta>
         </div>
       </div>
       {rules.length ? <RulesFilter data={data} rules={rules} kinds={kinds} q={q} /> : null}
-      {filtered && all.length && !shown.length ? (
+      {filtered && all.length && !shown.length && !retiredShown.length ? (
         <div className="px-6 py-16 text-center">
           <p className="font-semibold tracking-tight">No rules match</p>
           <p className="mt-1 text-[13px] text-muted">{needle ? `Nothing mentions “${q.trim()}”` : 'No rules of that type'}. <a href={href('rules')} className="underline hover:text-fg">Clear filters</a></p>
@@ -96,7 +104,55 @@ export function Rules({ data, at, cap, refresh, query }: { data: LocalBoard; at:
           </section>
         );
       })}
+      {retiredShown.length ? (
+        <section className="mt-10">
+          <SectionTitle count={retiredShown.length}>
+            <button type="button" aria-expanded={showRetired} onClick={() => setRetiredOpen(!showRetired)} className="inline-flex items-center gap-1.5 rounded-ui outline-none hover:text-muted focus-visible:ring-1 focus-visible:ring-border-strong">
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className={`shrink-0 text-faint transition-transform ${showRetired ? 'rotate-90' : ''}`}><path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              Retired
+            </button>
+          </SectionTitle>
+          {showRetired ? (
+            <>
+              {/* A read-only copy speaks to whoever it was sent to: the agent and the limit aren't theirs. */}
+              <Meta className="-mt-1 mb-3 block">{data.live ? 'Out of DECISIONS.md, so your agent no longer follows them.' : 'Out of DECISIONS.md: new work no longer follows them.'}</Meta>
+              <ul className="divide-y divide-border border-t border-border">
+                {retiredShown.map((r) => <RetiredRow key={r.id} r={r} at={at} />)}
+              </ul>
+            </>
+          ) : null}
+        </section>
+      ) : null}
     </main>
+  );
+}
+
+/**
+ * A rule taken out of DECISIONS.md, under Retired: its words and reason, quieter than a rule in force, then
+ * how it left under a label in the Review inbox's Clashes red: Reason and why it was retired, or Replaced by
+ * and the rule that took its place, its id a chip linking to it. The day it left where a rule in force has
+ * its date.
+ */
+function RetiredRow({ r, at }: { r: BoardRule; at: string | null }) {
+  const by = r.ended?.kind === 'replaced' ? r.ended.by : undefined;
+  const why = r.ended?.kind === 'retired' ? r.ended.why : undefined;
+  return (
+    <li id={r.id} className={ROW}>
+      <Id className={`pt-0.5 ${at === r.id ? 'text-fg' : ''}`}>{r.id}</Id>
+      <div className="min-w-0 max-w-[40rem]">
+        <div className="text-muted">{sentence(r.decision)}</div>
+        {r.rationale ? <div className="mt-0.5 text-[13px] text-muted">{sentence(r.rationale)}</div> : null}
+        {by || why ? (
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1 text-[13px]">
+            <span className="text-bad">{by ? 'Replaced by' : 'Reason'}</span>
+            <span className="text-muted">
+              {by ? <><a href={href('rules', { at: by.id })} className={`${CHIP} hover:border-border-strong`}>{by.id}</a> {sentence(by.decision)}</> : sentence(why!)}
+            </span>
+          </div>
+        ) : null}
+      </div>
+      {r.ended?.date ? <When iso={r.ended.date} className="pt-0.5 text-right text-xs tabular-nums text-faint" /> : <span />}
+    </li>
   );
 }
 
@@ -246,6 +302,7 @@ function RuleRow({ r, at, from, live, copyText, onRemoved, refresh }: { r: Board
         {a.mode === 'edit' ? <EditBox a={a} /> : <div>{sentence(r.decision)}</div>}
         {r.rationale ? <div className="mt-0.5 text-[13px] text-muted">{sentence(r.rationale)}</div> : null}
         {from ? <Meta className="mt-1 block">Decided on <a href={href(from.id)} className="text-fg hover:underline">{from.name}</a></Meta> : null}
+        <Standing r={r} />
         {a.mode === 'edit' ? <EditButtons a={a} /> : live ? (
           <div className="mt-1 flex items-center gap-3 text-[12px] text-faint opacity-0 transition-opacity focus-within:opacity-100 group-hover/rule:opacity-100 group-focus-within/rule:opacity-100">
             <RuleCopy text={copyText} />
@@ -262,6 +319,52 @@ function RuleRow({ r, at, from, live, copyText, onRemoved, refresh }: { r: Board
       </div>
       {r.date ? <When iso={r.date} className="pt-0.5 text-right text-xs tabular-nums text-faint" /> : <span />}
     </li>
+  );
+}
+
+/** An exception, as a footnote to its rule: an asterisk at the tray's size and stroke. */
+const ASTERISK = <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true" className="shrink-0"><path d="M7 2.5v9" /><path d="M3.1 4.75l7.8 4.5" /><path d="M3.1 9.25l7.8-4.5" /></svg>;
+
+/**
+ * Where a rule doesn't hold, and what waits against it, as pills under its reason: an asterisk with how
+ * many exceptions, in amber on the grey the decided and waiting counts use, and the Review inbox's tray
+ * with how many clashes wait there. The words are on hover and for a screen reader. Each opens in place to list its own, the pill again, the change's name and its
+ * Change line: an exception links to its decision on its change's page, a clash to its work in the inbox.
+ */
+function Standing({ r }: { r: BoardRule }) {
+  const [open, setOpen] = useState<'exceptions' | 'waiting' | null>(null);
+  const exceptions = r.exceptions ?? [], waiting = r.waiting ?? [];
+  if (!exceptions.length && !waiting.length) return null;
+  const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+  const pill = (kind: 'exceptions' | 'waiting', words: string, badge: React.ReactNode) => (
+    <Tooltip label={`${words}. ${open === kind ? 'Hide' : 'Show'} ${words.startsWith('1 ') ? 'it' : 'them'}.`}>
+      <button type="button" aria-expanded={open === kind} onClick={() => setOpen((o) => (o === kind ? null : kind))}
+        className={`inline-flex rounded-full outline-none focus-visible:ring-1 focus-visible:ring-border-strong ${open === kind ? 'ring-1 ring-border-strong' : 'hover:opacity-75'}`}>
+        {badge}
+      </button>
+    </Tooltip>
+  );
+  const list = open === 'exceptions' ? exceptions : open === 'waiting' ? waiting : [];
+  // A change's name without its area, as a card under its area's heading says it: "Settings — Billing" is Billing.
+  const short = (name: string) => name.split(' — ').pop() || name;
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {exceptions.length ? pill('exceptions', plural(exceptions.length, 'exception'), <Badge tone="excepted" className="cursor-pointer gap-1 tabular-nums">{ASTERISK}<span aria-hidden="true">{exceptions.length}</span><span className="sr-only">{plural(exceptions.length, 'exception')}</span></Badge>) : null}
+        {waiting.length ? pill('waiting', `${plural(waiting.length, 'clash')} waiting in the Review inbox`, <Badge tone="info" className="cursor-pointer gap-1 tabular-nums">{TRAY}<span>{waiting.length}</span></Badge>) : null}
+      </div>
+      {list.length ? (
+        <ul className="mt-2 space-y-1.5 text-[13px] text-muted">
+          {list.map((x) => (
+            <li key={x.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              {open === 'exceptions' ? <Badge tone="warn">Exception</Badge> : <Badge tone="info">Waiting</Badge>}
+              <a href={open === 'exceptions' ? href(x.card, { at: x.id }) : href('review', { at: x.card })} className="font-medium text-fg hover:underline">{short(x.name)}</a>
+              <span>{sentence(x.change)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 

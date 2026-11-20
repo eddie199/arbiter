@@ -7,7 +7,7 @@
  */
 import type { BoardDecision, BoardRequest, CandidateState } from '../../src/board-types';
 
-export type { Board, BoardCandidate, BoardDecision, BoardRequest, BoardRule, CandidateState } from '../../src/board-types';
+export type { Board, BoardCandidate, BoardDecision, BoardRequest, BoardRule, CandidateState, RuleEnd } from '../../src/board-types';
 
 /** Record text shown as a sentence: first letter up, the rest as written. */
 export const sentence = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -74,18 +74,19 @@ export const statusRank = (c: { work?: boolean; state: CandidateState }): number
   return c.work ? 2 : s === 'approved' ? 0 : s === 'proposed' ? 1 : 3;
 };
 /**
- * A decision's state as its pill says it: Rule or Retired. None for one confirmed or fixed: a fix already
+ * A decision's state as its pill says it: Rule; once out of DECISIONS.md, Replaced when a newer rule took
+ * its place, else Retired. None for one confirmed or fixed: a fix already
  * shows in its Rejected row, the agent's words "corrected by" you.
  */
-export const verdictLabel = (d: { verdict: string; active?: boolean }): string | null =>
-  d.verdict === 'rule' ? (d.active === false ? 'Retired' : 'Rule') : null;
+export const verdictLabel = (d: { verdict: string; active?: boolean; ended?: { kind: string } | null }): string | null =>
+  d.verdict === 'rule' ? (d.active === false ? (d.ended?.kind === 'replaced' ? 'Replaced' : 'Retired') : 'Rule') : null;
 
 /**
  * A decision as text, the way its change's page shows it: id, type and state, then Change, Rule or
  * Pattern, Rejected and Applies to. What Copy puts on the clipboard, on a change's page and on Design
  * rules alike, so one copied from either reads the same.
  */
-export function decisionText(d: Pick<BoardDecision, 'id' | 'change' | 'decision' | 'rejected' | 'verdict' | 'dimension' | 'active' | 'against'>, applies: string | null): string {
+export function decisionText(d: Pick<BoardDecision, 'id' | 'change' | 'decision' | 'rejected' | 'verdict' | 'dimension' | 'active' | 'against' | 'ended'>, applies: string | null): string {
   const dim = d.dimension ? DIMENSION_LABEL[d.dimension] ?? d.dimension : null;
   return [
     [d.id, dim, verdictLabel(d), d.against ? 'Exception' : null].filter(Boolean).join(' · '),

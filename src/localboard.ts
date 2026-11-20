@@ -20,15 +20,33 @@ import { missingPictures } from './pictures';
 import { readArrangement } from './areas';
 import { settingsOf } from './settings';
 import { checkable, verify } from './verify';
-import type { Agent, Board, BoardCandidate, BoardDecision, BoardRequest, CodeCheck, LocalBoard, PendingDecision, QueuedLine, ReviewState } from './board-types';
+import type { Agent, Board, BoardCandidate, BoardDecision, BoardRequest, CodeCheck, LocalBoard, PendingDecision, QueuedLine, ReviewState, RuleEnd, RuleLink } from './board-types';
 
 /** On the board: judged, still in force, and not polish. */
 const shown = (d: Decision) => d.verdict !== 'pending' && d.verdict !== 'retire' && d.level !== 'polish';
-/** A decision as the board shows it. An exception carries the rule it goes against, found among every rule ever recorded, retired ones too. */
-const toDecision = (d: Decision, inForce?: Set<string>, rules?: Map<string, Decision>): BoardDecision => {
+/**
+ * A decision as the board shows it. An exception carries the rule it goes against, found among every rule
+ * ever recorded, retired ones too; a rule no longer in force, how it left.
+ */
+const toDecision = (d: Decision, inForce?: Set<string>, rules?: Map<string, Decision>, ends?: (id: string) => RuleEnd | null): BoardDecision => {
   const rule = d.against && d.verdict !== 'rule' ? rules?.get(d.against) : undefined;
-  return { id: d.id, change: d.change, decision: d.decision, rejected: d.rejected, verdict: d.verdict, dimension: d.dimension, scope: d.scope, ref: d.ref, date: d.date, ...(inForce && d.verdict === 'rule' ? { active: inForce.has(d.id) } : {}), ...(rule ? { against: { id: rule.id, decision: rule.decision, rationale: rule.rationale } } : {}) };
+  const ended = inForce && d.verdict === 'rule' && !inForce.has(d.id) ? ends?.(d.id) ?? null : null;
+  return { id: d.id, change: d.change, decision: d.decision, rejected: d.rejected, verdict: d.verdict, dimension: d.dimension, scope: d.scope, ref: d.ref, date: d.date, ...(inForce && d.verdict === 'rule' ? { active: inForce.has(d.id) } : {}), ...(rule ? { against: { id: rule.id, decision: rule.decision, rationale: rule.rationale } } : {}), ...(ended ? { ended } : {}) };
 };
+
+/**
+ * How each rule left DECISIONS.md, from the entry that ended it: a retirement says why, a newer rule
+ * that replaced it says what it says now. A rule still in force has none.
+ */
+function endsOf(archive: Decision[]): (id: string) => RuleEnd | null {
+  const by = new Map<string, Decision>();
+  for (const x of archive) if (x.supersedes && !by.has(x.supersedes)) by.set(x.supersedes, x);
+  return (id) => {
+    const x = by.get(id);
+    if (!x) return null;
+    return x.verdict === 'retire' ? { kind: 'retired', date: x.date, why: x.rationale } : { kind: 'replaced', date: x.date, by: { id: x.id, decision: x.decision } };
+  };
+}
 
 export interface BoardOptions {
   /** Where the page finds pictures: the review server's `/snapshots/`, or an export's `snapshots/` folder. */
@@ -49,6 +67,7 @@ export function boardOf(paths: Paths, opts: BoardOptions): Board {
   const inForce = new Set(readActive(paths).map((d) => d.id));
   const archive = readArchive(paths);
   const ruleById = new Map(archive.filter((d) => d.verdict === 'rule').map((d) => [d.id, d]));
+  const ends = endsOf(archive);
   const candidates: BoardCandidate[] = known.map((c) => ({
     id: c.id,
     name: c.name,
@@ -61,7 +80,7 @@ export function boardOf(paths: Paths, opts: BoardOptions): Board {
     supersededBy: c.supersededBy,
     url: null,
     snapshot: c.snapshot && fs.existsSync(path.join(candidatesDir(paths), c.snapshot)) ? `${opts.pictures}${c.snapshot}` : null,
-    decisions: decisionsFor(paths, c.id).filter(shown).map((d) => toDecision(d, inForce, ruleById)),
+    decisions: decisionsFor(paths, c.id).filter(shown).map((d) => toDecision(d, inForce, ruleById, ends)),
   }));
   // Screenless decisions: one card per piece of work.
   const ids = new Set(known.map((c) => c.id));
@@ -83,12 +102,25 @@ export function boardOf(paths: Paths, opts: BoardOptions): Board {
       id, name: trigger, feature: areas.get(trigger.toLowerCase()) ?? null, state: 'recorded', work: true,
       author: last.author, date: last.date, reason: null, notes: '', supersededBy: null, url: null,
       snapshot: shot ? `${opts.pictures}${path.basename(shot)}` : null,
-      decisions: ds.filter(shown).map((d) => toDecision(d, inForce, ruleById)),
+      decisions: ds.filter(shown).map((d) => toDecision(d, inForce, ruleById, ends)),
       ...versionsOf(paths, id, opts.pictures),
     });
   }
   // The day each became a rule, for the Design rules page.
-  const rules = opts.includeRules ? readActive(paths).map((r) => ({ id: r.id, dimension: r.dimension, decision: r.decision, rationale: r.rationale, candidate: r.candidate ?? null, date: r.date.slice(0, 10) })) : null;
+  // With each, where it doesn't hold and what waits against it: the exceptions kept to it, and clashes in the Review inbox.
+  const link = (d: Decision): RuleLink => {
+    const card = cardOf(paths, d, ids);
+    return { id: d.id, card, name: known.find((c) => c.id === card)?.name ?? d.trigger, change: d.change ?? d.decision };
+  };
+  const rules = opts.includeRules ? readActive(paths).map((r) => ({
+    id: r.id, dimension: r.dimension, decision: r.decision, rationale: r.rationale, candidate: r.candidate ?? null, date: r.date.slice(0, 10),
+    exceptions: archive.filter((x) => x.against === r.id && x.verdict === 'accept').map(link),
+    waiting: opts.queued.filter((x) => x.against === r.id && x.verdict === 'pending').map(link),
+  })) : null;
+  // The rules taken out of it, the latest to go first: what they said, and how each left.
+  const retired = opts.includeRules ? archive.filter((r) => r.verdict === 'rule' && !inForce.has(r.id))
+    .map((r) => ({ id: r.id, dimension: r.dimension, decision: r.decision, rationale: r.rationale, candidate: r.candidate ?? null, date: r.date.slice(0, 10), ended: ends(r.id) }))
+    .sort((a, b) => (b.ended?.date ?? '').localeCompare(a.ended?.date ?? '') || b.id.localeCompare(a.id)) : null;
   // The owner's answers to the team's change requests, so a thread shows the answer under its request.
   const requests: BoardRequest[] = readRequests(paths)
     .filter((r) => r.status !== 'open')
@@ -105,7 +137,7 @@ export function boardOf(paths: Paths, opts: BoardOptions): Board {
         return d ? [{ id: d.id, change: d.change ?? d.decision, card: cardOf(paths, d, ids) }] : [];
       }),
     }));
-  return { project: path.basename(paths.root), exported: new Date().toISOString().slice(0, 10), candidates, rules, requests };
+  return { project: path.basename(paths.root), exported: new Date().toISOString().slice(0, 10), candidates, rules, retired, requests };
 }
 
 /** A piece of work's pictures, oldest first, when it has had more than one. */

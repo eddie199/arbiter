@@ -1,4 +1,5 @@
-import { areasFor, sameHead, STATUS_LABEL, statusRank, type BoardCandidate, type Status } from '@/lib/board';
+import { areasFor, sameHead, sentence, STATUS_LABEL, statusRank, type BoardCandidate, type RuleEnd, type Status } from '@/lib/board';
+import { dayWords } from '@/components/When';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip } from '@/components/ui/tooltip';
 import type { LocalBoard } from './types';
@@ -36,7 +37,7 @@ export function WaitingBadge() {
 }
 
 /** The Review inbox's tray: the icon the side nav and the phone's top bar give the inbox. */
-const TRAY = <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><path d="M1.5 8.5 3 2.5h8l1.5 6v3h-11z" /><path d="M1.5 8.5h3.25l.75 1.5h3l.75-1.5h3.25" /></svg>;
+export const TRAY = <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><path d="M1.5 8.5 3 2.5h8l1.5 6v3h-11z" /><path d="M1.5 8.5h3.25l.75 1.5h3l.75-1.5h3.25" /></svg>;
 
 /**
  * On a card or a row, what's waiting for you: the inbox's tray and how many, in the Waiting pill's
@@ -65,6 +66,17 @@ export function OptionsCount({ n, others }: { n: number; others?: boolean }) {
  * words: the text a Code Clash names, the rule a Rule Clash is with.
  */
 export const CHIP = 'break-words rounded-[4px] border border-border bg-bg px-[5px] font-mono text-[12.5px] text-fg';
+
+/**
+ * How a rule left DECISIONS.md, in one sentence: "Retired today: Trying new empty states for projects",
+ * "Replaced by D-0006 on 10 Nov: List filters are a row of chips". The day as the board says days, in
+ * lower case inside the sentence. The same words on Design rules and on a Retired pill's hover.
+ */
+export function endedWords(e: RuleEnd): string {
+  const w = dayWords(e.date);
+  const day = w === 'Today' || w === 'Yesterday' ? w.toLowerCase() : w.endsWith('ago') ? w : `on ${w}`;
+  return e.kind === 'replaced' && e.by ? `Replaced by ${e.by.id} ${day}: ${sentence(e.by.decision)}` : `Retired ${day}${e.why ? `: ${sentence(e.why)}` : ''}`;
+}
 
 /** A flag: the agent's work disagrees with something and needs your call. */
 const FLAG = <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0"><path d="M3 12.5V1.75" /><path d="M3 2.25h7.75L9 4.75l1.75 2.5H3" /></svg>;

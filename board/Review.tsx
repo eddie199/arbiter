@@ -287,7 +287,7 @@ function Single({ all, results, at, cur, setCur, agent, onJudged, onUndo, onList
         <span className="ml-auto shrink-0 text-[13px] tabular-nums text-muted" aria-live="polite">{i + 1} of {queue.length}</span>
       </div>
       <DecisionCard key={d.id} d={d} agent={agent} keys wide nav={nav} onJudged={(r) => { setLast(r); onJudged(r); }} />
-      <p className="mt-3 text-[12px] text-faint">Press the letter on a button to choose it. <Kbd>←</Kbd> <Kbd>→</Kbd> move between decisions without judging.</p>
+      <p className="mt-3 text-[12px] text-faint">Press the number on a button to choose it. <Kbd>←</Kbd> <Kbd>→</Kbd> move between decisions without judging.</p>
     </div>
   );
 }
@@ -415,7 +415,8 @@ function DecisionCard({ d, i, n, agent, keys, wide, nav, compact, onJudged }: { 
         if (e.key === 'Escape') setPanel(null);
         return;
       }
-      const a = actions.find((x) => x.key === e.key.toLowerCase());
+      // A button's number, 1 for the first, the same on every card; its old letter still works.
+      const a = /^[1-9]$/.test(e.key) ? actions[Number(e.key) - 1] : actions.find((x) => x.key === e.key.toLowerCase());
       if (!a) return;
       e.preventDefault();
       a.run();
@@ -425,10 +426,10 @@ function DecisionCard({ d, i, n, agent, keys, wide, nav, compact, onJudged }: { 
   });
 
   // In Single they're the page's main controls: all one size and outlined, Confirm filled.
-  const buttons = actions.map((a) => (
+  const buttons = actions.map((a, k) => (
     <Tooltip key={a.key} label={a.tip}>
-      <Button size={nav ? 'md' : 'sm'} variant={nav && a.variant === 'ghost' ? 'secondary' : a.variant} className={nav ? 'px-2.5!' : undefined} disabled={busy} onClick={a.run} aria-keyshortcuts={keys ? a.key.toUpperCase() : undefined}>
-        {a.label}{keys ? <kbd className="font-mono text-[11px] opacity-60">{a.key.toUpperCase()}</kbd> : null}
+      <Button size={nav ? 'md' : 'sm'} variant={nav && a.variant === 'ghost' ? 'secondary' : a.variant} className={nav ? 'px-2.5!' : undefined} disabled={busy} onClick={a.run} aria-keyshortcuts={keys ? `${k + 1} ${a.key.toUpperCase()}` : undefined}>
+        {a.label}{keys ? <kbd className="font-mono text-[11px] opacity-60">{k + 1}</kbd> : null}
       </Button>
     </Tooltip>
   ));

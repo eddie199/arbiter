@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
-import { queue, record } from '../commands/record';
+import { queue, record, retire } from '../commands/record';
 import { review } from '../commands/review';
 import { buildManifest } from '../hosted';
 import { boardOf, liveBoard } from '../localboard';
@@ -125,4 +125,39 @@ test('an exception carries the rule it goes against to the board, with the rule�
   const of = (id: string) => board.candidates.flatMap((c) => c.decisions).find((d) => d.id === id)!;
   assert.deepEqual(of('D-0002').against, { id: 'D-0001', decision: 'Settings save straight away', rationale: 'Nothing to forget to save' });
   assert.equal(of('D-0001').against, undefined, 'a rule is no exception');
+});
+
+test('a rule on Design rules carries its exceptions, and the clashes waiting against it on the live board only', () => {
+  const cwd = tmp();
+  const o = { cwd, author: 'test' };
+  record(input({ verdict: 'rule', trigger: 'Settings — Privacy', decision: 'Settings save straight away', rationale: 'Nothing to forget to save', scope: 'pattern:settings-autosave', dimension: 'interaction' }), o);
+  record(input({ verdict: 'accept', against: 'D-0001', call: 'asked', trigger: 'Settings — Billing', decision: 'Changing plan waits for a Confirm button', change: 'Changing plan waits for a Confirm button', scope: 'file:app/billing.tsx', dimension: 'interaction' }), o);
+  queue(input({ against: 'D-0001', trigger: 'Settings — Notifications', decision: 'Notifications save with a Save button', change: 'Notifications uses a Save button', scope: 'file:app/notifications.tsx', dimension: 'interaction' }), o);
+  const paths = resolvePaths(cwd);
+  const live = boardOf(paths, { pictures: '/snapshots/', includeRules: true, queued: readPending(paths) }).rules!.find((r) => r.id === 'D-0001')!;
+  assert.deepEqual(live.exceptions, [{ id: 'D-0002', card: 'W-settings-billing', name: 'Settings — Billing', change: 'Changing plan waits for a Confirm button' }]);
+  assert.deepEqual(live.waiting?.map((x) => [x.card, x.change]), [['W-settings-notifications', 'Notifications uses a Save button']]);
+  // An export carries no queue, so nothing waits on its rules.
+  const exported = boardOf(paths, { pictures: 'snapshots/', includeRules: true, queued: [] }).rules!.find((r) => r.id === 'D-0001')!;
+  assert.equal(exported.exceptions?.length, 1);
+  assert.deepEqual(exported.waiting, []);
+});
+
+test('Design rules keeps the rules taken out, the latest first, each saying how it left, and so does its pill', () => {
+  const cwd = tmp();
+  const o = { cwd, author: 'test' };
+  record(input({ verdict: 'rule', decision: 'An empty list shows a picture and one line', scope: 'pattern:empty-list', dimension: 'states' }), o);
+  record(input({ verdict: 'rule', decision: 'Filters sit in a side panel', scope: 'pattern:filters', dimension: 'structure' }), o);
+  assert.equal(retire('D-0001', 'Trying new empty states', o).exitCode, 0);
+  assert.equal(record(input({ verdict: 'rule', decision: 'Filters are a row of chips', scope: 'pattern:filters', dimension: 'structure' }), { ...o, supersedes: 'D-0002' }).exitCode, 0);
+  const board = boardOf(resolvePaths(cwd), { pictures: 'snapshots/', includeRules: true, queued: [] });
+  assert.deepEqual(board.rules!.map((r) => r.id), ['D-0004']);
+  assert.deepEqual(board.retired!.map((r) => [r.id, r.ended?.kind]), [['D-0002', 'replaced'], ['D-0001', 'retired']]);
+  assert.deepEqual(board.retired![0].ended?.by, { id: 'D-0004', decision: 'Filters are a row of chips' });
+  assert.equal(board.retired![1].ended?.why, 'Trying new empty states');
+  // On its change's page, the decision says the same.
+  const d = board.candidates.flatMap((c) => c.decisions).find((x) => x.id === 'D-0001')!;
+  assert.equal(d.active, false);
+  assert.equal(d.ended?.kind, 'retired');
+  assert.equal(boardOf(resolvePaths(cwd), { pictures: 'snapshots/', includeRules: false, queued: [] }).retired, null, 'only with the rules');
 });
