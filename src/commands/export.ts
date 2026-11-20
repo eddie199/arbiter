@@ -45,7 +45,8 @@ export function exportBoard(opts: ExportOptions = {}): ExportResult {
   const outDir = path.resolve(root, opts.out ?? 'arbiter-export');
   const snapDir = path.join(outDir, 'snapshots');
   // Pictures from an earlier export go: a screen since removed mustn't stay in a folder people get sent.
-  fs.rmSync(snapDir, { recursive: true, force: true });
+  // Only those, by their names: anything else in a snapshots/ folder is someone's own, and stays.
+  clearPictures(snapDir);
   fs.mkdirSync(snapDir, { recursive: true });
 
   const manifest = boardOf(paths, { pictures: PICTURES, includeRules: !!opts.includeRules, queued: [] });
@@ -96,6 +97,20 @@ export function exportBoard(opts: ExportOptions = {}): ExportResult {
     try { spawn(cmd, args, { stdio: 'ignore', detached: true }).unref(); } catch { /* path is printed anyway */ }
   }
   return { dir: outDir, index, candidates: cards.length, snapshots };
+}
+
+/**
+ * The pictures an export writes, and only those: a card's or a piece of work's own (C-0001.png,
+ * W-settings-billing.png) and its earlier ones under history/<W-…>/. A folder left empty goes too.
+ */
+function clearPictures(snapDir: string): void {
+  const id = /^(C-\d{4,}|W-[a-z0-9-]{1,48})$/;
+  const picture = /^(C-\d{4,}|W-[a-z0-9-]{1,48})\.(png|jpe?g|webp|gif|svg)$/;
+  const list = (dir: string) => { try { return fs.readdirSync(dir, { withFileTypes: true }); } catch { return []; } };
+  for (const e of list(snapDir)) if (e.isFile() && picture.test(e.name)) fs.rmSync(path.join(snapDir, e.name));
+  const history = path.join(snapDir, 'history');
+  for (const e of list(history)) if (e.isDirectory() && id.test(e.name)) fs.rmSync(path.join(history, e.name), { recursive: true, force: true });
+  for (const dir of [history, snapDir]) if (fs.existsSync(dir) && !list(dir).length) fs.rmdirSync(dir);
 }
 
 /**

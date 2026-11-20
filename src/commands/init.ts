@@ -15,6 +15,7 @@ import { archiveHeader } from '../format';
 import { Prompter } from './prompt';
 import { CHECKINS, type Checkin } from './setup';
 import { installHook } from '../hook';
+import { FILE as HANDOFF_FILE } from '../handoff';
 
 export type Client = 'claude-code' | 'cursor';
 
@@ -149,7 +150,12 @@ export async function init(opts: InitOptions = {}): Promise<Step[]> {
 
     // ── .arbiter/archive.md ──────────────────────────────────────────────
     fs.mkdirSync(paths.archiveDir, { recursive: true });
-    steps.push(writeIfChanged(root, path.join('.arbiter', '.gitignore'), 'hosted.token\n'));
+    // Never committed: the publish token, and what the board hands this machine's agent (a teammate's
+    // agent mustn't make it). Lines already there stay, so a re-run never un-ignores anything.
+    const ignore = path.join(paths.archiveDir, '.gitignore');
+    const had = fs.existsSync(ignore) ? fs.readFileSync(ignore, 'utf8').split(/\r?\n/).filter(Boolean) : [];
+    const lines = [...had, ...['hosted.token', HANDOFF_FILE].filter((x) => !had.includes(x))];
+    steps.push(writeIfChanged(root, path.join('.arbiter', '.gitignore'), lines.join('\n') + '\n'));
     if (fs.existsSync(paths.archive)) {
       steps.push({ file: '.arbiter/archive.md', outcome: 'unchanged' });
     } else {

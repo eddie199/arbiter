@@ -312,7 +312,7 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
           return;
         }
         const type = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }[path.extname(abs)] ?? 'application/octet-stream';
-        res.writeHead(200, { 'content-type': type, 'cache-control': 'max-age=86400' });
+        res.writeHead(200, { 'content-type': type, 'cache-control': 'max-age=86400', ...PICTURE });
         fs.createReadStream(abs).pipe(res);
         return;
       }
@@ -325,7 +325,7 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
           return;
         }
         const type = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.svg': 'image/svg+xml' }[path.extname(file)] ?? 'application/octet-stream';
-        res.writeHead(200, { 'content-type': type, 'cache-control': 'no-cache' });
+        res.writeHead(200, { 'content-type': type, 'cache-control': 'no-cache', ...PICTURE });
         fs.createReadStream(abs).pipe(res);
         return;
       }
@@ -580,6 +580,13 @@ function whoIsAt(port: number): Promise<string | null> {
     req.on('error', () => resolve(null));
   });
 }
+
+/**
+ * A picture is only ever a picture. An SVG opened in a tab of its own would otherwise run its scripts as
+ * the board, and a planted one could reach the API (reword a rule, which the hook then hands the agent).
+ * Sandboxed, it runs nothing and has no origin; in the board's <img> it draws as before.
+ */
+const PICTURE = { 'content-security-policy': "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'", 'x-content-type-options': 'nosniff' };
 
 function json(res: http.ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });

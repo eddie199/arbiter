@@ -60,7 +60,7 @@ export interface Handoff {
   told?: boolean;
 }
 
-const FILE = 'last-review.json';
+export const FILE = 'last-review.json';
 
 export function summarize(answers: Answer[], finished: Handoff['finished'], at = new Date().toISOString()): Handoff {
   const h: Handoff = { finished, at, confirmed: [], rules: [], fixed: [], skipped: [], declined: [], options: [], reworded: [], removed: [], renamed: [], todo: [], next: '' };
