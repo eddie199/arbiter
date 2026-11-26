@@ -1,11 +1,11 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.svg">
-  <img src=".github/assets/banner-light.svg" alt="arbiter. Design decisions that stick. Reasons that survive." width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.png">
+  <img src=".github/assets/banner-light.png" alt="arbiter. Shared design decision memory for your team and agents." width="100%">
 </picture>
 
-### The decision layer for agent-built UI
+### Arbiter: open-source design decision memory
 
 [![npm](https://img.shields.io/npm/v/arbiterdesign?style=flat-square&color=171717&label=npm)](https://www.npmjs.com/package/arbiterdesign)
 [![Status: beta](https://img.shields.io/badge/status-beta-171717?style=flat-square)](https://arbiter.design/changelog)
@@ -16,28 +16,26 @@
 
 **[Website](https://arbiter.design)** · **[Live demo](https://arbiter.design/p/acme)** · **[Start guide](https://arbiter.design/get-started)** · **[Changelog](https://arbiter.design/changelog)**
 
-[Quick start](#quick-start) · [How it works](#how-it-works) · [Share with your team](#share-it-with-your-team) · [Commands](#commands) · [FAQ](#faq)
+[How it works](#how-it-works) · [Share with your team](#share-it-with-your-team) · [FAQ](#faq) · [Reference](#reference)
 
 </div>
 
 <br>
 
-## What is Arbiter?
+Arbiter turns the design decisions made while you build into rules your agent follows and reasons your team can find. It works with Claude Code and Cursor.
 
-Arbiter is a decision record for teams building UI with AI agents like Claude Code and Cursor.
-
-As your agent builds, it writes down the design calls it makes: what it chose, what it beat, and why. You approve them in seconds. The agent follows them next time, and everyone on your team can read them.
-
-It's documentation that writes itself.
+As your agent builds, Arbiter writes down each design call: what changed, what it beat, and why. You approve them in seconds, in chat or on your board. The agent follows them next time, and everyone on your team can read them.
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/board-dark.png">
-    <img src=".github/assets/board-light.png" alt="A screen on the Arbiter board: the Settings page, the reason it won, who decided it, and the tabs version it replaced." width="80%">
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/hero-dark.gif">
+    <img src=".github/assets/hero-light.gif" alt="A tour of the Arbiter board. The Settings screen, approved and decided by Sam, scrolls down to the decisions made on it and the tabs it beat. Then Design rules, then the Overview of every screen." width="100%">
   </picture>
 </p>
 
-<p align="center"><sub>A screen on the board: what was decided, who decided it, and what it beat. <a href="https://arbiter.design/p/acme">Try the live demo</a>.</sub></p>
+<p align="center"><sub>Your board: every screen, what was decided on it, who decided, and what it beat. <a href="https://arbiter.design/p/acme">Click around the live demo</a>.</sub></p>
+
+<br>
 
 ## What you get
 
@@ -54,7 +52,9 @@ Every design decision and change is recorded as it's made: what was chosen, what
 ### Visibility
 
 **See every decision in one place.**<br>
-Publish a board so you and your team can see each screen, the decisions made on it, and what lost.
+Your board shows each screen, the decisions made on it, and what lost. It runs on your machine, and you share it when your team should see it too.
+
+<br>
 
 ## Why Arbiter
 
@@ -67,53 +67,61 @@ Building with an agent means making product decisions all day, and nobody keeps 
 Arbiter fixes that without adding work:
 
 - 📄 **It's just files in your repo.** Rules live in `DECISIONS.md`. Plain markdown, reviewed in pull requests like everything else.
-- 🤫 **It stays out of the way.** No popups while you iterate. The agent queues what it decided and you judge it when you're ready.
-- 🧭 **It informs, it doesn't enforce.** Rules shape what the agent builds. Nothing blocks a build.
+- 🤫 **It stays out of the way.** No popups while you iterate. The agent queues what it decided and you judge it when you're ready, in chat or on your board.
+- 🧭 **It informs, it doesn't enforce.** Rules shape what the agent builds. When your request goes against one, it asks once, then builds what you choose. Nothing blocks a build.
 
-## Quick start
-
-```bash
-npx arbiterdesign init
-```
-
-> [!NOTE]
-> On Windows, in PowerShell, type `npx.cmd` instead of `npx`, here and in every command after. PowerShell blocks plain `npx` out of the box, with "running scripts is disabled on this system". Command Prompt and Git Bash don't.
-
-That's the whole install. Run it in the folder your agent works in, or ask the agent to run it. It detects Claude Code or Cursor, teaches your agent the protocol, and adds `arbiterdesign` to your devDependencies, which is what makes the shorter `npx arbiter` work from then on. Running it twice changes nothing.
-
-It asks one question, once: how often the agent should check in about decisions while you work. If the agent ran the install, it asks you in chat instead.
-
-No `package.json` in the project? Add `arbiterdesign` as a dev dependency yourself. New to the terminal? Follow the [step-by-step guide](https://arbiter.design/get-started).
-
-If you want the agent to take screenshots of the screens it changes, tell it where your app runs:
-
-```bash
-npx arbiter setup --app http://localhost:3000
-```
-
-Then build UI the way you normally do. Arbiter picks it up from there.
-
-<details>
-<summary><b>The files Arbiter keeps in your repo</b></summary>
 <br>
 
-| File | What it's for |
-|---|---|
-| `DECISIONS.md` | Your active rules, grouped by type. Capped at 40. The agent reads this before UI work. |
-| `.arbiter/archive.md` | Every decision ever made, append-only. Never loaded into the agent. |
-| `.arbiter/pending.md` | Decisions the agent queued that you haven't judged yet. |
-| `.arbiter/candidates/` | One page per generated screen or direction: its state, snapshot, decisions, and why it lost. |
-| `.arbiter/work/` | One picture per piece of work, when the agent could take one. `publish` carries it to the board. |
-| `.arbiter/hosted.json`, `comments.json`, `requests.json` | Which hosted board is yours, and the comments and change requests `pull` brings back. |
-| `CANDIDATES.md` | Index of candidates. Only written when `destination` is `git`. |
-| `.claude/skills/arbiter/SKILL.md` or `.cursor/rules/arbiter.mdc` | Tells the agent to check your rules before UI work, ask when something clashes with one, then surface its decisions and record what you confirm. |
-| `arbiter.json` | Config. `app.url` is where the agent opens screens for pictures. |
-| `AGENTS.md` | One line appended, pointing at `DECISIONS.md`. It tells the agent to ask before building when your request or the design system goes against a rule, and that a rule written as an exception beats the design system. Merged, never overwritten. A newer `init` refreshes only that line. |
-| `CLAUDE.md` / `.cursor/commands/arbiter.md` | The same pointer for Claude Code, and an `/arbiter` command for Cursor. |
-
-</details>
-
 ## How it works
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/how-chat-dark.gif">
+  <img src=".github/assets/how-chat-light.gif" alt="A Claude Code chat. You ask for the settings page, the agent reads 12 rules and builds it, you try tabs and go back to one page. Arbiter offers a review, and the one-page decision becomes rule D-0006." width="100%">
+</picture>
+
+**1. Build, then review in chat**
+
+Ask for a screen as you always do. Your agent reads your rules first. When decisions pile up, it asks: confirm each one, make it a rule, or type what it should be.
+
+</td>
+<td width="33%" valign="top">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/how-beat-dark.gif">
+  <img src=".github/assets/how-beat-light.gif" alt="The board: the approved single-page Settings, then the rejected tabs and accordion versions, each with the reason it lost." width="100%">
+</picture>
+
+**2. Review on your board**
+
+Or open your board with `npx arbiter review`: every change with its picture and what it beat. It runs on your machine, and nothing is uploaded until you publish.
+
+</td>
+<td width="33%" valign="top">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/how-exceptions-dark.gif">
+  <img src=".github/assets/how-exceptions-light.gif" alt="The Design rules page: a rule with one exception. Clicking it shows where the rule doesn't apply and why." width="100%">
+</picture>
+
+**3. Rules and exceptions**
+
+Rules go into `DECISIONS.md`, and your agent follows them from then on. When one screen needs to differ, keep it as an exception.
+
+</td>
+</tr>
+</table>
+
+You can also just say it in chat: *"make that a rule"*, or *"reject the tabs, going with a single page."*
+
+<details>
+<summary><b>The whole loop, as a diagram</b></summary>
+<br>
+
+In your repo, the agent builds, queues its design calls, and you judge them. Rules go into `DECISIONS.md` for the next session. With Arbiter Team, publish the board and your team can comment or ask for a change, which `pull` brings back.
 
 ```mermaid
 flowchart TB
@@ -140,184 +148,200 @@ flowchart TB
     linkStyle 7,8 stroke:#2da44e
 ```
 
-1. **You ask for a screen.** The agent reads `DECISIONS.md` first. After a sizeable piece of work it names up to three rules that shaped it, like *Following D-0001 (removing asks first, no undo bar)*, so you can see the record working.
-2. **You iterate.** The agent says nothing about decisions while you're going back and forth. Each version you move past becomes a rejected alternative on the one that replaced it.
-3. **You move on.** The agent queues the design calls it made, sized as `feature` or `pattern` (a small one-off fix isn't recorded at all). When 5 are waiting (then 10, 15…) it asks if you want to review them. Only real choices get queued: things you asked for, things you corrected, and options the agent actually weighed. Its habits don't.
-4. **You judge them when you want.** In chat with `/arbiter`, or on your local board: answer "yes, in the browser" when it asks, or open it yourself with `npx arbiter review`. Keep it open while you work: it shows what the agent records as it records it, and in Claude Code the fixes you ask for there reach the agent with your next message. Elsewhere they come at the next `/arbiter`. Close the tab when you're done with it.
-5. **Rules go into `DECISIONS.md`.** Everything you judged goes into the archive. Skipped items disappear. The next session reads the new rules.
-6. **You share it.** `npx arbiter publish` puts the board online, so your team can see each screen, what was decided and why. They can comment or request a change, and `npx arbiter pull` brings that back for you to answer. More in [Share it with your team](#share-it-with-your-team).
-
-You can also just say it: *"make that a rule"*, or *"reject the tabs, going with a single page."* The agent records it without asking.
-
-### What a rule looks like
-
-```markdown
-### D-0001 · Destructive actions confirm in a modal, never inline
-
-- **Change:** The delete-project link now opens a confirm modal
-- **Rationale:** Inline confirms get clicked through; a modal forces the pause.
-- **Rejected:**
-  - Inline confirm — clicked through without reading
-- **Trigger:** Delete-project flow used an inline "Are you sure?" link
-- **Scope:** pattern:destructive-confirm · **Dimension:** interaction · **Level:** pattern
-```
-
-### Judging the queue
-
-Each item reads as **Change** (what happened), **Pattern** (the rule) and **Rejected** (what lost). For each one you pick:
-
-| Action | What happens |
-|---|---|
-| **Confirm** | Goes into the archive as a one-off. |
-| **Make it a rule** | Goes into `DECISIONS.md`. The agent follows it from now on. |
-| **Skip** | Thrown away. |
-| **Fix** | Type a correction and it's recorded your way. |
-
-Small one-off fixes never reach the queue, so each item is a real call. If an item goes against an existing rule, Arbiter says so (*Clashes with D-0009*) and asks which one wins: **Follow D-0009**, **Replace D-0009**, or **Keep as exception**.
-
-> [!TIP]
-> Too chatty? `npx arbiter setup --checkin quiet` turns off the check-ins. `--checkin every` does the opposite and mentions a rule every time one changed something.
-
-### When something clashes with a rule
-
-The agent asks before building, once, and always in the same shape: *Before building, Arbiter found a clash*, the facts, one question, and two or three options plus Other. It only speaks up when a rule is involved.
-
-| Clash | It asks | Your answer goes into the record as |
-|---|---|---|
-| You ask for something a rule goes against | *Do you still want the undo bar?* | Nothing (it follows the rule), a one-off exception, or a new rule replacing the old one |
-| A rule goes against the design system | *Which should the empty list follow?* | The rule retired, or reworded as *Exception to the design system: …* |
-| Two rules disagree (only when both can't be true) | *Which should they follow?* | The other one retired, or both reworded to say what each is for |
-| Other screens don't follow a rule you just built to (asked after building) | *Update Events too?* | Nothing (it updates them), a clash on your review list, or an exception |
-| A rule needs something the design system doesn't have | *Build one?* | A short plan first, then this screen only, or a clash on your review list |
-
-The design system means `DESIGN.md`, pattern and component docs, and the shared components. It ranks above a plain rule, so it's the first option when the two disagree. A rule written as an exception beats it, and the agent follows that rule without asking.
-
-The agent never edits the design system, never adds to the shared components to fit a rule without asking, and never checks your work against it. That stays with your own tooling.
-
-## Share it with your team
-
-### The hosted board
-
-```bash
-npx arbiter publish
-```
-
-Puts your board online at [arbiter.design](https://arbiter.design) and prints a share link. Nothing to set up. People sign in with a magic link and can comment, say "looks good", or request a change on any screen. See what one looks like in the [live demo](https://arbiter.design/p/acme).
-
-```bash
-npx arbiter pull
-```
-
-Brings their comments back into your repo, where `arbiter review` shows them next to each screen.
-
-Git stays the source of truth. The service only holds the latest board and its comments, and only `publish` and `pull` ever touch the network. A board holds up to 100 pictures (25 MB); a picture that doesn't fit is left off and `publish` says so.
-
-**Keep it current automatically:**
-
-- `npx arbiter publish --auto` republishes whenever the record changes. Works anywhere: no GitHub, no CI, no repo needed. If a republish fails (offline, service down) the command still succeeds and tells you the board is behind. `--no-auto` turns it off.
-- `npx arbiter publish --on-push` writes a GitHub Actions workflow that republishes when decisions land on your default branch, and sets the `ARBITER_PUBLISH_TOKEN` secret through `gh` if you're signed in. Commit the workflow along with `.arbiter/hosted.json`.
-
-**Keep it private, or take it down:**
-
-- `npx arbiter publish --password` puts the board behind a password. It makes up a strong one and prints it once, so send it with the link. `--password "<yours>"` sets your own (8 characters or more), `--no-password` takes it off, and a plain `publish` leaves it as it is.
-- `npx arbiter unpublish --yes` deletes the board, its pictures and its comments from the service, saving the comments into `.arbiter/comments.json` first. Without `--yes` it only says what it would delete.
-- Lost the project folder, so you can't run it? Use **Report or remove this board** at the bottom of the board, and it's taken down by hand.
-
-### Change requests
-
-A comment is just input. **Request change** is different: someone wants something changed, so it gets a proper answer.
-
-1. `npx arbiter pull` turns each request into `R-0001` in `.arbiter/requests.json`. Commit it so everyone sees the same answers.
-2. You answer in chat with `/arbiter`:
-   - **Apply**: `record R-0001 --as apply`
-   - **Apply, but…**: `record R-0001 --as apply --to "keep the tab, make the button red"`
-   - **Decline**: `record R-0001 --as decline --why "…"` (a reason is required, since the requester reads it)
-3. The agent makes the change right away.
-4. `publish` sends the answer back. The requester sees *Open*, *Approved*, *Applied* (with what changed) or *Declined* (with the reason).
-
-> [!NOTE]
-> Nothing gets applied without the owner saying yes, and the board never writes to git. Requests come in through `pull` and answers go out through `publish`.
+</details>
 
 <details>
-<summary><b>More on requests</b></summary>
+<summary><b>What a rule looks like in <code>DECISIONS.md</code></b></summary>
 <br>
 
-- Pulling twice never creates the same request twice. If the requester deletes it on the board before it's made, the next pull takes it off the queue and says so.
-- Only an approved request can be applied. A change the owner hasn't said yes to is refused.
-- Removing the last decision that applied a request reopens it for a fresh answer. The agent never remakes it unasked.
-- A screen or decision with a request waiting on it can't be removed until the request is declined or applied.
-- Display names and comment text come from outside the project, so neither is trusted. Names arrive as a single line, and nothing they contain can add a line, entry or field to the record.
+```markdown
+### D-0006 · Settings live on one scrolling page with a section nav, not tabs
+
+- **Change:** Settings moved from four tabs to one page with a section nav
+- **Rationale:** People look for a setting with ⌘F, and tabs hid it
+- **Rejected:**
+  - Tabs, one per section — they hid settings from ⌘F
+- **Trigger:** Settings build
+- **Scope:** pattern:settings-layout · **Dimension:** structure · **Level:** pattern · **Class:** judgment · **Verdict:** rule
+- **Author:** sam · **Date:** 2026-10-27T09:00:00Z · **Commit:** — · **Supersedes:** —
+```
 
 </details>
 
-### Other ways to share
+<br>
 
-- **Static export.** `npx arbiter export` writes `arbiter-export/`: the same board as `arbiter review`, read-only, as a folder (`index.html`, the board's script and styles, and the pictures). No server: open it from disk or drop it on any static host. Each change with its picture and how it got there, what was decided in plain words, and with `--include-rules`, your design rules.
-- **GitHub Pages.** With `"destination": "git"` in `arbiter.json`, every candidate change also writes the export to `docs/arbiter/`. Turn on Pages for the `docs` folder once and the board lives at `https://<owner>.github.io/<repo>/arbiter/`. `npx arbiter publish --to pages` does the whole setup in one go.
+## When something clashes with a rule
 
-## Screenshots
+The agent asks before building, once, and always the same way: what it found, one question, and two or three options plus Other. It only speaks up when one of your rules is involved.
 
-The agent takes one picture per piece of work, when the work settles and it changed how a specific screen looks.
+- **You ask for something a rule goes against.** *"Do you still want the undo bar?"* Follow the rule, make a one-off exception, or replace the rule.
+- **A rule goes against your design system.** *"Which should the empty list follow?"* Retire the rule, or reword it as an exception to the design system.
+- **Two rules disagree.** *"Which should they follow?"* Retire one, or reword both to say what each is for.
+- **Other screens don't follow a rule you just made.** *"Update Events too?"* Update them, review it later, or keep them as exceptions.
+- **A rule needs something your design system doesn't have.** *"Build one?"* A short plan first, this screen only, or review it later.
 
-- **Gets a picture:** layout, wording or visual changes to one screen. Even a small pattern change counts.
-- **Doesn't:** font or token changes (no single screen to show), motion and behaviour (a still can't show it), and small one-off fixes (they aren't recorded).
+Your design system (`DESIGN.md`, your pattern and component docs, and your shared components) outranks a plain rule. A rule written as an exception outranks the design system. Arbiter never edits your design system and never checks your work against it.
 
-The agent renders pictures with a headless browser. If it can't (no browser, app not running, screen behind a login) it tells you once and says why. On macOS, `--capture` lets you drag-select a picture yourself; elsewhere, save one and pass `--file`.
+<br>
+
+## Where Arbiter fits
+
+Your agent has good taste and your design system, and still drifts from what your team decided. Arbiter adds the layer that stops the drift: your own design calls, with the reason.
+
+| Layer | Where it lives | What it holds |
+|---|---|---|
+| Taste packs | Design skills, taste packs | Generic taste, anyone's |
+| References | Design references, Mobbin | Design references and judgment |
+| Written law | `DESIGN.md`, `CLAUDE.md`, `tokens.json` | Defined tokens, components and usage |
+| **Case law** | **`DECISIONS.md`, kept by Arbiter** | **Your team's calls, with a reason, an owner and a date** |
+| Examples | Storybook, Figma | Your approved screens and code |
+
+<br>
+
+## Share it with your team
+
+Your board is private to you. To share it, use **Share board** at the top of your board, or the same two options here.
+
+### A read-only copy
+
+Free, and nothing goes to Arbiter. Export your board as a folder anyone can open from disk or put on any static host:
+
+```
+npx arbiter export
+```
+
+Or put it on your own GitHub Pages site with `npx arbiter publish --to pages`.
+
+### Arbiter Team (early access)
+
+A private board on arbiter.design where your team comments, says "looks good", and requests changes. Teammates sign in with an email link, and there's nothing to install. Arbiter Team is in early access, by invitation: [request early access](https://arbiter.design/plans).
+
+<details>
+<summary><b>Once you're in</b></summary>
+<br>
+
+`npx arbiter publish` puts your board online and gives you a link. It's unlisted and never indexed.
+
+`npx arbiter pull` brings comments and change requests back into your project. A comment is just input. A change request gets a proper answer: you reply in chat with `/arbiter` (apply it, apply it with a tweak, or decline with a reason), the agent makes the change, and your next `publish` shows them what happened. Nothing is applied without your yes, and the board never writes to your project on its own.
+
+- **Keep it current.** `npx arbiter publish --auto` republishes whenever the record changes. `--on-push` sets up a GitHub Action that republishes when decisions land on your default branch.
+- **Keep it private.** `npx arbiter publish --password` puts it behind a password and prints one for you to send with the link.
+- **Take it down.** `npx arbiter unpublish --yes` deletes the online copy and its comments, after saving the comments into your project.
+
+Your project stays the source of truth. Only `publish`, `pull` and `unpublish` talk to the online service.
+
+</details>
+
+<br>
+
+## Under the hood
+
+It's just files in your project. You own them, and they're reviewed in pull requests like everything else.
+
+<details>
+<summary><b>The files Arbiter keeps</b></summary>
+<br>
+
+| File | What it's for |
+|---|---|
+| `DECISIONS.md` | Your active rules, grouped by type. 40 at most by default, or set your own. The agent reads this before UI work. |
+| `.arbiter/archive.md` | Every decision ever made, append-only. Never loaded into the agent. |
+| `.arbiter/pending.md` | Decisions the agent queued that you haven't judged yet, in chat or on the board. |
+| `.arbiter/candidates/` | One page per competing direction: its state, picture, decisions, and why it lost. |
+| `.arbiter/work/` | A picture per piece of work, and the ones before it, so the board shows how it got there. |
+| `.arbiter/areas.json` | The folders you make for areas in the board's side nav. |
+| `.arbiter/hosted.json`, `comments.json`, `requests.json` | Which online board is yours, and the comments and change requests `pull` brings back. |
+| `CANDIDATES.md` | Index of candidates. Only written when `destination` is `git`. |
+| `.claude/skills/arbiter/SKILL.md` or `.cursor/rules/arbiter.mdc` | Tells the agent to check your rules before UI work, ask when something clashes with one, surface its decisions after, record what you confirm, and pick up what you judged on the board. |
+| `arbiter.json` | Settings: when the agent checks in, the rule cap, where your app runs for pictures. |
+| `AGENTS.md` | One line appended, pointing at `DECISIONS.md`. It tells the agent to ask before building when your request or the design system goes against a rule, and that a rule written as an exception beats the design system. Merged, never overwritten. |
+| `CLAUDE.md` / `.cursor/commands/arbiter.md` | The same pointer for Claude Code, and an `/arbiter` command for Cursor. |
+
+</details>
+
+<br>
+
+## FAQ
+
+<details>
+<summary><b>What counts as a decision?</b></summary>
+
+A call the agent made where a reasonable alternative existed: layout, flow, wording, states, what happens on error, and what it chose over. Not code details like imports, file names or plumbing. Each one reads Change, Rule, Rejected.
+
+</details>
+
+<details>
+<summary><b>How do I set it up?</b></summary>
+
+One command, in the folder your agent works in. In the terminal you already use with Claude Code or Cursor, type `npx arbiterdesign init`, or ask the agent to run it. It adds a few plain files to the project and a one-line note telling the agent to read the rules before UI work. Nothing to sign up for, nothing to configure. From the next session, the agent records as it goes. When you want to share your board, `npx arbiter export` makes a read-only copy, and Arbiter Team (early access) gives your team a private link. Step by step, with what you'll see: [Get started](https://arbiter.design/get-started).
+
+</details>
+
+<details>
+<summary><b>Will it interrupt me, or bury me in reviews?</b></summary>
+
+No. Decisions queue quietly while you work and come up in one line when you move on. One-off fixes aren't recorded at all, so you only judge calls that matter.
+
+</details>
+
+<details>
+<summary><b>Can I change my mind about a rule?</b></summary>
+
+Yes. Make the new call and the old rule steps aside. It stays in the archive with the reason it was replaced, so the history reads as history. Nothing is deleted.
+
+</details>
+
+<details>
+<summary><b>Where does the record live, and who can see it?</b></summary>
+
+In your project, as plain-text files you own: `DECISIONS.md` and a folder beside it. Your board runs on your machine and reads those files: no account, and nothing is uploaded. Only you see it. When you want others to see it, `npx arbiter export` makes a read-only copy, or Arbiter Team (early access) puts one at a private link: unlisted, never indexed, comments by email sign-in. Delete that copy and you lose the comments, nothing else.
+
+</details>
+
+<details>
+<summary><b>We already have a design system.</b></summary>
+
+Good. Arbiter records decisions, not tokens. Rules can name your components and files (*"interactive elements use brand tokens, never raw hex"*) and sit beside whatever system you have. It captures the calls a design system doesn't: layout, flow, copy, and what was rejected.
+
+</details>
+
+<details>
+<summary><b>Is this like ADRs?</b></summary>
+
+Yes, same idea: a call, what it beat, and why. ADRs (architecture decision records) are for engineering: the stack, the data model, the API. Arbiter is for design: layout, flow, copy and states. And no one writes it up. The agent records each call as it works and you approve in seconds.
+
+</details>
+
+<details>
+<summary><b>Doesn't Claude have memory now?</b></summary>
+
+Yes, but memory is what the agent learned. Arbiter is what your team decided. Claude Code's auto memory is notes Claude keeps for itself: nobody approves them, and they stay on one machine. Arbiter's rules are ones you approved, kept in the repo for every teammate, and each one records what it beat and what it replaced.
+
+</details>
+
+<br>
+
+## Reference
+
+You won't need most of this day to day: the agent runs these for you. It's here for design engineers who want the details.
+
+The commands you'll use most:
+
+```
+npx arbiterdesign init     # install into this project
+npx arbiter review         # open your board
+npx arbiter rules          # list your rules
+npx arbiter export         # a read-only copy of your board to share
+npx arbiter update         # get the newest Arbiter
+npx arbiter publish        # Arbiter Team: put your board online
+npx arbiter pull           # Arbiter Team: bring comments and requests back
+```
+
+> [!NOTE]
+> On Windows, in PowerShell, type `npx.cmd` instead of `npx`. PowerShell blocks plain `npx` out of the box, with "running scripts is disabled on this system". Command Prompt and Git Bash don't.
 
 > [!TIP]
-> Name each piece of work after the screen it changed, like `Settings, billing` instead of one `Settings build` across four routes. Then one picture per piece of work means one per screen.
-
-Named it something else first? `arbiter rename "Settings build" "Settings, billing"` moves its decisions, its picture and its comments on the board to the new name.
-
-Cards without a picture show an icon of the kind of change, so the board never looks broken. To make sure missing pictures still get noticed, `record` tells the agent the command to add one, the review page marks the group "No picture", and `publish` lists the cards that are missing one.
-
-## Keeping the record honest
-
-### Verify and sweep
-
-A mechanical rule (a hex colour ban, say) can name the `files` it applies to and what should be `present` in or `absent` from them. Use `regex:<pattern>` for patterns, like `regex:#[0-9a-fA-F]{6}\b` for any hex colour.
-
-- **Verify.** Arbiter reads only those files and refuses a claim that doesn't hold.
-- **Sweep.** `npx arbiter sweep D-0004` lists every existing line that breaks the rule. `--queue` turns each file into a pending item to fix or keep as an exception. Sweep never edits code; fixing is the agent's job.
-
-Keep token files and reference HTML out of sweeps in `arbiter.json`:
-
-```json
-{
-  "sweep": { "exclude": ["app/globals.css", "design-reference/**", "docs/**"] },
-  "overlap": { "ignore": ["audit", "journey"] }
-}
-```
-
-`overlap.ignore` lists words too common in your project to signal that two rules overlap.
-
-### Taking something out
-
-Three different things, and only one of them deletes.
-
-| | When to use it | Command |
-|---|---|---|
-| **Retire** | It was real, and it's over | `arbiter record --retire D-0003 --why "…"` |
-| **Remove** | It was never real (a test, a misfire) | `arbiter remove D-0004` |
-| **Unlink** | It's real, but attached to the wrong screen | `arbiter unlink D-0004` |
-
-Changing your mind is history worth keeping, so judgments are never deleted, only superseded. Mistakes are different: a record that says something false makes the archive less trustworthy. `remove` deletes it everywhere and prints the full record it removed. It refuses while anything still points at the record, unless you pass `--force` to unlink screens in one go. `remove --snapshot "<work>"` takes away just the picture.
-
-## Candidates
-
-When the agent generates several directions for one feature, each one is a candidate with a state: `generated`, `in_review`, `approved`, `rejected` or `superseded`. Approving one supersedes the rest and keeps the reason. Decisions link to the candidate they were made for, and `arbiter board` lists them all.
-
-## Commands
-
-The ones you'll use most:
-
-```bash
-npx arbiterdesign init     # install into this project
-npx arbiter review         # judge the queue in your browser
-npx arbiter rules          # list active rules
-npx arbiter publish        # put the board online and get a share link
-npx arbiter pull           # bring comments and requests back
-```
+> Too chatty? `npx arbiter setup --checkin quiet` turns off the check-ins. `--checkin every` does the opposite and mentions a rule every time one changed something.
 
 <details>
 <summary><b>Full command reference</b></summary>
@@ -375,6 +399,8 @@ npx arbiter pull           # bring comments and requests back
 
 #### Sharing
 
+`export` and `publish --to pages` work for everyone. The rest is Arbiter Team (early access).
+
 | Command | What it does |
 |---|---|
 | `arbiter publish` | Board online at arbiter.design, with comments. Prints the share link. |
@@ -394,8 +420,106 @@ npx arbiter pull           # bring comments and requests back
 | `0` | Recorded. |
 | `1` | Invalid input. |
 | `2` | Overlaps an existing rule. Re-run with `--supersedes <id>` or `--keep-both`. |
-| `3` | The 40-rule cap is reached. |
+| `3` | The rule cap is reached. |
 | `4` | Contradicted: the named files don't match the claim. |
+
+</details>
+
+<details>
+<summary><b>Pictures of your screens</b></summary>
+<br>
+
+The agent takes one picture per piece of work, when the work settles and it changed how a specific screen looks.
+
+- **Gets a picture:** layout, wording or visual changes to one screen. Even a small pattern change counts.
+- **Doesn't:** font or token changes (no single screen to show), motion and behaviour (a still can't show it), and small one-off fixes (they aren't recorded).
+
+The agent renders pictures with a headless browser. If it can't (no browser, app not running, screen behind a login) it tells you once and says why. On macOS, `--capture` lets you drag-select a picture yourself; elsewhere, save one and pass `--file`.
+
+Name each piece of work after the screen it changed, like `Settings, billing` instead of one `Settings build` across four routes. Then one picture per piece of work means one per screen. Named it something else first? `arbiter rename "Settings build" "Settings, billing"` moves its decisions, its picture and its comments to the new name.
+
+Cards without a picture show an icon of the kind of change, so the board never looks broken. To make sure missing pictures still get noticed, `record` tells the agent the command to add one, the board marks the group "No picture", and `publish` lists the cards that are missing one.
+
+</details>
+
+<details>
+<summary><b>Change requests in detail</b></summary>
+<br>
+
+1. `npx arbiter pull` turns each request into `R-0001` in `.arbiter/requests.json`. Commit it so everyone sees the same answers.
+2. You answer in chat with `/arbiter`:
+   - **Apply**: `record R-0001 --as apply`
+   - **Apply, but…**: `record R-0001 --as apply --to "keep the tab, make the button red"`
+   - **Decline**: `record R-0001 --as decline --why "…"` (a reason is required, since the requester reads it)
+3. The agent makes the change right away.
+4. `publish` sends the answer back. The requester sees *Open*, *Approved*, *Applied* (with what changed) or *Declined* (with the reason).
+
+- Pulling twice never creates the same request twice. If the requester deletes it on the board before it's made, the next pull takes it off the queue and says so.
+- Only an approved request can be applied. A change the owner hasn't said yes to is refused.
+- Removing the last decision that applied a request reopens it for a fresh answer. The agent never remakes it unasked.
+- A screen or decision with a request waiting on it can't be removed until the request is declined or applied.
+- Display names and comment text come from outside the project, so neither is trusted. Names arrive as a single line, and nothing they contain can add a line, entry or field to the record.
+
+</details>
+
+<details>
+<summary><b>More on sharing</b></summary>
+<br>
+
+- The service only holds the latest board and its comments. A board holds up to 100 pictures (25 MB); a picture that doesn't fit is left off and `publish` says so.
+- `publish --auto` works anywhere: no GitHub, no CI, no repo needed. If a republish fails (offline, service down) the command still succeeds and tells you the board is behind. `--no-auto` turns it off.
+- `publish --on-push` writes the workflow and sets the `ARBITER_PUBLISH_TOKEN` secret through `gh` if you're signed in. Commit the workflow along with `.arbiter/hosted.json`.
+- `publish --password` makes up a strong password and prints it once. `--password "<yours>"` sets your own (8 characters or more), `--no-password` takes it off, and a plain `publish` leaves it as it is.
+- `unpublish` without `--yes` only says what it would delete.
+- Lost the project folder, so you can't run `unpublish`? Use **Report or remove this board** at the bottom of the board, and it's taken down by hand.
+- `export` writes `arbiter-export/`: the same board as `arbiter review`, read-only (`index.html`, the board's script and styles, and the pictures). With `--include-rules`, your design rules too.
+- With `"destination": "git"` in `arbiter.json`, every candidate change also writes the export to `docs/arbiter/`. Turn on Pages for the `docs` folder once and the board lives at `https://<owner>.github.io/<repo>/arbiter/`.
+
+</details>
+
+<details>
+<summary><b>Keeping the record honest: verify and sweep</b></summary>
+<br>
+
+A mechanical rule (a hex colour ban, say) can name the `files` it applies to and what should be `present` in or `absent` from them. Use `regex:<pattern>` for patterns, like `regex:#[0-9a-fA-F]{6}\b` for any hex colour.
+
+- **Verify.** Arbiter reads only those files and refuses a claim that doesn't hold.
+- **Sweep.** `npx arbiter sweep D-0004` lists every existing line that breaks the rule. `--queue` turns each file into a pending item to fix or keep as an exception. Sweep never edits code; fixing is the agent's job.
+
+Keep token files and reference HTML out of sweeps in `arbiter.json`:
+
+```json
+{
+  "sweep": { "exclude": ["app/globals.css", "design-reference/**", "docs/**"] },
+  "overlap": { "ignore": ["audit", "journey"] }
+}
+```
+
+`overlap.ignore` lists words too common in your project to signal that two rules overlap.
+
+</details>
+
+<details>
+<summary><b>Taking something out</b></summary>
+<br>
+
+Three different things, and only one of them deletes.
+
+| | When to use it | Command |
+|---|---|---|
+| **Retire** | It was real, and it's over | `arbiter record --retire D-0003 --why "…"` |
+| **Remove** | It was never real (a test, a misfire) | `arbiter remove D-0004` |
+| **Unlink** | It's real, but attached to the wrong screen | `arbiter unlink D-0004` |
+
+Changing your mind is history worth keeping, so judgments are never deleted, only superseded. Mistakes are different: a record that says something false makes the archive less trustworthy. `remove` deletes it everywhere and prints the full record it removed. It refuses while anything still points at the record, unless you pass `--force` to unlink screens in one go. `remove --snapshot "<work>"` takes away just the picture.
+
+</details>
+
+<details>
+<summary><b>Competing directions (candidates)</b></summary>
+<br>
+
+When the agent generates several directions for one feature, each one is a candidate with a state: `generated`, `in_review`, `approved`, `rejected` or `superseded`. Approving one supersedes the rest and keeps the reason. Decisions link to the candidate they were made for, and `arbiter board` lists them all.
 
 </details>
 
@@ -435,7 +559,7 @@ Rewording is the one change made in place. The id stays, so everything that name
 
 </details>
 
-## Updating
+### Updating
 
 ```bash
 npx arbiter update
@@ -443,70 +567,7 @@ npx arbiter update
 
 Two things can go out of date separately: the package in your devDependencies, and the skill file `init` copied into your project. Arbiter can tell when they don't match, without going online, and the agent will mention it in one line. `update` installs the newest package, refreshes the skill file, and re-pins the publish workflow if you have one. Your settings, `DECISIONS.md` and archive are left alone. `--check` reports without changing anything.
 
-## FAQ
-
-<details>
-<summary><b>What counts as a decision?</b></summary>
-
-A call the agent made where a reasonable alternative existed: layout, flow, wording, states, what happens on error, and what it chose over. Not code details like imports, file names or plumbing. Each one reads Change, Rule, Rejected.
-
-</details>
-
-<details>
-<summary><b>How do I set it up?</b></summary>
-
-Run `npx arbiterdesign init` in the folder your agent works in, or ask the agent to run it. It adds a few plain files and a one-line note telling the agent to read the rules before UI work, and asks one question: how often to check in. Nothing to sign up for. From the next session, the agent records as it goes. Step by step, with what you'll see: [Get started](https://arbiter.design/get-started).
-
-</details>
-
-<details>
-<summary><b>Will it interrupt me, or bury me in reviews?</b></summary>
-
-No. Decisions queue silently while you iterate and surface in one line when you move on. Only features and patterns are queued, a card each; small one-off fixes aren't recorded at all. You judge them when you want, or never.
-
-</details>
-
-<details>
-<summary><b>Will it stop the agent doing what I ask?</b></summary>
-
-No, but it checks first. Ask for something a rule says otherwise and the agent asks once before building: follow the rule, or do it your way just this once. Either answer and it builds. Nothing fails, and the rule only changes if you say so.
-
-</details>
-
-<details>
-<summary><b>Can I change my mind about a rule?</b></summary>
-
-Yes. Make the new call and the old rule steps aside. It stays in the archive with the reason it was replaced, so the history reads as history. Nothing is deleted.
-
-</details>
-
-<details>
-<summary><b>Where does the record live, and who can see it?</b></summary>
-
-In your project, as plain-text files you own: `DECISIONS.md` and the `.arbiter/` folder beside it. The board is a copy at a private link. It's unlisted and never indexed, people sign in by email to comment, and `publish --password` puts it behind a password. `arbiter unpublish` deletes it from the service, after saving its comments into your repo.
-
-</details>
-
-<details>
-<summary><b>We already have a design system.</b></summary>
-
-Good. Arbiter records decisions, not tokens. Rules can name your components and files (*"interactive elements use brand tokens, never raw hex"*) and sit beside whatever system you have. It captures the calls a design system doesn't: layout, flow, copy, and what was rejected.
-
-</details>
-
-<details>
-<summary><b>Is this like ADRs?</b></summary>
-
-Yes, same idea: a call, what it beat, and why. ADRs (architecture decision records) are for engineering: the stack, the data model, the API. Arbiter is for design: layout, flow, copy and states. And no one writes it up. The agent records each call as it works and you approve in seconds.
-
-</details>
-
-<details>
-<summary><b>Doesn't Claude have memory now?</b></summary>
-
-Yes, but memory is what the agent learned. Arbiter is what your team decided. Claude Code's auto memory is notes Claude keeps for itself: nobody approves them, and they stay on one machine. Arbiter's rules are ones you approved, kept in the repo for every teammate, and each one records what it beat and what it replaced.
-
-</details>
+<br>
 
 ## Development
 
@@ -517,6 +578,8 @@ npm test
 ```
 
 Requires Node 20 or newer. Issues and ideas are welcome on the [issue tracker](https://github.com/eddie199/arbiter/issues).
+
+<br>
 
 ## License
 
