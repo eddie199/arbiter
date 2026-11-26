@@ -255,11 +255,11 @@ The queue JSON carries `firstRun: true` only while nobody has answered the check
 > **How it works**
 > 1. You build as usual. I say nothing about decisions until a piece of work settles, then one line. When 5 changes are waiting, I'll ask if you want to review them.
 > 2. `/arbiter` shows what's queued. For each: **Confirm**, **Make it a rule**, or **Skip**. Rules go into `DECISIONS.md`, and I read them before touching UI.
-> 3. When you want the team to see it, say **publish** — I'll give you a link to a board they can read, comment on, and request changes from. Their requests come back to you to apply or decline.
+> 3. When you want others to see it, say **open the board** and use **Share board** there: a read-only copy anyone can open, or Arbiter Team, in early access, for a private board your team can comment on and request changes from.
 >
 > **Commands**
 > - `/arbiter` — review what's queued
-> - **publish** — say it, get the board link
+> - **"open the board"** — your board in the browser, with **Share board**
 > - **"record that"** / **"make that a rule"** — mid-chat, recorded, no questions
 
 Then one question, with the selection widget (text fallback: the same three lines, numbered). It goes alone, before the queue. Never fold it into the review's questions: dismissed along with them, it comes back on every `/arbiter`.
