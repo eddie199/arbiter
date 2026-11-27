@@ -17,6 +17,7 @@ import { ChangeRequest, describe, findRequest, oneLine, readRequests, REQUEST_ID
 import { updateNotice } from './update';
 import { findOverlaps, type Overlap } from '../overlap';
 import { HANDOFF_FILE, takeHandoff } from '../handoff';
+import { withLock } from '../lock';
 
 export interface RulesOptions {
   /** Filled in by rules(); the queue's JSON reports firstRun and checkin from it. */
@@ -88,7 +89,14 @@ function pendingList(pending: Decision[], opts: RulesOptions, paths: Paths): str
     // Judged decisions mean someone has been through a review, whatever arbiter.json says: the stamp
     // lives in a committed file, and a branch that never merged takes it along.
     const firstRun = !opts.config?.introduced && !archiveAll.length && !active.length;
-    if (firstRun && opts.config) writeConfig(paths, { ...opts.config, introduced: now() });
+    // Read again under the lock: a record running at the same time may have just written arbiter.json
+    // (where the rules moved to, say), and writing back the copy read earlier would undo it.
+    if (firstRun && opts.config) {
+      withLock(paths, () => {
+        const fresh = readConfig(paths);
+        if (fresh && !fresh.introduced) writeConfig(paths, { ...fresh, introduced: now() });
+      });
+    }
     return JSON.stringify(
       {
         ...(lastReview && { lastReview: { ...lastReview, file: HANDOFF_FILE, done: 'npx arbiter review --done' } }),

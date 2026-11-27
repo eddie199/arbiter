@@ -13,6 +13,7 @@ import { formatActive, isRulesFile, notesOf, parseEntries } from '../format';
 import { liveBoard } from '../localboard';
 import { readActive, readConfig, resolvePaths, rulesFileAllowed, rulesName, takeRulesMoved, writeActive } from '../store';
 import { Decision } from '../schema';
+import { saveSettings } from '../settings';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'arbiter-rules-'));
 const read = (cwd: string, rel: string) => fs.readFileSync(path.join(cwd, rel), 'utf8');
@@ -221,4 +222,86 @@ test('the board and an exported copy name the rules file, so Design rules says w
   assert.equal(liveBoard(resolvePaths(cwd)).rulesFile, 'DESIGN-DECISIONS.md');
   const r = exportBoard({ cwd, includeRules: true, out: 'copy' });
   assert.match(fs.readFileSync(r.index, 'utf8'), /"rulesFile":"DESIGN-DECISIONS\.md"/);
+});
+
+// ── From the 0.1.10 review ──────────────────────────────────────────────────
+
+test('a board started before the rules moved reads and writes the new file, never their DECISIONS.md', () => {
+  const cwd = tmp();
+  fs.writeFileSync(path.join(cwd, 'DECISIONS.md'), THEIRS);
+  fs.writeFileSync(path.join(cwd, 'arbiter.json'), JSON.stringify({ version: 1, destination: 'local', author: 'test', client: 'claude-code' }));
+  const board = resolvePaths(cwd); // what `arbiter review` holds from start-up: still DECISIONS.md
+  assert.equal(record(rule(), opts(cwd)).exitCode, 0); // judged elsewhere: the rules move out
+  takeRulesMoved();
+  assert.equal(readActive(board).length, 1, 'Design rules shows the rule');
+  assert.equal(rulesName(board), 'DESIGN-DECISIONS.md', 'and Download names the right file');
+  // Preferences rewrites the rules file's header when the cap changes.
+  assert.equal(saveSettings(board, { cap: 50 }).ok, true);
+  assert.equal(read(cwd, 'DECISIONS.md'), THEIRS);
+  assert.match(read(cwd, 'DESIGN-DECISIONS.md'), /— 1 of 50\./);
+});
+
+test('with no arbiter.json, the first rule still moves out of their DECISIONS.md, and arbiter.json remembers where', () => {
+  const cwd = tmp();
+  fs.writeFileSync(path.join(cwd, 'DECISIONS.md'), THEIRS);
+  record(rule(), opts(cwd));
+  takeRulesMoved();
+  assert.equal(read(cwd, 'DECISIONS.md'), THEIRS);
+  assert.equal(readConfig(resolvePaths(cwd))?.decisions, 'DESIGN-DECISIONS.md');
+  assert.equal(readActive(resolvePaths(cwd)).length, 1);
+});
+
+test("a rules file named by hand that turns out to be someone else's is never written into", () => {
+  const cwd = tmp();
+  fs.writeFileSync(path.join(cwd, 'NOTES.md'), THEIRS);
+  fs.writeFileSync(path.join(cwd, 'arbiter.json'), JSON.stringify({ version: 1, destination: 'local', author: 'test', decisions: 'NOTES.md' }));
+  assert.throws(() => record(rule(), opts(cwd)), /isn't one Arbiter wrote, so nothing was written to it/);
+  assert.equal(read(cwd, 'NOTES.md'), THEIRS);
+});
+
+test('a line inside a rule (a remark, a wrapped line, a comment) is kept as a note and never moves another rule', () => {
+  const cwd = tmp();
+  fs.writeFileSync(path.join(cwd, 'arbiter.json'), JSON.stringify({ version: 1, destination: 'local', author: 'test' }));
+  record(rule({ decision: 'Cards use 16px padding', scope: 'pattern:card-padding', dimension: 'visual', rejected: ['12px'] }), opts(cwd));
+  record(rule({ decision: 'Empty states name the next step', scope: 'pattern:empty-next-step', dimension: 'visual', trigger: 'Inbox', rejected: ['A blank page'] }), opts(cwd));
+  const paths = resolvePaths(cwd);
+  const file = path.join(cwd, 'DECISIONS.md');
+  // Inside D-0001, between its fields: a remark, a wrapped rationale line, a comment, and a Rejected typed with a trailing space.
+  const edited = fs.readFileSync(file, 'utf8')
+    .replace(/(### D-0001[\s\S]*?- \*\*Rationale:\*\* [^\n]*\n)/, '$1  and it reads calmer on a phone\nAgreed with Sam in the March audit.\n<!-- keep -->\n')
+    .replace('- **Rejected:**\n  - 12px', '- **Rejected:** \n  - 12px');
+  fs.writeFileSync(file, edited);
+  const expected = parseEntries(edited);
+  assert.equal(expected.length, 2);
+
+  writeActive(paths, readActive(paths));
+  writeActive(paths, readActive(paths));
+  const text = fs.readFileSync(file, 'utf8');
+  assert.deepEqual(parseEntries(text), expected, 'both rules exactly as they were, after two rewrites');
+  for (const kept of ['Agreed with Sam in the March audit.', '<!-- keep -->', '  and it reads calmer on a phone']) {
+    assert.equal(text.split(kept).length - 1, 1, `kept once: ${kept}`);
+  }
+});
+
+test("a note under the title is kept, and a header after a BOM or a comment isn't kept twice", () => {
+  const cwd = tmp();
+  fs.writeFileSync(path.join(cwd, 'arbiter.json'), JSON.stringify({ version: 1, destination: 'local', author: 'test' }));
+  record(rule(), opts(cwd));
+  const paths = resolvePaths(cwd);
+  const file = path.join(cwd, 'DECISIONS.md');
+  const plain = fs.readFileSync(file, 'utf8');
+  fs.writeFileSync(file, '﻿<!-- markdownlint-disable -->\n' + plain.replace('# Decisions\n', '# Decisions\n\nOwned by the design team. Ask before changing.\n'));
+  writeActive(paths, readActive(paths));
+  writeActive(paths, readActive(paths));
+  const text = fs.readFileSync(file, 'utf8');
+  assert.equal(text.match(/^# Decisions$/gm)?.length, 1, 'one header');
+  assert.equal(text.match(/^Active design rules for this project/gm)?.length, 1, 'one count line');
+  assert.equal(text.split('Owned by the design team. Ask before changing.').length - 1, 1);
+  assert.equal(text.split('<!-- markdownlint-disable -->').length - 1, 1);
+  assert.equal(readActive(paths).length, 1);
+});
+
+test('names arbiter.json may not give: another spelling of DECISIONS.md, Arbiter’s own files, Windows device names', () => {
+  for (const bad of ['decisions.md', 'Decisions.md', 'CANDIDATES.md', 'DESIGN.md', 'NUL.md', 'com1.md', 'aux.notes.md']) assert.ok(!rulesFileAllowed(bad), bad);
+  assert.ok(rulesFileAllowed('DECISIONS.md'));
 });

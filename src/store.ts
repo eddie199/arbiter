@@ -73,15 +73,20 @@ export interface Config {
 export const RULES_FILE = 'DECISIONS.md';
 /** Where the rules go instead when the project's DECISIONS.md is someone else's, in order. */
 export const RULES_FILE_ALTERNATIVES = ['DESIGN-DECISIONS.md', 'ARBITER-DECISIONS.md'];
-/** Files a rules file may never be: Arbiter rewrites its rules file in full. */
-const NEVER_RULES = new Set(['readme.md', 'claude.md', 'agents.md', 'changelog.md', 'license.md', 'contributing.md']);
+/** Files a rules file may never be: Arbiter rewrites its rules file in full. CANDIDATES.md is Arbiter's own index. */
+const NEVER_RULES = new Set(['readme.md', 'claude.md', 'agents.md', 'changelog.md', 'license.md', 'contributing.md', 'candidates.md', 'design.md']);
+/** Names Windows keeps for devices, whatever follows the dot. */
+const DEVICE = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])\./i;
 
 /**
  * A rules file arbiter.json may name: a Markdown file in the project's root and nothing else, so
- * the setting can't reach outside the project or into a file that belongs to something else.
+ * the setting can't reach outside the project or into a file that belongs to something else. A
+ * different spelling of DECISIONS.md is refused too: on Windows and macOS it is the same file.
  */
 export function rulesFileAllowed(name: unknown): name is string {
-  return typeof name === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]*\.md$/.test(name) && !NEVER_RULES.has(name.toLowerCase());
+  if (typeof name !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.md$/.test(name)) return false;
+  const lower = name.toLowerCase();
+  return !NEVER_RULES.has(lower) && !DEVICE.test(name) && !(lower === RULES_FILE.toLowerCase() && name !== RULES_FILE);
 }
 
 /** The rules file arbiter.json names, or DECISIONS.md. A missing or unreadable arbiter.json is the default. */
@@ -108,7 +113,8 @@ export function rulesName(paths: Paths): string {
  */
 export function chooseRulesFile(root: string, existing: Config | null): string {
   const named = existing?.decisions;
-  if (rulesFileAllowed(named)) return named;
+  // A name set by hand is kept only while it's free or Arbiter's: never someone else's file.
+  if (rulesFileAllowed(named) && (!fs.existsSync(path.join(root, named)) || isRulesFile(fs.readFileSync(path.join(root, named), 'utf8')))) return named;
   for (const name of [RULES_FILE, ...RULES_FILE_ALTERNATIVES]) {
     const abs = path.join(root, name);
     if (!fs.existsSync(abs) || isRulesFile(fs.readFileSync(abs, 'utf8'))) return name;
@@ -150,20 +156,33 @@ export function rulesMovedLine(file: string, now = false): string {
 }
 
 /**
+ * Points `paths` at the rules file arbiter.json names now. A board started before the rules moved, or
+ * any `paths` resolved before, would otherwise read and write the old file, which may be someone else's.
+ */
+function syncRulesPath(paths: Paths): void {
+  const now = path.join(paths.root, rulesFileOf(paths.root));
+  if (now !== paths.decisions) paths.decisions = now;
+}
+
+/**
  * Before the first write into DECISIONS.md: if it isn't Arbiter's (the project's own, from before an
- * install that checked, with no `npx arbiter update` since), it's left alone. The rules go in a new file
- * of their own, arbiter.json says which, and what points the agent at the rules points there instead.
- * With no free name, nothing moves: the file is still written with every line of theirs kept.
+ * install that checked, with no `npx arbiter update` since, or with no install at all), it's left alone.
+ * The rules go in a new file of their own, arbiter.json says which (made, if there's none), and what
+ * points the agent at the rules points there instead. With no free name, nothing moves: the file is
+ * still written with every line of theirs kept.
  */
 function claimRulesFile(paths: Paths): void {
-  if (!fs.existsSync(paths.decisions) || !fs.existsSync(paths.config)) return;
+  if (!fs.existsSync(paths.decisions)) return;
   let config: Config | null;
   try {
     config = readConfig(paths);
   } catch {
+    if (!isRulesFile(fs.readFileSync(paths.decisions, 'utf8'))) {
+      throw new Error(`arbiter.json isn't valid JSON, so Arbiter can't tell where its rules go, and ${rulesName(paths)} isn't one it wrote. Nothing was written to it. Fix arbiter.json, then try again.`);
+    }
     return;
   }
-  if (!config || rulesFileAllowed(config.decisions)) return;
+  if (config && rulesFileAllowed(config.decisions) && config.decisions !== RULES_FILE) return;
   if (isRulesFile(fs.readFileSync(paths.decisions, 'utf8'))) return;
   // Only a name nobody's using: rules already in a file mean arbiter.json lost track, and a guess could write over them.
   const name = RULES_FILE_ALTERNATIVES.find((n) => {
@@ -171,13 +190,13 @@ function claimRulesFile(paths: Paths): void {
     return !fs.existsSync(abs) || !fs.readFileSync(abs, 'utf8').trim();
   });
   if (!name) return;
-  writeConfig(paths, { ...config, decisions: name });
+  writeConfig(paths, { ...(config ?? { version: 1, destination: 'local' }), decisions: name });
   paths.decisions = path.join(paths.root, name);
   moved = name;
   try {
     // Here and not at the top: init reads this file, so a top-level import would go round in a circle.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    (require('./commands/init') as typeof import('./commands/init')).pointAgentsAt(paths.root, config.client, name);
+    (require('./commands/init') as typeof import('./commands/init')).pointAgentsAt(paths.root, config?.client, name);
   } catch {
     // The rules are safe either way; `npx arbiter update` points the agent at them.
   }
@@ -215,6 +234,7 @@ export function writeConfig(paths: Paths, config: Config): void {
 }
 
 export function readActive(paths: Paths): Decision[] {
+  syncRulesPath(paths);
   if (!fs.existsSync(paths.decisions)) return [];
   return parseEntries(fs.readFileSync(paths.decisions, 'utf8'));
 }
@@ -225,8 +245,13 @@ export function readActive(paths: Paths): Decision[] {
  * the rules if it was above them, below otherwise.
  */
 export function writeActive(paths: Paths, decisions: Decision[], cap: number = ACTIVE_CAP): void {
+  syncRulesPath(paths);
   claimRulesFile(paths);
   const before = fs.existsSync(paths.decisions) ? fs.readFileSync(paths.decisions, 'utf8') : '';
+  // A file arbiter.json names by hand that turns out to be someone else's: never written into.
+  if (before.trim() && !isRulesFile(before) && rulesName(paths) !== RULES_FILE) {
+    throw new Error(`arbiter.json names ${rulesName(paths)} as the rules file, but it isn't one Arbiter wrote, so nothing was written to it. Point "decisions" in arbiter.json at a new file name.`);
+  }
   writeAtomic(paths.decisions, formatActive(decisions, cap, notesOf(before)));
 }
 

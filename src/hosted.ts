@@ -223,7 +223,9 @@ export async function publishHosted(paths: Paths, serviceUrl: string, opts: { ad
     if (r.status === 401) throw new Error(`${base} only lets an admin create boards. Ask whoever runs it for the token, then: npx arbiter publish --to ${base} --admin-token <token>`);
     // Invite-only: the service says why, and where to ask. Asked without a code, say how to use one.
     if (r.status === 403 && typeof r.body.error === 'string') {
-      throw new Error(r.body.invite === 'required' ? `${r.body.error}\n    With an invite code: npx arbiter publish --invite <code>` : r.body.error);
+      // A self-hosted server is named again in the line, so the command works as typed.
+      const to = base === 'https://arbiter.design' ? '' : ` --to ${base}`;
+      throw new Error(r.body.invite === 'required' ? `${r.body.error}\n    With an invite code: npx arbiter publish --invite <code>${to}` : r.body.error);
     }
     // The service says which limit it was: this network's, or everyone's.
     if (r.status === 429) throw new Error(typeof r.body.error === 'string' ? r.body.error : `${base} is busy right now — try again in an hour`);

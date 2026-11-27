@@ -94,7 +94,8 @@ export function parseEntries(md: string): Decision[] {
   };
 
   for (const raw of lines) {
-    const line = raw.replace(/\r$/, '');
+    // Trailing spaces too (an editor's, or a "- **Rejected:** " typed by hand), as notesOf reads it.
+    const line = raw.replace(/\s+$/, '');
     const h = HEADING.exec(line);
     if (h) {
       flush();
@@ -228,34 +229,34 @@ export function isRulesFile(md: string): boolean {
 /** Text in the rules file that isn't Arbiter's header, a dimension heading or an entry. */
 export interface Notes { top: string; bottom: string }
 
-/** The first line of each field an entry carries: an entry runs on while its lines are these. */
+/** A field an entry carries, as it's written. These are re-written from the entry; any other line in it is a note. */
 const ENTRY_LINE = /^- \*\*(Change|Rationale|Rejected|Reworded|Trigger|Scope|Author|Ref|Files|Paths|Expect):\*\*/;
 const DIMENSION_HEADING = new RegExp(`^## (${Object.values(DIMENSION_LABELS).join('|')})$`);
+const ANY_HEADING = /^#{1,6} /;
+/** The lines of Arbiter's header, as every version wrote them. Written fresh, so never kept as notes. */
+const HEADER_LINES = new Set(activeHeader(0, 0).split('\n').filter((l) => l.trim()));
+const isHeaderLine = (l: string) => HEADER_LINES.has(l) || HEADER_COUNT.test(l) || l.startsWith(HEADER_LAST);
 
 /**
- * What a person wrote in the rules file, so a rewrite can put it back word for word. Text above the
- * first rule stays above the rules; anything after one goes below them. Arbiter's own header, its
- * `## <Dimension>` headings and the entries themselves are left out: those are written fresh.
+ * What a person wrote in the rules file, so a rewrite can put it back word for word. It reads the file
+ * the way parseEntries does: an entry runs from its heading to the next heading. Its fields are written
+ * fresh from the entry; any other line inside it (a remark, a wrapped line, a comment) is a note and
+ * moves below the rules, so it can never be read into another rule. Text above the first rule stays
+ * above, wherever it sits around Arbiter's header; anything after one goes below. Left out: Arbiter's
+ * own header lines, its `## <Dimension>` headings and the entries.
  */
 export function notesOf(md: string): Notes {
-  const lines = md.replace(/\r\n/g, '\n').split('\n');
-  let i = 0;
-  // Arbiter's header, as any version wrote it: the title, the count line, through the "Add entries" line.
-  while (i < lines.length && !lines[i].trim()) i++;
-  if (lines[i] === HEADER_TITLE) {
-    const end = lines.findIndex((l, k) => k > i && k < i + 16 && l.startsWith(HEADER_LAST));
-    if (end > 0 && lines.slice(i, end).some((l) => HEADER_COUNT.test(l))) i = end + 1;
-  }
-
+  const lines = md.replace(/^﻿/, '').replace(/\r\n/g, '\n').split('\n');
   const top: string[] = [];
   const bottom: string[] = [];
   let afterRules = false;
   let inEntry = false;
-  // An indented item belongs to an entry only under its Rejected or Reworded line.
+  // An indented item belongs to an entry only under its Rejected or Reworded line, as parseEntries reads it.
   let inList = false;
   let inNotes = false;
-  for (; i < lines.length; i++) {
-    const line = lines[i];
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const line = raw.replace(/\s+$/, '');
     if (HEADING.test(line)) {
       inEntry = true;
       inList = false;
@@ -263,33 +264,37 @@ export function notesOf(md: string): Notes {
       inNotes = false;
       continue;
     }
-    if (inEntry) {
-      if (!line.trim()) continue;
+    if (ANY_HEADING.test(line)) {
+      inEntry = false;
+      inList = false;
+      if (DIMENSION_HEADING.test(line)) {
+        // Only Arbiter's own: one with a rule under it. A person's "## Content" over their notes stays theirs.
+        const next = lines.slice(i + 1).find((l) => l.trim());
+        if (next !== undefined && HEADING.test(next.replace(/\s+$/, ''))) {
+          afterRules = true;
+          inNotes = false;
+          continue;
+        }
+      }
+    }
+    if (!afterRules && isHeaderLine(line)) continue;
+    const into = afterRules ? bottom : top;
+    if (inEntry && line) {
       if (ENTRY_LINE.test(line)) {
         inList = line === '- **Rejected:**' || line === '- **Reworded:**';
-        continue;
-      }
-      if (inList && LIST_ITEM.test(line)) continue;
-    }
-    inEntry = false;
-    inList = false;
-    if (DIMENSION_HEADING.test(line)) {
-      // Only Arbiter's own: one with a rule under it. A person's "## Content" over their notes stays theirs.
-      const next = lines.slice(i + 1).find((l) => l.trim());
-      if (next !== undefined && HEADING.test(next)) {
-        afterRules = true;
         inNotes = false;
         continue;
       }
+      if (inList && LIST_ITEM.test(line)) continue;
+      inList = false;
     }
-    const into = afterRules ? bottom : top;
-    if (!line.trim()) {
+    if (!line) {
       if (inNotes) into.push('');
       continue;
     }
     // Notes from two places between the rules come out as two paragraphs, not run together.
     if (!inNotes && into.length && into[into.length - 1] !== '') into.push('');
-    into.push(line);
+    into.push(raw);
     inNotes = true;
   }
   const trim = (a: string[]) => a.join('\n').replace(/^\n+|\n+$/g, '');
