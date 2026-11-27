@@ -20,7 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { CANDIDATE_ID, DECISION_ID } from '../schema';
 import { formatEntry } from '../format';
-import { ACTIVE_CAP, findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, writeActive, writeArchive, writePending, type Paths } from '../store';
+import { ACTIVE_CAP, findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, rulesName, writeActive, writeArchive, writePending, type Paths } from '../store';
 import { candidateFile, candidatesDir, readCandidates, writeCandidate } from '../candidates';
 import { deliver } from '../destination';
 import { workId, workSnapshot } from '../work';
@@ -98,7 +98,7 @@ function removeDecision(id: string, opts: RemoveOptions): RemoveResult {
       ...(replaced ? { note: `${replaced.id} — which ${id} replaced — is still inactive. Record it again if it should apply.` } : {}),
       ...(reopened.length ? { requests: `${reopened.join(', ')} ${reopened.length === 1 ? 'is' : 'are'} open again — nothing on record makes ${reopened.length === 1 ? 'that change' : 'those changes'} now, so ${reopened.length === 1 ? 'it needs' : 'they need'} a fresh answer` } : {}),
       ...(reused ? { idReuse: `${id} was the newest, so the next decision recorded will take that id again. If this board is published, comments on the old ${id} will read as if they were about the new one — republish after recording.` } : {}),
-      wrote: ['.arbiter/archive.md', ...(isActive ? ['DECISIONS.md'] : []), ...touched, ...(detached.length ? ['.arbiter/requests.json'] : [])],
+      wrote: ['.arbiter/archive.md', ...(isActive ? [rulesName(paths)] : []), ...touched, ...(detached.length ? ['.arbiter/requests.json'] : [])],
       // Printed in full so it can be put back by hand — not everyone has git.
       removed: formatEntry(entry).trimEnd(),
     },

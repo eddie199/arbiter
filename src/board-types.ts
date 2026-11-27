@@ -123,6 +123,8 @@ export interface LocalBoard {
   arrangement: Arrangement | null;
   /** Settings, from arbiter.json. Null on an exported copy, which has none. */
   settings: BoardSettings | null;
+  /** The rules file's name: DECISIONS.md, unless the project's own DECISIONS.md was there first. Missing on older copies. */
+  rulesFile?: string;
 }
 
 /** What the Preferences page shows and saves. Saved in arbiter.json. */

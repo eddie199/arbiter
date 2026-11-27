@@ -16,7 +16,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { readCandidates, writeCandidate } from '../candidates';
 import { deliver, pagesUrl } from '../destination';
-import { findRoot, readArchive, readConfig, resolvePaths, writeConfig } from '../store';
+import { findRoot, readArchive, readConfig, resolvePaths, rulesName, writeConfig } from '../store';
 import { newPassword, PASSWORD_MIN, publishable, publishHosted, readToken, TOKEN_ENV } from '../hosted';
 import { missingPictures } from '../pictures';
 import { selfVersion } from './init';
@@ -188,7 +188,7 @@ function onPush(root: string, paths: ReturnType<typeof resolvePaths>): PublishRe
 
   const branch = git(root, ['rev-parse', '--abbrev-ref', 'HEAD']) || 'main';
   const file = path.join(root, WORKFLOW_FILE);
-  const content = workflow(branch, selfVersion());
+  const content = workflow(branch, selfVersion(), rulesName(paths));
   if (!fs.existsSync(file)) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, content);
@@ -215,7 +215,7 @@ function onPush(root: string, paths: ReturnType<typeof resolvePaths>): PublishRe
   return steps;
 }
 
-function workflow(branch: string, version: string): string {
+function workflow(branch: string, version: string, rules: string): string {
   return [
     '# Written by `npx arbiter publish --on-push`. Republishes the board when decisions land.',
     '# Needs one repository secret, ARBITER_PUBLISH_TOKEN: the contents of .arbiter/hosted.token.',
@@ -226,7 +226,7 @@ function workflow(branch: string, version: string): string {
     `    branches: [${branch}]`,
     '    paths:',
     "      - '.arbiter/**'",
-    "      - 'DECISIONS.md'",
+    `      - '${rules}'`,
     "      - 'CANDIDATES.md'",
     'concurrency:',
     '  group: arbiter-publish',

@@ -244,7 +244,7 @@ It's just files in your project. You own them, and they're reviewed in pull requ
 
 | File | What it's for |
 |---|---|
-| `DECISIONS.md` | Your active rules, grouped by type. 40 at most by default, or set your own. The agent reads this before UI work. |
+| `DECISIONS.md` | Your active rules, grouped by type. 40 at most by default, or set your own. The agent reads this before UI work. Notes you add by hand are kept. Already have a `DECISIONS.md` of your own? Arbiter leaves it alone and keeps your design rules in `DESIGN-DECISIONS.md` instead. |
 | `.arbiter/archive.md` | Every decision ever made, append-only. Never loaded into the agent. |
 | `.arbiter/pending.md` | Decisions the agent queued that you haven't judged yet, in chat or on the board. |
 | `.arbiter/candidates/` | One page per competing direction: its state, picture, decisions, and why it lost. |
@@ -308,7 +308,7 @@ Good. Arbiter records decisions, not tokens. Rules can name your components and 
 <details>
 <summary><b>Is this like ADRs?</b></summary>
 
-Yes, same idea: a call, what it beat, and why. ADRs (architecture decision records) are for engineering: the stack, the data model, the API. Arbiter is for design: layout, flow, copy and states. And no one writes it up. The agent records each call as it works and you approve in seconds.
+Yes, same idea: a call, what it beat, and why. ADRs (architecture decision records) are for engineering: the stack, the data model, the API. Arbiter is for design: layout, flow, copy and states. And no one writes it up. The agent records each call as it works and you approve in seconds. If your ADRs already live in a `DECISIONS.md`, Arbiter doesn't touch it: your design rules go in `DESIGN-DECISIONS.md`.
 
 </details>
 

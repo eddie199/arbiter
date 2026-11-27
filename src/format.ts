@@ -190,9 +190,14 @@ function complete(p: Partial<Decision>): Decision {
   };
 }
 
+const HEADER_TITLE = '# Decisions';
+const HEADER_COUNT = /^Active design rules for this project/;
+/** The header's last line starts this way in every version, so a rewrite finds where it ends. */
+const HEADER_LAST = 'Add entries with `npx arbiter record`.';
+
 export function activeHeader(count: number, cap: number): string {
   return [
-    '# Decisions',
+    HEADER_TITLE,
     '',
     `Active design rules for this project — ${count} of ${cap}.`,
     '',
@@ -201,29 +206,122 @@ export function activeHeader(count: number, cap: number): string {
     'what lost, and why; `Trigger` is the case that prompted it. Superseded rules drop out of',
     'here and stay in `.arbiter/archive.md`.',
     '',
-    'Add entries with `npx arbiter record`. Edit by hand if you must — the format round-trips.',
+    `${HEADER_LAST} Edit by hand if you must: the format round-trips, and notes of your own are kept.`,
     '',
   ].join('\n');
 }
 
-export function archiveHeader(): string {
+/**
+ * Whether a rules file is Arbiter's to rewrite: empty, or carrying Arbiter's header or an entry it
+ * can read. Anything else (a project's own decision log, say) belongs to someone else.
+ */
+export function isRulesFile(md: string): boolean {
+  if (!md.trim()) return true;
+  if (md.replace(/\r\n/g, '\n').split('\n').some((l) => HEADER_COUNT.test(l))) return true;
+  try {
+    return parseEntries(md).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** Text in the rules file that isn't Arbiter's header, a dimension heading or an entry. */
+export interface Notes { top: string; bottom: string }
+
+/** The first line of each field an entry carries: an entry runs on while its lines are these. */
+const ENTRY_LINE = /^- \*\*(Change|Rationale|Rejected|Reworded|Trigger|Scope|Author|Ref|Files|Paths|Expect):\*\*/;
+const DIMENSION_HEADING = new RegExp(`^## (${Object.values(DIMENSION_LABELS).join('|')})$`);
+
+/**
+ * What a person wrote in the rules file, so a rewrite can put it back word for word. Text above the
+ * first rule stays above the rules; anything after one goes below them. Arbiter's own header, its
+ * `## <Dimension>` headings and the entries themselves are left out: those are written fresh.
+ */
+export function notesOf(md: string): Notes {
+  const lines = md.replace(/\r\n/g, '\n').split('\n');
+  let i = 0;
+  // Arbiter's header, as any version wrote it: the title, the count line, through the "Add entries" line.
+  while (i < lines.length && !lines[i].trim()) i++;
+  if (lines[i] === HEADER_TITLE) {
+    const end = lines.findIndex((l, k) => k > i && k < i + 16 && l.startsWith(HEADER_LAST));
+    if (end > 0 && lines.slice(i, end).some((l) => HEADER_COUNT.test(l))) i = end + 1;
+  }
+
+  const top: string[] = [];
+  const bottom: string[] = [];
+  let afterRules = false;
+  let inEntry = false;
+  // An indented item belongs to an entry only under its Rejected or Reworded line.
+  let inList = false;
+  let inNotes = false;
+  for (; i < lines.length; i++) {
+    const line = lines[i];
+    if (HEADING.test(line)) {
+      inEntry = true;
+      inList = false;
+      afterRules = true;
+      inNotes = false;
+      continue;
+    }
+    if (inEntry) {
+      if (!line.trim()) continue;
+      if (ENTRY_LINE.test(line)) {
+        inList = line === '- **Rejected:**' || line === '- **Reworded:**';
+        continue;
+      }
+      if (inList && LIST_ITEM.test(line)) continue;
+    }
+    inEntry = false;
+    inList = false;
+    if (DIMENSION_HEADING.test(line)) {
+      // Only Arbiter's own: one with a rule under it. A person's "## Content" over their notes stays theirs.
+      const next = lines.slice(i + 1).find((l) => l.trim());
+      if (next !== undefined && HEADING.test(next)) {
+        afterRules = true;
+        inNotes = false;
+        continue;
+      }
+    }
+    const into = afterRules ? bottom : top;
+    if (!line.trim()) {
+      if (inNotes) into.push('');
+      continue;
+    }
+    // Notes from two places between the rules come out as two paragraphs, not run together.
+    if (!inNotes && into.length && into[into.length - 1] !== '') into.push('');
+    into.push(line);
+    inNotes = true;
+  }
+  const trim = (a: string[]) => a.join('\n').replace(/^\n+|\n+$/g, '');
+  return { top: trim(top), bottom: trim(bottom) };
+}
+
+/** The rules file as written: header, notes above the rules, the rules, notes below. No notes: as it always was. */
+export function formatActive(decisions: Decision[], cap: number, notes: Notes = { top: '', bottom: '' }): string {
+  return activeHeader(decisions.length, cap)
+    + (notes.top ? '\n' + notes.top + '\n' : '')
+    + '\n' + formatGrouped(decisions)
+    + (notes.bottom ? (decisions.length ? '\n' : '') + notes.bottom + '\n' : '');
+}
+
+export function archiveHeader(rules = 'DECISIONS.md'): string {
   return [
     '# Decision archive',
     '',
     'Every decision ever recorded, in order. A decision you changed your mind about is superseded,',
     'never rewritten; only `npx arbiter remove` takes an entry out, for a record of something that',
-    'never happened. Active rules live in `DECISIONS.md`; this file is for traceability and is never',
+    `never happened. Active rules live in \`${rules}\`; this file is for traceability and is never`,
     'loaded into agent context.',
     '',
   ].join('\n');
 }
 
-export function pendingHeader(): string {
+export function pendingHeader(rules = 'DECISIONS.md'): string {
   return [
     '# Pending decisions',
     '',
     'Queued by the agent, not yet judged. Review with `npx arbiter review` or `/arbiter` in chat.',
-    'Judged entries move to `.arbiter/archive.md` (and `DECISIONS.md` if made a rule); skipped',
+    `Judged entries move to \`.arbiter/archive.md\` (and \`${rules}\` if made a rule); skipped`,
     'entries are dropped. Nothing here is in agent context.',
     '',
   ].join('\n');

@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { Decision } from './schema';
-import { activeHeader, archiveHeader, formatEntry, formatGrouped, parseEntries, pendingHeader } from './format';
+import { archiveHeader, formatActive, formatEntry, isRulesFile, notesOf, parseEntries, pendingHeader } from './format';
 import { writeAtomic } from './lock';
 
 export const ACTIVE_CAP = 40;
@@ -32,6 +32,8 @@ export interface Config {
   checkin?: 'feature' | 'quiet' | 'every';
   /** Set once the check-in question is answered: at install, or by `setup --checkin` after it. */
   onboarded?: string;
+  /** Set when the first /arbiter's intro was handed to the agent, so it's said once. */
+  introduced?: string;
   /** Where the app runs, so the agent has an address to open for screenshots. Set by `arbiter setup --app`. */
   app?: { url: string };
   /**
@@ -60,12 +62,113 @@ export interface Config {
    * repository at all. Set by `arbiter publish --auto`.
    */
   hosted?: { url?: string; auto?: boolean };
+  /**
+   * The rules file, when it isn't DECISIONS.md: a file name in the project's root. Set by `init`
+   * when the project already had a DECISIONS.md of its own, which Arbiter then leaves alone.
+   */
+  decisions?: string;
+}
+
+/** The rules file's name when arbiter.json doesn't give another. */
+export const RULES_FILE = 'DECISIONS.md';
+/** Where the rules go instead when the project's DECISIONS.md is someone else's, in order. */
+export const RULES_FILE_ALTERNATIVES = ['DESIGN-DECISIONS.md', 'ARBITER-DECISIONS.md'];
+/** Files a rules file may never be: Arbiter rewrites its rules file in full. */
+const NEVER_RULES = new Set(['readme.md', 'claude.md', 'agents.md', 'changelog.md', 'license.md', 'contributing.md']);
+
+/**
+ * A rules file arbiter.json may name: a Markdown file in the project's root and nothing else, so
+ * the setting can't reach outside the project or into a file that belongs to something else.
+ */
+export function rulesFileAllowed(name: unknown): name is string {
+  return typeof name === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]*\.md$/.test(name) && !NEVER_RULES.has(name.toLowerCase());
+}
+
+/** The rules file arbiter.json names, or DECISIONS.md. A missing or unreadable arbiter.json is the default. */
+function rulesFileOf(root: string): string {
+  try {
+    const name = (JSON.parse(fs.readFileSync(path.join(root, 'arbiter.json'), 'utf8')) as { decisions?: unknown }).decisions;
+    if (rulesFileAllowed(name)) return name;
+  } catch {
+    // No arbiter.json yet, or one that isn't JSON: readConfig says so where it matters.
+  }
+  return RULES_FILE;
+}
+
+/** The rules file's name as people see it in messages, the skill and the board: `DECISIONS.md` unless arbiter.json names another. */
+export function rulesName(paths: Paths): string {
+  return path.basename(paths.decisions);
+}
+
+/**
+ * Where this project's rules live, at install. DECISIONS.md, unless the project already has one of
+ * its own (a decision log, say): Arbiter rewrites its rules file whenever a rule changes, so it never
+ * takes over a file it didn't write. Then the first free name of the alternatives. A name arbiter.json
+ * already gives is kept, so a re-run never moves the rules.
+ */
+export function chooseRulesFile(root: string, existing: Config | null): string {
+  const named = existing?.decisions;
+  if (rulesFileAllowed(named)) return named;
+  for (const name of [RULES_FILE, ...RULES_FILE_ALTERNATIVES]) {
+    const abs = path.join(root, name);
+    if (!fs.existsSync(abs) || isRulesFile(fs.readFileSync(abs, 'utf8'))) return name;
+  }
+  throw new Error(`${[RULES_FILE, ...RULES_FILE_ALTERNATIVES].join(', ')} are all files of your own, so Arbiter has nowhere to keep its rules. Set "decisions" in arbiter.json to a new file name, like "UI-DECISIONS.md", and run init again.`);
+}
+
+/** What to tell the user when this command moved the rules to a file of their own: once, then null. */
+let moved: string | null = null;
+export function takeRulesMoved(): { file: string; say: string } | null {
+  const file = moved;
+  moved = null;
+  return file ? { file, say: rulesMovedLine(file, true) } : null;
+}
+
+/** The one line that says why the rules are in another file. `now`: it happened just now, not at install. */
+export function rulesMovedLine(file: string, now = false): string {
+  return now
+    ? `You already have a DECISIONS.md, so Arbiter has put your design rules in their own file, ${file}. Yours stays exactly as it is: Arbiter never writes to it.`
+    : `You already have a DECISIONS.md, so Arbiter keeps your design rules in their own file, ${file}. Yours stays exactly as it is: Arbiter never writes to it.`;
+}
+
+/**
+ * Before the first write into DECISIONS.md: if it isn't Arbiter's (the project's own, from before an
+ * install that checked, with no `npx arbiter update` since), it's left alone. The rules go in a new file
+ * of their own, arbiter.json says which, and what points the agent at the rules points there instead.
+ * With no free name, nothing moves: the file is still written with every line of theirs kept.
+ */
+function claimRulesFile(paths: Paths): void {
+  if (!fs.existsSync(paths.decisions) || !fs.existsSync(paths.config)) return;
+  let config: Config | null;
+  try {
+    config = readConfig(paths);
+  } catch {
+    return;
+  }
+  if (!config || rulesFileAllowed(config.decisions)) return;
+  if (isRulesFile(fs.readFileSync(paths.decisions, 'utf8'))) return;
+  // Only a name nobody's using: rules already in a file mean arbiter.json lost track, and a guess could write over them.
+  const name = RULES_FILE_ALTERNATIVES.find((n) => {
+    const abs = path.join(paths.root, n);
+    return !fs.existsSync(abs) || !fs.readFileSync(abs, 'utf8').trim();
+  });
+  if (!name) return;
+  writeConfig(paths, { ...config, decisions: name });
+  paths.decisions = path.join(paths.root, name);
+  moved = name;
+  try {
+    // Here and not at the top: init reads this file, so a top-level import would go round in a circle.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    (require('./commands/init') as typeof import('./commands/init')).pointAgentsAt(paths.root, config.client, name);
+  } catch {
+    // The rules are safe either way; `npx arbiter update` points the agent at them.
+  }
 }
 
 export function resolvePaths(root: string = process.cwd()): Paths {
   return {
     root,
-    decisions: path.join(root, 'DECISIONS.md'),
+    decisions: path.join(root, rulesFileOf(root)),
     archiveDir: path.join(root, '.arbiter'),
     archive: path.join(root, '.arbiter', 'archive.md'),
     pending: path.join(root, '.arbiter', 'pending.md'),
@@ -98,9 +201,15 @@ export function readActive(paths: Paths): Decision[] {
   return parseEntries(fs.readFileSync(paths.decisions, 'utf8'));
 }
 
-/** Rewrites DECISIONS.md in full. Entries are re-serialized, so hand edits survive. */
+/**
+ * Rewrites the rules file in full. Entries are re-serialized, so hand edits to them survive, and
+ * anything else written in the file (a preamble, a section of notes) is kept word for word: above
+ * the rules if it was above them, below otherwise.
+ */
 export function writeActive(paths: Paths, decisions: Decision[], cap: number = ACTIVE_CAP): void {
-  writeAtomic(paths.decisions, activeHeader(decisions.length, cap) + '\n' + formatGrouped(decisions));
+  claimRulesFile(paths);
+  const before = fs.existsSync(paths.decisions) ? fs.readFileSync(paths.decisions, 'utf8') : '';
+  writeAtomic(paths.decisions, formatActive(decisions, cap, notesOf(before)));
 }
 
 export function readArchive(paths: Paths): Decision[] {
@@ -112,7 +221,7 @@ export function readArchive(paths: Paths): Decision[] {
 export function appendArchive(paths: Paths, d: Decision): void {
   fs.mkdirSync(paths.archiveDir, { recursive: true });
   const exists = fs.existsSync(paths.archive);
-  const prefix = exists ? '\n' : archiveHeader() + '\n';
+  const prefix = exists ? '\n' : archiveHeader(rulesName(paths)) + '\n';
   fs.appendFileSync(paths.archive, prefix + formatEntry(d));
 }
 
@@ -123,7 +232,7 @@ export function appendArchive(paths: Paths, d: Decision): void {
  */
 export function writeArchive(paths: Paths, decisions: Decision[]): void {
   fs.mkdirSync(paths.archiveDir, { recursive: true });
-  writeAtomic(paths.archive, archiveHeader() + '\n' + decisions.map(formatEntry).join('\n'));
+  writeAtomic(paths.archive, archiveHeader(rulesName(paths)) + '\n' + decisions.map(formatEntry).join('\n'));
 }
 
 export function readPending(paths: Paths): Decision[] {
@@ -134,7 +243,7 @@ export function readPending(paths: Paths): Decision[] {
 /** Rewrites pending.md in full. */
 export function writePending(paths: Paths, decisions: Decision[]): void {
   fs.mkdirSync(paths.archiveDir, { recursive: true });
-  writeAtomic(paths.pending, pendingHeader() + '\n' + decisions.map(formatEntry).join('\n'));
+  writeAtomic(paths.pending, pendingHeader(rulesName(paths)) + '\n' + decisions.map(formatEntry).join('\n'));
 }
 
 /** Next P- id. Pending ids are never reused within the file but may repeat once it empties. */

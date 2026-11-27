@@ -21,7 +21,7 @@ import { spawn } from 'node:child_process';
 import { judge, judgeAll, JudgeAction, Judgement, retire, reword, unjudge, unretire } from './record';
 import { updateCandidate } from './candidate';
 import { candidatesDir, readCandidates } from '../candidates';
-import { findRoot, readActive, readArchive, readPending, resolvePaths } from '../store';
+import { findRoot, readActive, readArchive, readPending, resolvePaths, rulesName } from '../store';
 import { withLock, withLockAsync } from '../lock';
 import { autoPublish } from '../autopublish';
 import { historyFile, workDir } from '../work';
@@ -200,7 +200,7 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
       // DECISIONS.md as it is, for Download on Design rules: the file the agent reads, not a copy of it.
       if (req.method === 'GET' && url.pathname === '/api/decisions') {
         const text = fs.existsSync(paths.decisions) ? fs.readFileSync(paths.decisions, 'utf8') : '';
-        res.writeHead(200, { 'content-type': 'text/markdown; charset=utf-8', 'content-disposition': 'attachment; filename="DECISIONS.md"', 'cache-control': 'no-store' });
+        res.writeHead(200, { 'content-type': 'text/markdown; charset=utf-8', 'content-disposition': `attachment; filename="${rulesName(paths)}"`, 'cache-control': 'no-store' });
         res.end(text);
         return;
       }

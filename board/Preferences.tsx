@@ -7,6 +7,7 @@ import { Faint, Meta, PageTitle, SectionTitle } from '@/components/ui/type';
 import type { BoardSettings, LocalBoard } from './types';
 import { errorsOf, post } from './api';
 import { saveKeys } from './keys';
+import { rulesFile } from './bits';
 
 type Key = keyof BoardSettings;
 
@@ -88,7 +89,7 @@ export function Preferences({ data, refresh }: { data: LocalBoard; refresh: () =
       </Group>
 
       <Group title="Rules and pictures" about="How many rules the agent keeps, and the pictures on each change.">
-        <Row label="Design rules" hint={`DECISIONS.md has ${s.rules} now. When it’s full, a new rule has to replace one. More rules is more for the agent to read before every change.`}>
+        <Row label="Design rules" hint={`${rulesFile()} has ${s.rules} now. When it’s full, a new rule has to replace one. More rules is more for the agent to read before every change.`}>
           <Cap value={shown.cap} min={Math.max(1, s.rules)} onSave={(cap) => save({ cap })} onEdit={() => clear('cap')} />
           <FieldError text={errors.cap} />
         </Row>
@@ -156,14 +157,14 @@ function Cap({ value, min, onSave, onEdit }: { value: number; min: number; onSav
   };
   return (
     <div className="flex items-center gap-2 text-[14px]">
-      <Tooltip label={`The most rules DECISIONS.md can hold, up to 100. It can’t go below the ${min} you have. Press Enter to save.`}>
+      <Tooltip label={`The most rules ${rulesFile()} can hold, up to 100. It can’t go below the ${min} you have. Press Enter to save.`}>
         <Input
-          type="number" inputMode="numeric" min={min} max={100} value={text} aria-label="The most design rules DECISIONS.md holds" className="w-20! tabular-nums"
+          type="number" inputMode="numeric" min={min} max={100} value={text} aria-label={`The most design rules ${rulesFile()} holds`} className="w-20! tabular-nums"
           onChange={(e) => { setText(e.target.value); onEdit(); }} onBlur={commit}
           onKeyDown={saveKeys(commit, back)}
         />
       </Tooltip>
-      <span className="text-muted">at most, in DECISIONS.md</span>
+      <span className="text-muted">at most, in {rulesFile()}</span>
     </div>
   );
 }

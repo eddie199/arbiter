@@ -14,7 +14,7 @@ import { boardOf } from '../localboard';
 import type { LocalBoard } from '../board-types';
 import { candidatesDir } from '../candidates';
 import { historyFile, workDir } from '../work';
-import { findRoot, resolvePaths } from '../store';
+import { findRoot, resolvePaths, rulesName } from '../store';
 import { readArrangement } from '../areas';
 
 export interface ExportOptions {
@@ -80,7 +80,7 @@ export function exportBoard(opts: ExportOptions = {}): ExportResult {
   // Read-only: `live: false` keeps the review pages, Done and the team board buttons out of it.
   const board = { ...manifest, candidates: cards, requests: [] };
   // The folders as you made them, so the copy's side nav reads the same as yours. Nobody can move them in it.
-  const data: LocalBoard = { board, comments: [], waiting: {}, queued: {}, pending: 0, hosted: null, version: null, live: false, arrangement: readArrangement(paths), settings: null };
+  const data: LocalBoard = { board, comments: [], waiting: {}, queued: {}, pending: 0, hosted: null, version: null, live: false, arrangement: readArrangement(paths), settings: null, rulesFile: rulesName(paths) };
   // In a <script>, so nothing in a name can close the tag or run.
   const json = JSON.stringify(data).replace(/</g, '\\u003c').split(LINE_SEP).join('\\u2028').split(PARA_SEP).join('\\u2029');
   // Functions, not strings: a `$&` in someone's decision would otherwise be read as a pattern.

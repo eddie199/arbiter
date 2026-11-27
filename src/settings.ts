@@ -5,7 +5,7 @@
  * `areas` says when folder suggestions are off.
  */
 
-import { ACTIVE_CAP, now, readActive, readConfig, writeActive, writeConfig, type Config, type Paths } from './store';
+import { ACTIVE_CAP, now, readActive, readConfig, rulesName, writeActive, writeConfig, type Config, type Paths } from './store';
 import { appUrl, CHECKINS, type Checkin } from './commands/setup';
 import type { BoardSettings } from './board-types';
 
@@ -67,7 +67,7 @@ export function saveSettings(paths: Paths, raw: unknown): { ok: true; settings: 
     const have = readActive(paths).length;
     const n = body.cap;
     if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > MAX_CAP) errors.push(`Design rules must be a whole number from 1 to ${MAX_CAP}`);
-    else if (n < have) errors.push(`DECISIONS.md has ${have} rules, so it can't hold fewer. Remove some first.`);
+    else if (n < have) errors.push(`${rulesName(paths)} has ${have} rules, so it can't hold fewer. Remove some first.`);
     else cap = next.activeCap = n;
   }
   if ('app' in body) {

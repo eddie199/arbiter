@@ -11,7 +11,7 @@
 
 import { Decision, DIMENSIONS, Dimension, ID_PATTERN } from '../schema';
 import { DIMENSION_LABELS, formatEntry } from '../format';
-import { findRoot, readActive, readArchive, readConfig, readPending, resolvePaths, ACTIVE_CAP, type Paths } from '../store';
+import { findRoot, now, readActive, readArchive, readConfig, readPending, resolvePaths, writeConfig, ACTIVE_CAP, type Paths } from '../store';
 import { readLinkOrNull } from '../hosted';
 import { ChangeRequest, describe, findRequest, oneLine, readRequests, REQUEST_ID, screenName } from '../requests';
 import { updateNotice } from './update';
@@ -84,12 +84,17 @@ function pendingList(pending: Decision[], opts: RulesOptions, paths: Paths): str
     // A Review Board sitting nobody was waiting on: its fixes and approved requests are still to make.
     // Handed over as it is now: once it's made, `done` clears this much, and keeps anything judged since.
     const lastReview = takeHandoff(paths);
+    // The intro, once, at the first /arbiter: until it's been handed out, and while nothing has been judged.
+    // Judged decisions mean someone has been through a review, whatever arbiter.json says: the stamp
+    // lives in a committed file, and a branch that never merged takes it along.
+    const firstRun = !opts.config?.introduced && !archiveAll.length && !active.length;
+    if (firstRun && opts.config) writeConfig(paths, { ...opts.config, introduced: now() });
     return JSON.stringify(
       {
         ...(lastReview && { lastReview: { ...lastReview, file: HANDOFF_FILE, done: 'npx arbiter review --done' } }),
-        // Judged decisions mean someone has been through a review, whatever arbiter.json says: the
-        // stamp lives in a committed file, and a branch that never merged takes it along.
-        firstRun: !opts.config?.onboarded && !archiveAll.length && !active.length,
+        firstRun,
+        // Install couldn't ask (an agent ran it, and the question never got relayed): ask it after the intro.
+        askCheckin: !opts.config?.onboarded,
         checkin: opts.config?.checkin ?? 'feature',
         ...updateNotice(paths),
         requests: { open, approved },

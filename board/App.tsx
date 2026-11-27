@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { areasOf, overviewCards, PLANS } from './bits';
+import { areasOf, overviewCards, PLANS, rulesFile, setRulesFile } from './bits';
 import { clock, dayWords, fullDate } from '@/components/When';
 import { Lockup } from '@/components/ui/mark';
 import { buttonClass } from '@/components/ui/button';
@@ -28,6 +28,7 @@ import { AreasNav, folderIn, layoutOf } from './Areas';
 export function App({ initial }: { initial: LocalBoard }) {
   const route = useRoute();
   const [data, setData] = useState(initial);
+  setRulesFile(data.rulesFile);
   const [state, setState] = useState<ReviewState | null>(null);
   // What was judged in this sitting stays on the page, collapsed, until the next visit.
   const [results, setResults] = useState<Results>({});
@@ -275,7 +276,7 @@ function BoardHelp({ data, page, areas }: { data: LocalBoard; page: Route['page'
   const live = data.live;
   const parts = [
     { href: href('overview'), icon: OverviewIcon, name: 'Overview', on: page === 'overview', says: `Every change, with its picture. Open one for the decisions behind it and what was turned down.${areas ? ' Areas group them by part of the product.' : ''}` },
-    ...(live || data.board.rules?.length ? [{ href: href('rules'), icon: RulesIcon, name: 'Design rules', on: page === 'rules', says: live ? 'The rules you’ve saved in DECISIONS.md. Everything new follows them.' : 'The rules this project’s designs follow.' }] : []),
+    ...(live || data.board.rules?.length ? [{ href: href('rules'), icon: RulesIcon, name: 'Design rules', on: page === 'rules', says: live ? `The rules you’ve saved in ${rulesFile()}. Everything new follows them.` :'The rules this project’s designs follow.' }] : []),
     ...(live ? [{ href: href('review'), icon: ReviewIcon, name: 'Review inbox', on: page === 'review', says: 'What the agent decided that you haven’t judged yet. Confirm it, make it a rule, or fix it.' }] : []),
     ...(live ? [{ href: href('preferences'), icon: PreferencesIcon, name: 'Preferences', on: page === 'preferences', says: 'When the agent checks in, what it records, and pictures. Saved in arbiter.json.' }] : []),
   ];

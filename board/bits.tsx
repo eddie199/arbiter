@@ -124,6 +124,17 @@ export function Counts({ decisions, comments, requests, then }: { decisions: num
 /** Arbiter Team is in early access, by invitation: the Plans page says what it adds, and how to ask. */
 export const PLANS = 'https://arbiter.design/plans';
 
+/**
+ * The rules file's name, for the words that say where rules live: DECISIONS.md, unless the project's
+ * own DECISIONS.md was there first and the rules went in another file. Set by App from the board's
+ * data before anything under it draws; a copy from before this was carried says DECISIONS.md.
+ */
+let rulesFileName = 'DECISIONS.md';
+export const rulesFile = () => rulesFileName;
+export function setRulesFile(name: string | undefined) {
+  rulesFileName = name || 'DECISIONS.md';
+}
+
 export const undecided = (c: { work?: boolean; decisions: unknown[] }) => !!c.work && !c.decisions.length;
 
 /**

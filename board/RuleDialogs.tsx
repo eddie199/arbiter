@@ -4,7 +4,7 @@ import { Button, buttonClass } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip } from '@/components/ui/tooltip';
 import { href } from './route';
-import { CHIP } from './bits';
+import { CHIP, rulesFile } from './bits';
 import type { CodeCheck } from './types';
 
 /**
@@ -109,7 +109,7 @@ export function FullDialog({ full, onReplace, ...shared }: Shared & { full: { ru
   return (
     <AskDialog
       {...shared} open={full !== null}
-      title="DECISIONS.md is full"
+      title={`${rulesFile()} is full`}
       description={`It holds ${full?.cap ?? 0} rules, the most it can. Pick one for this to replace, or raise the limit in Preferences.`}
       footer={<a href={href('preferences')} className={buttonClass('secondary', 'md')}>Raise the limit</a>}
     >
