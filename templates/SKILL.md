@@ -732,15 +732,29 @@ Each finding becomes a pending item with a verdict to attach. Then one line: `12
 
 ## Publishing a board
 
-When the user wants a board — *"publish this"*, *"share it"*, *"get me a link"* — run one command and paste back the link it prints:
+When the user wants others to see the board — *"publish this"*, *"share it"*, *"get me a link"* — what you do depends on whether the project already has a team board: `.arbiter/hosted.json` exists.
+
+**It has one.** Run one command and paste back the link it prints:
 
 ```
 npx arbiter publish
 ```
 
+It replaces the board on arbiter.design and keeps its comments. No code, no token. **Don't ask where to publish, and don't ask for a token.**
+
+**It has none.** A team board (Arbiter Team, a private board on arbiter.design the team can comment on) is in early access, by invitation, so a new one needs an invite code. Unless the user has given you one, don't run `publish`: offer the free read-only copy instead.
+
+```
+npx arbiter export
+```
+
+It makes a folder, `arbiter-export/`, that anyone can open in a browser: every change with its picture. `--include-rules` adds the design rules. `npx arbiter publish --to pages` puts the same copy on the project's GitHub Pages site instead, which is public. Then one line, once: a private board the team can comment on is Arbiter Team, in early access, at arbiter.design/plans.
+
+**They have an invite code.** `npx arbiter publish --invite <code>`. Only the first publish uses it, and it's never saved: the board's link goes in `.arbiter/hosted.json` (commit it) and a publish token in `.arbiter/hosted.token` (git-ignored — a teammate sets `ARBITER_PUBLISH_TOKEN` to republish). If publish says a code is needed, or that theirs doesn't work, relay its line as it is. Never try another code.
+
 Above the link, a `picture missing` line names each card that should have a picture and doesn't. Don't drop them: after the link, one line naming those cards — `No picture yet on Settings — billing and Audit page.` If the app is running, take them instead (see **Screenshots**) and publish again.
 
-It goes to arbiter.design. Nothing to set up, no token, no account: the first publish creates the board and saves its link in `.arbiter/hosted.json` (commit it) and a publish token in `.arbiter/hosted.token` (git-ignored — a teammate sets `ARBITER_PUBLISH_TOKEN` to republish). Later publishes replace the board. **Don't ask where to publish, and don't ask for a token.** Only a self-hosted Arbiter takes `--to <url>`; `--to pages` is GitHub Pages instead.
+Only a self-hosted Arbiter takes `--to <url>`. The rest of this section is for a project with a team board.
 
 *"Keep the board up to date"*, *"publish automatically"* — `npx arbiter publish --auto`. The board then republishes whenever the record changes: after judging, after a screen changes state, after a picture is attached. It needs no GitHub, no CI and no git repository, so it's the right answer unless they specifically want it tied to pushes. `--no-auto` stops it.
 
