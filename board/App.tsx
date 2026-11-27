@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { areasOf, overviewCards, PLANS, rulesFile, setRulesFile } from './bits';
+import { arbiter, areasOf, overviewCards, PLANS, rulesFile, setCommand, setRulesFile } from './bits';
 import { clock, dayWords, fullDate } from '@/components/When';
 import { Lockup } from '@/components/ui/mark';
 import { buttonClass } from '@/components/ui/button';
@@ -29,6 +29,7 @@ export function App({ initial }: { initial: LocalBoard }) {
   const route = useRoute();
   const [data, setData] = useState(initial);
   setRulesFile(data.rulesFile);
+  setCommand(data.command);
   const [state, setState] = useState<ReviewState | null>(null);
   // What was judged in this sitting stays on the page, collapsed, until the next visit.
   const [results, setResults] = useState<Results>({});
@@ -125,7 +126,7 @@ export function App({ initial }: { initial: LocalBoard }) {
           {stopped ? (
             <div className="mb-5 rounded-lg border border-border bg-surface px-4 py-3 text-[13px]">
               <span className="font-semibold tracking-tight">This board has stopped.</span>{' '}
-              <span className="text-muted">What’s on it may be out of date. Run <code className="font-mono text-[12px]">npx arbiter review</code> to start it again, and this page picks up by itself.</span>
+              <span className="text-muted">What’s on it may be out of date. Run <code className="font-mono text-[12px]">{arbiter('review')}</code> to start it again, and this page picks up by itself.</span>
             </div>
           ) : null}
           {page}
@@ -332,7 +333,7 @@ function ShareBoard() {
         <div className={POP}>
           <p className="font-semibold tracking-tight text-fg">Share read-only board</p>
           <p className="mt-1">A folder anyone can open, or your own GitHub Pages site. Nothing goes to Arbiter.</p>
-          <Command text="npx arbiter export" className="mt-2.5" />
+          <Command text={arbiter('export')} className="mt-2.5" />
           <div className="-mx-3 my-3 border-t border-border" />
           <p className="font-semibold tracking-tight text-fg">Arbiter Team<span className="font-normal text-faint"> · Early access</span></p>
           <p className="mt-1">A private board where your team comments and requests changes. By invitation.</p>

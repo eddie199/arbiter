@@ -135,6 +135,13 @@ export function setRulesFile(name: string | undefined) {
   rulesFileName = name || 'DECISIONS.md';
 }
 
+/** How this project runs Arbiter, for commands the board shows to copy: npx arbiterdesign where it isn't in a package.json. */
+let commandName = 'npx arbiter';
+export const arbiter = (args: string) => `${commandName} ${args}`;
+export function setCommand(name: string | undefined) {
+  commandName = name || 'npx arbiter';
+}
+
 export const undecided = (c: { work?: boolean; decisions: unknown[] }) => !!c.work && !c.decisions.length;
 
 /**

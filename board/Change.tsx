@@ -8,7 +8,7 @@ import { MultiSelect } from '@/components/ui/multi-select';
 import { Faint, Id, KeyValues, Label, Lede, Meta, PageTitle, Property, PropertyRow, SectionTitle } from '@/components/ui/type';
 import type { LocalBoard } from './types';
 import { go, href } from './route';
-import { areasOf, cap, CHIP, endedWords, PLANS, StatusBadge, undecided, WaitingBadge } from './bits';
+import { arbiter, areasOf, cap, CHIP, endedWords, PLANS, StatusBadge, undecided, WaitingBadge } from './bits';
 import { CommentLine, DecisionThread } from './Comments';
 import { ChangeMenu } from './ChangeMenu';
 import { byVersion, VersionGroups, VersionRow } from './Versions';
@@ -198,7 +198,7 @@ export function Change({ data, c, at, kinds, refresh }: { data: LocalBoard; c: B
               {notes.map((n) => <CommentLine key={n.id} n={n} stale={!current(n)} requests={requests} cards={ids} candidate={c.id} />)}
             </ul>
           ) : <p className="text-[13px] text-muted">No comments yet.</p>}
-          {data.live && data.hosted ? <p className="mt-4 max-w-2xl text-[13px] text-faint">Your team comments on the team board. <code className="font-mono text-[12px]">npx arbiter pull</code> brings what they said here.</p> : null}
+          {data.live && data.hosted ? <p className="mt-4 max-w-2xl text-[13px] text-faint">Your team comments on the team board. <code className="font-mono text-[12px]">{arbiter('pull')}</code> brings what they said here.</p> : null}
         </section> : null}
       </div>
     </main>

@@ -9,6 +9,7 @@ import { checkinHandoff, init, installReport } from '../commands/init';
 import { rules } from '../commands/rules';
 import { setup } from '../commands/setup';
 import { readConfig, resolvePaths, rulesMovedLine, writeConfig } from '../store';
+import { liveBoard } from '../localboard';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'arbiter-onboard-'));
 
@@ -71,7 +72,7 @@ test('only what needs the person is listed, under Needs you', async () => {
   const cwd = tmp(); // no package.json here
   const steps = await init({ cwd, yes: true, author: 'test', client: 'claude-code' });
   const out = installReport(cwd, steps);
-  assert.match(out, /Needs you:\n {2}package\.json {2}no package\.json here\. Add arbiterdesign as a dev dependency yourself, or type npx arbiterdesign where you'd type npx arbiter\./);
+  assert.match(out, /Needs you:\n {2}package\.json {2}no package\.json here, so in this project Arbiter's command is npx arbiterdesign, not npx arbiter\. Your agent has been told\./);
   assert.ok(out.indexOf('Needs you') < out.indexOf("You're set"));
 });
 
@@ -104,4 +105,31 @@ test('the first /arbiter intro is handed out once, to everyone: asked at install
   assert.equal(later.askCheckin, true, 'still unanswered, so still asked');
   assert.equal(setup({ cwd: unasked, checkin: 'every' }).exitCode, 0);
   assert.equal(JSON.parse(rules(undefined, { cwd: unasked, pending: true, json: true })).askCheckin, false);
+});
+
+test("with Arbiter not in a package.json, everything the agent and the board run says npx arbiterdesign, never someone else's npx arbiter", async () => {
+  const short = /npx arbiter(?![A-Za-z])/;
+  // No package.json: install can't add it, so npx arbiter would fetch the npm package called arbiter.
+  const bare = tmp();
+  await init({ cwd: bare, yes: true, skipInstall: true, author: 'test', client: 'claude-code' });
+  const skill = fs.readFileSync(path.join(bare, '.claude', 'skills', 'arbiter', 'SKILL.md'), 'utf8');
+  assert.match(skill, /In this project the command is `npx arbiterdesign`/);
+  assert.match(skill, /npx arbiterdesign rules --pending --json/);
+  assert.doesNotMatch(skill.replace(/`npx arbiter` would fetch|names `npx arbiter`/g, ''), short, 'only the note itself names the short form');
+  assert.doesNotMatch(fs.readFileSync(path.join(bare, '.claude', 'hooks', 'arbiter-board.cjs'), 'utf8'), short);
+  assert.equal(liveBoard(resolvePaths(bare)).command, 'npx arbiterdesign');
+
+  // Cursor gets the same in its command file.
+  const cursor = tmp();
+  await init({ cwd: cursor, yes: true, skipInstall: true, author: 'test', client: 'cursor' });
+  assert.doesNotMatch(fs.readFileSync(path.join(cursor, '.cursor', 'commands', 'arbiter.md'), 'utf8'), short);
+
+  // In package.json: the short name finds it, and nothing changes.
+  const js = tmp();
+  fs.writeFileSync(path.join(js, 'package.json'), JSON.stringify({ name: 'app', devDependencies: { arbiterdesign: '^0.1.10' } }));
+  await init({ cwd: js, yes: true, skipInstall: true, author: 'test', client: 'claude-code' });
+  const jsSkill = fs.readFileSync(path.join(js, '.claude', 'skills', 'arbiter', 'SKILL.md'), 'utf8');
+  assert.doesNotMatch(jsSkill, /npx arbiterdesign /);
+  assert.match(jsSkill, /npx arbiter rules --pending --json/);
+  assert.equal(liveBoard(resolvePaths(js)).command, 'npx arbiter');
 });

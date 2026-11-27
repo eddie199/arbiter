@@ -116,6 +116,24 @@ export function chooseRulesFile(root: string, existing: Config | null): string {
   throw new Error(`${[RULES_FILE, ...RULES_FILE_ALTERNATIVES].join(', ')} are all files of your own, so Arbiter has nowhere to keep its rules. Set "decisions" in arbiter.json to a new file name, like "UI-DECISIONS.md", and run init again.`);
 }
 
+/**
+ * How the agent and the board run Arbiter in this project. `npx arbiter` finds the copy install added to
+ * package.json. With none there (no package.json, or install couldn't add it), `npx arbiter` would fetch
+ * the npm package called arbiter, which is someone else's, so the full name is used instead.
+ */
+export function arbiterCommand(root: string): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as { name?: string; dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+    if (pkg.name === 'arbiterdesign' || pkg.devDependencies?.arbiterdesign || pkg.dependencies?.arbiterdesign) return 'npx arbiter';
+  } catch {
+    // No package.json, or one that isn't JSON.
+  }
+  return 'npx arbiterdesign';
+}
+
+/** Text that runs `npx arbiter …`, as this project runs it. */
+export const withCommand = (text: string, command: string) => (command === 'npx arbiter' ? text : text.replace(/npx arbiter(?![A-Za-z])/g, command));
+
 /** What to tell the user when this command moved the rules to a file of their own: once, then null. */
 let moved: string | null = null;
 export function takeRulesMoved(): { file: string; say: string } | null {

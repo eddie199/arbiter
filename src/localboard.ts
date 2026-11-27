@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { candidatesDir, decisionsFor, readCandidates } from './candidates';
-import { ACTIVE_CAP, Paths, readActive, readArchive, readConfig, readPending, rulesName } from './store';
+import { ACTIVE_CAP, Paths, readActive, readArchive, readConfig, readPending, rulesName, arbiterCommand } from './store';
 import type { Decision } from './schema';
 import { workId, workSnapshot, workVersions } from './work';
 import { cardOf, readRequests } from './requests';
@@ -164,7 +164,7 @@ export function liveBoard(paths: Paths): LocalBoard {
     (lines[card] ??= []).push({ id: d.id, change: d.change ?? null, decision: d.decision, dimension: d.dimension, scope: d.scope, date: d.date });
   }
   const link = readLinkOrNull(paths);
-  return { board, comments: readComments(paths), waiting, queued: lines, pending: queued.filter((d) => d.level !== 'polish').length, hosted: link?.shareUrl ?? null, version: link?.boardVersion ?? null, live: true, arrangement: readArrangement(paths), settings: settingsOf(paths), rulesFile: rulesName(paths) };
+  return { board, comments: readComments(paths), waiting, queued: lines, pending: queued.filter((d) => d.level !== 'polish').length, hosted: link?.shareUrl ?? null, version: link?.boardVersion ?? null, live: true, arrangement: readArrangement(paths), settings: settingsOf(paths), rulesFile: rulesName(paths), command: arbiterCommand(paths.root) };
 }
 
 /** What `/api/state` sends: the review queue. */

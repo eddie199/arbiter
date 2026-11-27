@@ -125,6 +125,8 @@ export interface LocalBoard {
   settings: BoardSettings | null;
   /** The rules file's name: DECISIONS.md, unless the project's own DECISIONS.md was there first. Missing on older copies. */
   rulesFile?: string;
+  /** How this project runs Arbiter: npx arbiter, or npx arbiterdesign where it isn't in a package.json. Missing on older copies. */
+  command?: string;
 }
 
 /** What the Preferences page shows and saves. Saved in arbiter.json. */

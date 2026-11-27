@@ -40,11 +40,12 @@ export interface HookStep { file: string; outcome: 'created' | 'updated' | 'unch
  * Write the script, and add the entry to .claude/settings.json beside whatever is there. A
  * settings file that isn't plain JSON is left alone: rewriting it could lose what someone wrote.
  */
-export function installHook(root: string, rules: string = 'DECISIONS.md'): HookStep[] {
+export function installHook(root: string, rules: string = 'DECISIONS.md', command = 'npx arbiter'): HookStep[] {
   const steps: HookStep[] = [];
   const script = path.join(root, SCRIPT);
-  // What it tells the agent names the rules file, so it names this project's.
-  const content = fs.readFileSync(TEMPLATE, 'utf8').replace(/\r\n/g, '\n').split('DECISIONS.md').join(rules);
+  // What it tells the agent names the rules file and the command as this project has them.
+  const named = fs.readFileSync(TEMPLATE, 'utf8').replace(/\r\n/g, '\n').split('DECISIONS.md').join(rules);
+  const content = command === 'npx arbiter' ? named : named.replace(/npx arbiter(?![A-Za-z])/g, command);
   const before = fs.existsSync(script) ? fs.readFileSync(script, 'utf8') : null;
   if (before === content) steps.push({ file: '.claude/hooks/arbiter-board.cjs', outcome: 'unchanged' });
   else {

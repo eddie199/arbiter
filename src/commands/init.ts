@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { chooseRulesFile, Config, gitUserName, now, readConfig, resolvePaths, rulesMovedLine, writeActive, writeConfig, ACTIVE_CAP, RULES_FILE } from '../store';
+import { arbiterCommand, chooseRulesFile, Config, gitUserName, now, readConfig, resolvePaths, rulesMovedLine, withCommand, writeActive, writeConfig, ACTIVE_CAP, RULES_FILE } from '../store';
 import { archiveHeader } from '../format';
 import { Prompter } from './prompt';
 import { CHECKINS, type Checkin } from './setup';
@@ -165,8 +165,13 @@ export async function init(opts: InitOptions = {}): Promise<Step[]> {
       steps.push({ file: '.arbiter/archive.md', outcome: 'created' });
     }
 
+    // ── Local dev dependency ─────────────────────────────────────────────
+    // First, so what's written next can say how this project runs Arbiter: `npx arbiter` only once it's in package.json.
+    const install: Step = opts.skipInstall ? { file: 'package.json', outcome: 'skipped', note: '--skip-install' } : installSelf(root);
+    const command = arbiterCommand(root);
+
     // ── Skill file ───────────────────────────────────────────────────────
-    const skill = skillFor(client, rulesFile);
+    const skill = skillFor(client, rulesFile, command);
     steps.push(writeIfChanged(root, skill.file, skill.content));
 
     // ── AGENTS.md — merge one line, never overwrite ──────────────────────
@@ -177,14 +182,12 @@ export async function init(opts: InitOptions = {}): Promise<Step[]> {
       // Claude Code's own context file. Same line, same marker; created if missing so injection has a path that's certain to load.
       steps.push(mergeAgentsLine(root, 'CLAUDE.md', true, agentsLine(rulesFile)));
       // The hook that hands the agent what you judged on the board, with your next message.
-      steps.push(...installHook(root, rulesFile));
+      steps.push(...installHook(root, rulesFile, command));
     } else {
       // Cursor has no skill-invoked slash commands; give it a command file that does what `/arbiter` does.
-      steps.push(writeIfChanged(root, path.join('.cursor', 'commands', 'arbiter.md'), CURSOR_COMMAND));
+      steps.push(writeIfChanged(root, path.join('.cursor', 'commands', 'arbiter.md'), withCommand(CURSOR_COMMAND, command)));
     }
-
-    // ── Local dev dependency ─────────────────────────────────────────────
-    steps.push(opts.skipInstall ? { file: 'package.json', outcome: 'skipped', note: '--skip-install' } : installSelf(root));
+    steps.push(install);
   } finally {
     ask?.close();
   }
@@ -326,11 +329,15 @@ export function checkinHandoff(rulesNote?: string, askQuestion = true): string {
  */
 export const withRulesFile = (text: string, rules: string) => (rules === RULES_FILE ? text : text.split(RULES_FILE).join(rules));
 
-function skillFor(client: Client, rules: string): { file: string; content: string } {
+/** Said in the skill when Arbiter isn't in a package.json here, so its commands carry the full name. */
+const FULL_NAME_NOTE = 'In this project the command is `npx arbiterdesign`: Arbiter isn\'t in a package.json here, and `npx arbiter` would fetch a different package that has nothing to do with Arbiter. Every command below already says `npx arbiterdesign`. When a reply from it names `npx arbiter`, run that as `npx arbiterdesign`.\n\n';
+
+function skillFor(client: Client, rules: string, command = 'npx arbiter'): { file: string; content: string } {
   // A Windows checkout with autocrlf hands us CRLF; the frontmatter regex and the marker line assume LF.
-  let template = withRulesFile(fs.readFileSync(SKILL_TEMPLATE, 'utf8').replace(/\r\n/g, '\n'), rules);
+  let template = withCommand(withRulesFile(fs.readFileSync(SKILL_TEMPLATE, 'utf8').replace(/\r\n/g, '\n'), rules), command);
   // The first /arbiter's intro says where the rules go; when that isn't their DECISIONS.md, it says theirs is safe.
   if (rules !== RULES_FILE) template = template.split(`Rules go into \`${rules}\`, and I read them`).join(`Rules go into \`${rules}\` (your own ${RULES_FILE} stays as it is), and I read them`);
+  if (command !== 'npx arbiter') template = template.replace('\n## Before UI work\n', `\n${FULL_NAME_NOTE}## Before UI work\n`);
   const m = /^---\n([\s\S]*?)\n---\n/.exec(template);
   // The version marker is the first body line, under the frontmatter, so both clients carry it.
   const body = skillMarker(selfVersion()) + '\n' + template.slice(m?.[0].length ?? 0);
@@ -389,11 +396,11 @@ export function pointAgentsAt(root: string, client: string | undefined, rules: s
   }
   for (const c of ['claude-code', 'cursor'] as const) {
     if (fs.existsSync(path.join(root, skillPath(c)))) {
-      const skill = skillFor(c, rules);
+      const skill = skillFor(c, rules, arbiterCommand(root));
       steps.push(writeIfChanged(root, skill.file, skill.content));
     }
   }
-  if (client !== 'cursor' && fs.existsSync(path.join(root, '.claude', 'hooks', 'arbiter-board.cjs'))) steps.push(...installHook(root, rules));
+  if (client !== 'cursor' && fs.existsSync(path.join(root, '.claude', 'hooks', 'arbiter-board.cjs'))) steps.push(...installHook(root, rules, arbiterCommand(root)));
   return steps;
 }
 
@@ -433,7 +440,7 @@ function installSelf(root: string): Step {
   const self = JSON.parse(fs.readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf8')) as { name: string; version: string };
   const hostPkgPath = path.join(root, 'package.json');
   if (!fs.existsSync(hostPkgPath)) {
-    return { file: 'package.json', outcome: 'skipped', attention: true, note: `no package.json here. Add ${self.name} as a dev dependency yourself, or type npx ${self.name} where you'd type npx arbiter.` };
+    return { file: 'package.json', outcome: 'skipped', attention: true, note: `no package.json here, so in this project Arbiter's command is npx ${self.name}, not npx arbiter. Your agent has been told.` };
   }
   const host = JSON.parse(fs.readFileSync(hostPkgPath, 'utf8')) as { name?: string; dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
   // Arbiter's own repo, dogfooding: `npx arbiter` already resolves to the package itself.
