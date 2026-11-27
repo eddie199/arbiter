@@ -22,7 +22,8 @@ import { handoffDone, handoffLine } from './handoff';
 import { update } from './commands/update';
 import { remove, removeSnapshot, unlink } from './commands/remove';
 import { autoPublish } from './autopublish';
-import { ADMIN_ENV } from './hosted';
+import { ADMIN_ENV, INVITE_ENV } from './hosted';
+import { invite } from './commands/invite';
 import { findRoot, readConfig, resolvePaths, rulesMovedLine, rulesName, takeRulesMoved } from './store';
 import { hookInstalled } from './hook';
 import { withLock } from './lock';
@@ -227,8 +228,9 @@ program
 
 program
   .command('publish')
-  .description('Put the board online at arbiter.design and print the link. --to <url> for your own hosted Arbiter; --to pages for GitHub Pages (git destination, export, commit, push). Nothing to set up first.')
+  .description('Put the board online at arbiter.design and print the link. Arbiter Team is in early access, by invitation: a new board\'s first publish needs --invite <code> (arbiter.design/plans). For a read-only copy anyone can open, use export. --to <url> for your own hosted Arbiter; --to pages for GitHub Pages (git destination, export, commit, push).')
   .option('--to <url|pages>', 'where to publish: a hosted Arbiter (default arbiter.design), or `pages` for GitHub Pages')
+  .option('--invite <code>', `your invite code, for the first publish only (or set ${INVITE_ENV}); later publishes don't need it`)
   .option('--admin-token <token>', 'only for a self-hosted Arbiter that gates board creation')
   .option('--no-push', 'GitHub Pages mode: do everything except push')
   .option('--on-push', 'also write a GitHub Actions workflow that republishes on every push, and set its secret')
@@ -237,7 +239,7 @@ program
   .option('--password [password]', 'the board asks for a password before showing anything; leave the value out to get a strong one made up. Once: later publishes keep it')
   .option('--no-password', 'take the password off: anyone with the link can see the board')
   .action(async (opts) => {
-    const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken, onPush: opts.onPush, auto: opts.auto === undefined ? undefined : !!opts.auto, password: opts.password });
+    const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken, invite: opts.invite, onPush: opts.onPush, auto: opts.auto === undefined ? undefined : !!opts.auto, password: opts.password });
     printSteps(r.steps);
     if (r.url) process.stdout.write(`\n${r.ok ? 'Live in about a minute' : 'Once the failed step is fixed'}: ${r.url}\n`);
     process.exit(r.ok ? 0 : 1);
@@ -251,6 +253,21 @@ program
   .action(async (boardLink: string | undefined, opts) => {
     const r = await unpublish({ yes: !!opts.yes, board: boardLink, admin: !!opts.admin });
     printSteps(r.steps);
+    process.exit(r.ok ? 0 : 1);
+  });
+
+// Only for whoever runs the server, so it stays out of --help.
+program
+  .command('invite [note]', { hidden: true })
+  .description(`Make an invite to Arbiter Team, which is in early access, by invitation: a code good for 1 board, shown once. Needs the server's admin token in ${ADMIN_ENV}.`)
+  .option('--boards <n>', 'how many boards it can make (default 1)')
+  .option('--list', 'every invite: who it is for, boards made and left')
+  .option('--off <id>', 'switch an invite off: it makes no more boards; the boards it made stay up')
+  .option('--to <url>', 'the server (default arbiter.design)')
+  .option('--json', 'print JSON')
+  .action(async (note: string | undefined, opts) => {
+    const r = await invite(note, opts);
+    (r.ok ? process.stdout : process.stderr).write(r.out + '\n');
     process.exit(r.ok ? 0 : 1);
   });
 

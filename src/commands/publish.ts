@@ -31,6 +31,8 @@ export interface PublishOptions {
   /** A hosted board. `--to pages` picks GitHub Pages instead. */
   to?: string;
   admin?: string;
+  /** The invite code a new board needs while the team board is invite-only. Only the first publish uses it. */
+  invite?: string;
   /** Also write a GitHub Actions workflow that republishes on every push, and set its secret. */
   onPush?: boolean;
   /** Turn on (or off, with false) republishing whenever the record changes. Needs no git. */
@@ -72,7 +74,7 @@ export async function publish(opts: PublishOptions = {}): Promise<PublishResult>
   if (to) {
     const password = opts.password === undefined ? undefined : opts.password === false ? null : opts.password === true ? newPassword() : opts.password;
     try {
-      const r = await publishHosted(paths, to, { admin: opts.admin, password });
+      const r = await publishHosted(paths, to, { admin: opts.admin, password, invite: opts.invite });
       if (r.created) done('project', `created on ${to} — link in .arbiter/hosted.json (commit it); token in .arbiter/hosted.token (git-ignored — teammates set ARBITER_PUBLISH_TOKEN)`);
       // A made-up password is printed once, here: the service keeps only a hash. One you chose isn't echoed.
       if (password === null) done('password', 'off — anyone with the link can see the board');
