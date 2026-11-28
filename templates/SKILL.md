@@ -242,34 +242,36 @@ Arbiter's skill file is from 0.1.3 (the CLI is 0.1.4) — say "update arbiter" a
 
 Never run it unasked. When they say yes — or say *"update arbiter"* unprompted — run the command `update.command` names and relay what it prints. It leaves `DECISIONS.md`, the archive and the settings alone.
 
+Any command's reply may carry `rulesFile`: the project already had a decisions file of its own, so Arbiter has just moved its rules to a file of their own, `rulesFile.file`, and left theirs exactly as it was. Tell the user `rulesFile.say`, word for word, once, in your reply. From then on the rules live in `rulesFile.file`: read that one before UI work.
+
 ## Right after install
 
-Install asks one question: when Arbiter should check in. Run in a terminal, it asks there. Run by you, nobody can answer, so its last lines hand you the question. Ask it then, on its own, before anything else: the widget below, with just this one question. Then save the answer with `setup --checkin`, as below. Asked once; `/arbiter` never asks it again.
+Install asks one question: how Arbiter should check in. Run in a terminal, it asks there, and the person reads the rest. Run by you, nobody saw any of it, so its last lines start `Agent:` and give you the words to say. Say them, then ask the question they hand you on its own, before anything else: the widget in **The first `/arbiter`** below, with just this one question. Save the answer with `setup --checkin`, as below, then say the closing line they give you. Asked once; `/arbiter` only asks it if it never got answered.
 
-## The first `/arbiter`, if nobody answered at install — intro, then the queue
+## The first `/arbiter` — intro, then the queue
 
-The queue JSON carries `firstRun: true` only while nobody has answered the check-in question (an install from before it asked, or one where it was never relayed) and nothing has been judged yet. When it does, before anything else, say this — verbatim, it's been written for the reader:
+The queue JSON carries `firstRun: true` once: at the first `/arbiter`, before anything has been judged. When it does, before anything else, say this — verbatim, it's been written for the reader. Only step 1 changes, to match their check-in setting (`checkin` in the same JSON):
 
-> **Arbiter's on.** While I build UI, I record the design decisions I make — what changed, the rule behind it, what was rejected — so nothing gets re-decided and your team can see why things are the way they are.
+> **Arbiter's on.** While I build UI, I record the design decisions I make, so nothing gets re-decided and your team can see why things are the way they are.
 >
-> **How it works**
-> 1. You build as usual. I say nothing about decisions until a piece of work settles, then one line. When 5 changes are waiting, I'll ask if you want to review them.
-> 2. `/arbiter` shows what's queued. For each: **Confirm**, **Make it a rule**, or **Skip**. Rules go into `DECISIONS.md`, and I read them before touching UI.
-> 3. When you want others to see it, say **open the board** and use **Share board** there: a read-only copy anyone can open, or Arbiter Team, in early access, for a private board your team can comment on and request changes from.
->
-> **Commands**
-> - `/arbiter` — review what's queued
-> - **"open the board"** — your board in the browser, with **Share board**
-> - **"record that"** / **"make that a rule"** — mid-chat, recorded, no questions
+> 1. *(step 1, below)*
+> 2. Here, for each one: **Confirm**, **Make it a rule**, or **Skip**. Rules go into `DECISIONS.md`, and I read them before touching UI.
+> 3. Say **open the board** to see everything in your browser, and **Share board** there to show others.
 
-Then one question, with the selection widget (text fallback: the same three lines, numbered). It goes alone, before the queue. Never fold it into the review's questions: dismissed along with them, it comes back on every `/arbiter`.
+Step 1, by `checkin`:
+
+- `feature` — You build as usual. When a feature settles, I say one line. At 5 changes waiting, I'll ask if you want to review.
+- `every` — You build as usual. Every time a piece of work settles, I say one line. At 5 changes waiting, I'll ask if you want to review.
+- `quiet` — You build as usual. I stay quiet unless something clashes with a rule. Type `/arbiter` whenever you want to see what's waiting.
+
+If the JSON also carries `askCheckin: true` (install couldn't ask, and the question never got relayed), then one question, with the selection widget (text fallback: the same three lines, numbered). It goes alone, after the intro and before the queue. Never fold it into the review's questions: dismissed along with them, it comes back on every `/arbiter`.
 
 - **header** — `While you work`
-- **question** — `When should Arbiter check in about decisions?`
+- **question** — `How should Arbiter check in while you work?`
 - **options** —
-  - `A line after big work` (Recommended) — *When a feature-sized piece settles, one sentence saying what changed. Every 5 changes waiting, a yes/no on reviewing. Never mid-iteration.*
-  - `Nothing until I ask` — *Saved silently. Asks only when something clashes with a rule. /arbiter whenever you want to see it.*
-  - `A line after everything` — *One sentence every time a piece of work settles, big or small. Every 5 changes waiting, a yes/no on reviewing.*
+  - `A line after big work` (Recommended) — *When a feature settles, one sentence on what changed.*
+  - `Nothing until I ask` — *Quiet, unless something clashes with a rule.*
+  - `A line after everything` — *One sentence every time a piece of work settles.*
 
 Record the answer, whatever comes back. Skip, a dismissed widget or no answer all mean the recommended one, so it's asked once:
 
@@ -732,15 +734,29 @@ Each finding becomes a pending item with a verdict to attach. Then one line: `12
 
 ## Publishing a board
 
-When the user wants a board — *"publish this"*, *"share it"*, *"get me a link"* — run one command and paste back the link it prints:
+When the user wants others to see the board — *"publish this"*, *"share it"*, *"get me a link"* — what you do depends on whether the project already has a team board: `.arbiter/hosted.json` exists.
+
+**It has one.** Run one command and paste back the link it prints:
 
 ```
 npx arbiter publish
 ```
 
+It replaces the board on arbiter.design and keeps its comments. No code, no token. **Don't ask where to publish, and don't ask for a token.**
+
+**It has none.** A team board (Arbiter Team, a private board on arbiter.design the team can comment on) is in early access, by invitation, so a new one needs an invite code. Unless the user has given you one, don't run `publish`: offer the free read-only copy instead.
+
+```
+npx arbiter export
+```
+
+It makes a folder, `arbiter-export/`, that anyone can open in a browser: every change with its picture. `--include-rules` adds the design rules. `npx arbiter publish --to pages` puts the same copy on the project's GitHub Pages site instead, which is public. Then one line, once: a private board the team can comment on is Arbiter Team, in early access, at arbiter.design/plans.
+
+**They have an invite code.** `npx arbiter publish --invite <code>`. Only the first publish uses it, and it's never saved: the board's link goes in `.arbiter/hosted.json` (commit it) and a publish token in `.arbiter/hosted.token` (git-ignored — a teammate sets `ARBITER_PUBLISH_TOKEN` to republish). If publish says a code is needed, or that theirs doesn't work, relay its line as it is. Never try another code.
+
 Above the link, a `picture missing` line names each card that should have a picture and doesn't. Don't drop them: after the link, one line naming those cards — `No picture yet on Settings — billing and Audit page.` If the app is running, take them instead (see **Screenshots**) and publish again.
 
-It goes to arbiter.design. Nothing to set up, no token, no account: the first publish creates the board and saves its link in `.arbiter/hosted.json` (commit it) and a publish token in `.arbiter/hosted.token` (git-ignored — a teammate sets `ARBITER_PUBLISH_TOKEN` to republish). Later publishes replace the board. **Don't ask where to publish, and don't ask for a token.** Only a self-hosted Arbiter takes `--to <url>`; `--to pages` is GitHub Pages instead.
+Only a self-hosted Arbiter takes `--to <url>`. The rest of this section is for a project with a team board.
 
 *"Keep the board up to date"*, *"publish automatically"* — `npx arbiter publish --auto`. The board then republishes whenever the record changes: after judging, after a screen changes state, after a picture is attached. It needs no GitHub, no CI and no git repository, so it's the right answer unless they specifically want it tied to pushes. `--no-auto` stops it.
 

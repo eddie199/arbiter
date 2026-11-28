@@ -12,7 +12,7 @@ import { Id, Meta, PageTitle, SectionTitle } from '@/components/ui/type';
 import { When } from '@/components/When';
 import type { LocalBoard } from './types';
 import { errorsOf, post } from './api';
-import { areasOf, CHIP, TRAY } from './bits';
+import { areasOf, CHIP, rulesFile, TRAY } from './bits';
 import { RemoveDialog } from './RemoveDialog';
 import { saveKeys } from './keys';
 import { go, href } from './route';
@@ -72,7 +72,7 @@ export function Rules({ data, at, cap, refresh, query }: { data: LocalBoard; at:
           <Meta className="mt-0.5 block">
             {/* A read-only copy speaks to whoever it was sent to, as its guide does: the rules aren't theirs. */}
             {!data.live ? `${rules.length} rule${rules.length === 1 ? '' : 's'} this project’s designs follow.`
-              : rules.length ? `${rules.length} rule${rules.length === 1 ? '' : 's'} you’ve saved in DECISIONS.md. Everything new follows ${rules.length === 1 ? 'it' : 'them'}.` : 'The rules you save in DECISIONS.md. Everything new follows them.'}
+              : rules.length ? `${rules.length} rule${rules.length === 1 ? '' : 's'} you’ve saved in ${rulesFile()}. Everything new follows ${rules.length === 1 ? 'it' : 'them'}.` : `The rules you save in ${rulesFile()}. Everything new follows them.`}
             {cap && rules.length >= cap ? ' Full: a new rule has to replace one.' : null}
           </Meta>
         </div>
@@ -116,7 +116,7 @@ export function Rules({ data, at, cap, refresh, query }: { data: LocalBoard; at:
           {showRetired ? (
             <>
               {/* A read-only copy speaks to whoever it was sent to: the agent and the limit aren't theirs. */}
-              <Meta className="-mt-1 mb-3 block">{data.live ? 'Out of DECISIONS.md, so your agent no longer follows them.' : 'Out of DECISIONS.md: new work no longer follows them.'}</Meta>
+              <Meta className="-mt-1 mb-3 block">{data.live ? `Out of ${rulesFile()}, so your agent no longer follows them.` : `Out of ${rulesFile()}: new work no longer follows them.`}</Meta>
               <ul className="divide-y divide-border border-t border-border">
                 {retiredShown.map((r) => <RetiredRow key={r.id} r={r} at={at} />)}
               </ul>
@@ -197,7 +197,7 @@ function RulesMenu({ data, rules }: { data: LocalBoard; rules: BoardRule[] }) {
   const [copied, setCopied] = useState(false);
   const download = () => {
     if (data.live) {
-      Object.assign(document.createElement('a'), { href: '/api/decisions', download: 'DECISIONS.md' }).click();
+      Object.assign(document.createElement('a'), { href: '/api/decisions', download: rulesFile() }).click();
       return;
     }
     const url = URL.createObjectURL(new Blob([asText(rules)], { type: 'text/markdown' }));
@@ -211,7 +211,7 @@ function RulesMenu({ data, rules }: { data: LocalBoard; rules: BoardRule[] }) {
     <>
       {copied ? <span className="text-[12px] text-faint" aria-live="polite">Copied</span> : null}
       <ActionMenu label="Download or copy the rules" tip="Download or copy" className={barDots} trigger={DOTS}>
-        <ActionItem onClick={download} icon={Icon.download} hint={data.live ? 'DECISIONS.md' : '.md'}>Download</ActionItem>
+        <ActionItem onClick={download} icon={Icon.download} hint={data.live ? rulesFile() : '.md'}>Download</ActionItem>
         <ActionItem onClick={() => void copy()} icon={Icon.copy} hint={String(rules.length)}>Copy all rules</ActionItem>
       </ActionMenu>
     </>

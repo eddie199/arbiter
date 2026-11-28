@@ -16,14 +16,15 @@ import { pull } from './commands/pull';
 import { snapshotWork } from './commands/snapshot';
 import { setup } from './commands/setup';
 import { rules } from './commands/rules';
-import { checkinHandoff, init } from './commands/init';
+import { checkinHandoff, init, installReport } from './commands/init';
 import { review } from './commands/review';
 import { handoffDone, handoffLine } from './handoff';
 import { update } from './commands/update';
 import { remove, removeSnapshot, unlink } from './commands/remove';
 import { autoPublish } from './autopublish';
-import { ADMIN_ENV } from './hosted';
-import { findRoot, readConfig, resolvePaths } from './store';
+import { ADMIN_ENV, INVITE_ENV } from './hosted';
+import { invite } from './commands/invite';
+import { findRoot, readConfig, resolvePaths, rulesMovedLine, rulesName, takeRulesMoved } from './store';
 import { hookInstalled } from './hook';
 import { withLock } from './lock';
 
@@ -95,7 +96,7 @@ program
       }
       result = oneOffGate(input) ?? locked(opts.cwd, () => (opts.pending ? queue(input, opts) : record(input, opts)));
     }
-    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    process.stdout.write(JSON.stringify(withNotices(result.output), null, 2) + '\n');
     // Queueing never reaches the board — work cards are built from judged decisions.
     if (result.exitCode === 0 && !opts.pending) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
@@ -110,14 +111,17 @@ program
   .option('--checkin <mode>', 'how Arbiter checks in while you work: feature | quiet | every (default: asked)')
   .option('-y, --yes', 'no questions — use detected values')
   .option('--skip-install', 'do not add the package to devDependencies')
+  .option('--verbose', 'list every file install wrote or left alone')
   .action(async (opts) => {
+    const root = process.cwd();
     const steps = await init(opts);
-    const w = Math.max(...steps.map((s) => s.file.length));
-    for (const s of steps) {
-      process.stdout.write(`  ${s.file.padEnd(w)}  ${s.outcome}${s.note ? `  — ${s.note}` : ''}\n`);
-    }
-    process.stdout.write('\nDone. Start a new agent session — it will read DECISIONS.md before UI work.\n');
-    if (!readConfig(resolvePaths(process.cwd()))?.onboarded) process.stdout.write(checkinHandoff());
+    // An agent ran it: nobody saw any of this, so the agent says it in chat, and asks what install couldn't.
+    const config = readConfig(resolvePaths(root));
+    const rules = rulesName(resolvePaths(root));
+    const theirs = steps.some((s) => s.file === 'DECISIONS.md' && s.note?.startsWith('yours')) && steps.some((s) => s.file === rules && s.outcome === 'created');
+    const handoff = !config?.onboarded ? checkinHandoff(theirs ? rulesMovedLine(rules) : undefined)
+      : theirs && !process.stdin.isTTY ? checkinHandoff(rulesMovedLine(rules), false) : '';
+    process.stdout.write('\n' + installReport(root, steps, { verbose: !!opts.verbose, closing: !handoff }) + handoff);
     if (opts.destination === 'git') {
       process.stdout.write([
         '',
@@ -157,7 +161,7 @@ program
   .option('--app <url>', 'where the app runs, for screenshots: http://localhost:3000 or a staging address (on its own, saves only this)')
   .action((opts) => {
     const result = locked(opts.cwd, () => setup(opts));
-    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    process.stdout.write(JSON.stringify(withNotices(result.output), null, 2) + '\n');
     process.exit(result.exitCode);
   });
 
@@ -168,7 +172,7 @@ program
   .option('--capture', 'macOS: drag-select a region of the screen')
   .action(async (work: string, opts) => {
     const result = locked(opts.cwd, () => snapshotWork(work, opts));
-    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    process.stdout.write(JSON.stringify(withNotices(result.output), null, 2) + '\n');
     if (result.exitCode === 0) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
   });
@@ -187,7 +191,7 @@ program
   .option('--author <name>', 'override the author')
   .action(async (idOrAdd: string, name: string | undefined, opts) => {
     const result = locked(opts.cwd, () => (idOrAdd === 'add' ? addCandidate(name ?? '', opts) : updateCandidate(idOrAdd, opts)));
-    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    process.stdout.write(JSON.stringify(withNotices(result.output), null, 2) + '\n');
     if (result.exitCode === 0) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
   });
@@ -224,8 +228,9 @@ program
 
 program
   .command('publish')
-  .description('Put the board online at arbiter.design and print the link. --to <url> for your own hosted Arbiter; --to pages for GitHub Pages (git destination, export, commit, push). Nothing to set up first.')
+  .description('Put the board online at arbiter.design and print the link. Arbiter Team is in early access, by invitation: a new board\'s first publish needs --invite <code> (arbiter.design/plans). For a read-only copy anyone can open, use export. --to <url> for your own hosted Arbiter; --to pages for GitHub Pages (git destination, export, commit, push).')
   .option('--to <url|pages>', 'where to publish: a hosted Arbiter (default arbiter.design), or `pages` for GitHub Pages')
+  .option('--invite <code>', `your invite code, for the first publish only (or set ${INVITE_ENV}); later publishes don't need it`)
   .option('--admin-token <token>', 'only for a self-hosted Arbiter that gates board creation')
   .option('--no-push', 'GitHub Pages mode: do everything except push')
   .option('--on-push', 'also write a GitHub Actions workflow that republishes on every push, and set its secret')
@@ -234,7 +239,7 @@ program
   .option('--password [password]', 'the board asks for a password before showing anything; leave the value out to get a strong one made up. Once: later publishes keep it')
   .option('--no-password', 'take the password off: anyone with the link can see the board')
   .action(async (opts) => {
-    const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken, onPush: opts.onPush, auto: opts.auto === undefined ? undefined : !!opts.auto, password: opts.password });
+    const r = await publish({ noPush: opts.push === false, to: opts.to, admin: opts.adminToken, invite: opts.invite, onPush: opts.onPush, auto: opts.auto === undefined ? undefined : !!opts.auto, password: opts.password });
     printSteps(r.steps);
     if (r.url) process.stdout.write(`\n${r.ok ? 'Live in about a minute' : 'Once the failed step is fixed'}: ${r.url}\n`);
     process.exit(r.ok ? 0 : 1);
@@ -251,6 +256,21 @@ program
     process.exit(r.ok ? 0 : 1);
   });
 
+// Only for whoever runs the server, so it stays out of --help.
+program
+  .command('invite [note]', { hidden: true })
+  .description(`Make an invite to Arbiter Team, which is in early access, by invitation: a code good for 1 board, shown once. Needs the server's admin token in ${ADMIN_ENV}.`)
+  .option('--boards <n>', 'how many boards it can make (default 1)')
+  .option('--list', 'every invite: who it is for, boards made and left')
+  .option('--off <id>', 'switch an invite off: it makes no more boards; the boards it made stay up')
+  .option('--to <url>', 'the server (default arbiter.design)')
+  .option('--json', 'print JSON')
+  .action(async (note: string | undefined, opts) => {
+    const r = await invite(note, opts);
+    (r.ok ? process.stdout : process.stderr).write(r.out + '\n');
+    process.exit(r.ok ? 0 : 1);
+  });
+
 program
   .command('areas')
   .description('Where everything sits on the board: folders, the areas in them, and the changes in each. Read it before naming new work, so it joins an area that is already there. --save writes folders, once the person has said yes to them.')
@@ -258,7 +278,7 @@ program
   .option('--save <json>', 'replace the folders: {"folders":[{"name":"Local board","areas":["Review inbox","Change page"]}]}')
   .action((opts: { json?: boolean; save?: string }) => {
     const result = opts.save ? locked(undefined, () => areasCommand({ json: opts.json, save: opts.save })) : areasCommand({ json: opts.json, save: opts.save });
-    process.stdout.write(result.exitCode !== 0 || opts.json ? JSON.stringify(result.output, null, 2) + '\n' : `${result.text}\n`);
+    process.stdout.write(result.exitCode !== 0 || opts.json ? JSON.stringify(withNotices(result.output), null, 2) + '\n' : `${result.text}\n`);
     process.exit(result.exitCode);
   });
 
@@ -268,7 +288,7 @@ program
   .option('--merge', 'the new name is a piece of work that already exists: this one joins it, decisions, pictures and comments')
   .action(async (work: string, newName: string, opts) => {
     const result = locked(opts.cwd, () => renameWork(work, newName, opts));
-    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    process.stdout.write(JSON.stringify(withNotices(result.output), null, 2) + '\n');
     if (result.exitCode === 0) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
   });
@@ -308,7 +328,7 @@ program
   .option('--force', 'with a screen: unlink the decisions on it rather than refusing')
   .action(async (id: string | undefined, opts) => {
     const result = locked(opts.cwd, () => (opts.snapshot ? removeSnapshot(opts.snapshot, opts) : remove(id ?? '', opts)));
-    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    process.stdout.write(JSON.stringify(withNotices(result.output), null, 2) + '\n');
     if (result.exitCode === 0) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
   });
@@ -318,7 +338,7 @@ program
   .description('Detach decisions from the screen they were recorded against. The decisions stay exactly as they are.')
   .action(async (ids: string[], opts) => {
     const result = locked(opts.cwd, () => unlink(ids, opts));
-    process.stdout.write(JSON.stringify(result.output, null, 2) + '\n');
+    process.stdout.write(JSON.stringify(withNotices(result.output), null, 2) + '\n');
     if (result.exitCode === 0) await boardUpdated(opts.cwd);
     process.exit(result.exitCode);
   });
@@ -367,6 +387,15 @@ program.parseAsync(process.argv).catch((e: Error) => {
  */
 function locked<T>(cwd: string | undefined, fn: () => T): T {
   return withLock(resolvePaths(findRoot(cwd)), fn);
+}
+
+/**
+ * A command's JSON, with what the agent has to pass on: when this command found the project's own
+ * DECISIONS.md and moved the rules to a file of their own, `rulesFile.say` is the line to tell the user.
+ */
+function withNotices(output: Record<string, unknown>): Record<string, unknown> {
+  const moved = takeRulesMoved();
+  return moved ? { ...output, rulesFile: moved } : output;
 }
 
 /** `publish` and `unpublish` report one line per step: name, outcome, why. */

@@ -4,7 +4,7 @@
  * removed from the page by mistake. Removing one is `remove`; a rule is retired instead.
  */
 
-import { ACTIVE_CAP, findRoot, now, readActive, readArchive, readConfig, resolvePaths, writeActive, writeArchive } from '../store';
+import { ACTIVE_CAP, findRoot, now, readActive, readArchive, readConfig, resolvePaths, rulesName, writeActive, writeArchive } from '../store';
 import { DECISION_ID, type Decision } from '../schema';
 import { explainOverlaps, findOverlaps } from '../overlap';
 import { refreshCandidates } from './candidate';
@@ -64,7 +64,7 @@ export function promote(id: string, opts: { cwd?: string; keepBoth?: boolean; su
     if (overlaps.length) return { exitCode: 2, output: { status: 'overlap', overlaps: explainOverlaps(entry, overlaps, active, new Map(readCandidates(paths).map((c) => [c.id, c.name]))) } };
   }
   // Full: the rules there, so one can be picked for this to replace without leaving the page.
-  if (active.length >= cap) return { exitCode: 3, output: { status: 'cap', cap, active: active.map((d) => ({ id: d.id, decision: d.decision })), errors: [`DECISIONS.md is full (${cap} rules). Remove one first, or raise the limit in Preferences.`] } };
+  if (active.length >= cap) return { exitCode: 3, output: { status: 'cap', cap, active: active.map((d) => ({ id: d.id, decision: d.decision })), errors: [`${rulesName(paths)} is full (${cap} rules). Remove one first, or raise the limit in Preferences.`] } };
   const rule: Decision = { ...entry, verdict: 'rule', ...(opts.supersedes ? { supersedes: opts.supersedes } : {}) };
   writeArchive(paths, archive.map((d) => (d.id === id ? rule : d)));
   writeActive(paths, [...active, rule], cap);

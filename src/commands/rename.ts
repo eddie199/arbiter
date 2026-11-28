@@ -16,7 +16,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { findRoot, readActive, readArchive, readPending, resolvePaths, writeActive, writeArchive, writePending } from '../store';
+import { findRoot, readActive, readArchive, readPending, resolvePaths, rulesName, writeActive, writeArchive, writePending } from '../store';
 import { readCandidates } from '../candidates';
 import { readComments, writeComments } from '../comments';
 import { oneLine, readRequests, writeRequests } from '../requests';
@@ -61,7 +61,7 @@ export function renameWork(from: string, to: string, opts: { cwd?: string; merge
   const rename = (ds: Decision[]) => ds.map((d) => (mine(d) ? { ...d, trigger: target } : d));
   if (archive.some(mine)) { writeArchive(paths, rename(archive)); wrote.push('.arbiter/archive.md'); }
   if (pending.some(mine)) { writePending(paths, rename(pending)); wrote.push('.arbiter/pending.md'); }
-  if (active.some(mine)) { writeActive(paths, rename(active)); wrote.push('DECISIONS.md'); }
+  if (active.some(mine)) { writeActive(paths, rename(active)); wrote.push(rulesName(paths)); }
 
   if (newId !== oldId) {
     // Merged: its pictures join the other's, in the order they were taken.

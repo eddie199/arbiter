@@ -38,6 +38,7 @@ import {
   readArchive,
   readConfig,
   readPending,
+  rulesName,
   resolvePaths,
   writeActive,
   writeArchive,
@@ -331,7 +332,7 @@ export function unretire(r: { rule: Decision; id: string }, opts: { cwd?: string
   const later = archive.find((d) => (d.id !== r.id && d.supersedes === r.rule.id) || d.supersedes === r.id);
   if (later) return fail([`${later.id} has changed ${r.rule.id} since, so it can't come back`]);
   const cap = readConfig(paths)?.activeCap ?? ACTIVE_CAP;
-  if (active.length >= cap) return fail([`DECISIONS.md is full (${cap} rules), so ${r.rule.id} can't come back until one goes`]);
+  if (active.length >= cap) return fail([`${rulesName(paths)} is full (${cap} rules), so ${r.rule.id} can't come back until one goes`]);
 
   writeArchive(paths, archive.filter((d) => d.id !== r.id));
   writeActive(paths, [...active, r.rule], cap);
@@ -375,7 +376,7 @@ export function reword(ruleId: string, to: string | undefined, opts: RecordOptio
       id: ruleId,
       decision: next,
       was: rule.decision,
-      wrote: opts.dryRun ? [] : ['DECISIONS.md', '.arbiter/archive.md'],
+      wrote: opts.dryRun ? [] : [rulesName(paths), '.arbiter/archive.md'],
     },
   };
 }
@@ -582,7 +583,7 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
             options: [
               ...overlaps.map((o) => ({
                 flag: `--supersedes ${o.id}${again}`,
-                effect: `${o.id} leaves DECISIONS.md and stays in the archive; the new rule records supersedes: ${o.id}`,
+                effect: `${o.id} leaves ${rulesName(paths)} and stays in the archive; the new rule records supersedes: ${o.id}`,
               })),
               { flag: `--keep-both${again}`, effect: 'both rules stay active' },
             ],
@@ -597,7 +598,7 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
         output: {
           status: 'cap',
           cap,
-          message: `DECISIONS.md holds ${nextActive.length} of ${cap} rules. Nothing was written. Supersede an existing rule with --supersedes <id> to make room.`,
+          message: `${rulesName(paths)} holds ${nextActive.length} of ${cap} rules. Nothing was written. Supersede an existing rule with --supersedes <id> to make room.`,
           candidate: input,
           active: nextActive.map((d) => ({ id: d.id, decision: d.decision, scope: d.scope })),
         },
@@ -635,7 +636,7 @@ export function recordInput(input: DecisionInput, opts: RecordOptions = {}): Rec
       candidate: entry.candidate,
       ...(entry.against && { against: entry.against }),
       active: `${nextActive.length} of ${cap}`,
-      wrote: opts.dryRun ? [] : entry.verdict === 'rule' || entry.verdict === 'retire' ? ['.arbiter/archive.md', 'DECISIONS.md'] : ['.arbiter/archive.md'],
+      wrote: opts.dryRun ? [] : entry.verdict === 'rule' || entry.verdict === 'retire' ? ['.arbiter/archive.md', rulesName(paths)] : ['.arbiter/archive.md'],
       ...(request && { request: { id: request.id, status: opts.dryRun ? request.status : 'applied', author: request.author } }),
       ...(sweepSummary && { sweep: sweepSummary }),
       ...picture(paths, entry),

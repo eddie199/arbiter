@@ -21,7 +21,7 @@ import { spawn } from 'node:child_process';
 import { judge, judgeAll, JudgeAction, Judgement, retire, reword, unjudge, unretire } from './record';
 import { updateCandidate } from './candidate';
 import { candidatesDir, readCandidates } from '../candidates';
-import { findRoot, readActive, readArchive, readPending, resolvePaths } from '../store';
+import { findRoot, readActive, readArchive, readPending, resolvePaths, rulesName } from '../store';
 import { withLock, withLockAsync } from '../lock';
 import { autoPublish } from '../autopublish';
 import { historyFile, workDir } from '../work';
@@ -102,7 +102,8 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
       bytes += st.size;
       latest = Math.max(latest, st.mtimeMs);
     };
-    for (const f of [paths.decisions, paths.archiveDir, paths.config]) visit(f);
+    // The rules file as arbiter.json names it now: it can move while the board is open.
+    for (const f of [resolvePaths(root).decisions, paths.archiveDir, paths.config]) visit(f);
     return `${files}.${bytes}.${latest}`;
   };
 
@@ -199,8 +200,10 @@ export function review(opts: ReviewOptions = {}): Promise<Handoff> {
       }
       // DECISIONS.md as it is, for Download on Design rules: the file the agent reads, not a copy of it.
       if (req.method === 'GET' && url.pathname === '/api/decisions') {
-        const text = fs.existsSync(paths.decisions) ? fs.readFileSync(paths.decisions, 'utf8') : '';
-        res.writeHead(200, { 'content-type': 'text/markdown; charset=utf-8', 'content-disposition': 'attachment; filename="DECISIONS.md"', 'cache-control': 'no-store' });
+        // Resolved now, not at start-up: the rules may have moved to a file of their own since.
+        const now = resolvePaths(root);
+        const text = fs.existsSync(now.decisions) ? fs.readFileSync(now.decisions, 'utf8') : '';
+        res.writeHead(200, { 'content-type': 'text/markdown; charset=utf-8', 'content-disposition': `attachment; filename="${rulesName(now)}"`, 'cache-control': 'no-store' });
         res.end(text);
         return;
       }

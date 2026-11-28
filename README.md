@@ -220,7 +220,7 @@ A private board on arbiter.design where your team comments, says "looks good", a
 <summary><b>Once you're in</b></summary>
 <br>
 
-`npx arbiter publish` puts your board online and gives you a link. It's unlisted and never indexed.
+The first time, publish with the invite code you were sent: `npx arbiter publish --invite <code>`. It puts your board online and gives you a link. It's unlisted and never indexed. After that, `npx arbiter publish` updates the same board, with no code.
 
 `npx arbiter pull` brings comments and change requests back into your project. A comment is just input. A change request gets a proper answer: you reply in chat with `/arbiter` (apply it, apply it with a tweak, or decline with a reason), the agent makes the change, and your next `publish` shows them what happened. Nothing is applied without your yes, and the board never writes to your project on its own.
 
@@ -244,7 +244,7 @@ It's just files in your project. You own them, and they're reviewed in pull requ
 
 | File | What it's for |
 |---|---|
-| `DECISIONS.md` | Your active rules, grouped by type. 40 at most by default, or set your own. The agent reads this before UI work. |
+| `DECISIONS.md` | Your active rules, grouped by type. 40 at most by default, or set your own. The agent reads this before UI work. Notes you add by hand are kept. Already have a `DECISIONS.md` of your own? Arbiter leaves it alone and keeps your design rules in `DESIGN-DECISIONS.md` instead. |
 | `.arbiter/archive.md` | Every decision ever made, append-only. Never loaded into the agent. |
 | `.arbiter/pending.md` | Decisions the agent queued that you haven't judged yet, in chat or on the board. |
 | `.arbiter/candidates/` | One page per competing direction: its state, picture, decisions, and why it lost. |
@@ -308,7 +308,7 @@ Good. Arbiter records decisions, not tokens. Rules can name your components and 
 <details>
 <summary><b>Is this like ADRs?</b></summary>
 
-Yes, same idea: a call, what it beat, and why. ADRs (architecture decision records) are for engineering: the stack, the data model, the API. Arbiter is for design: layout, flow, copy and states. And no one writes it up. The agent records each call as it works and you approve in seconds.
+Yes, same idea: a call, what it beat, and why. ADRs (architecture decision records) are for engineering: the stack, the data model, the API. Arbiter is for design: layout, flow, copy and states. And no one writes it up. The agent records each call as it works and you approve in seconds. If your ADRs already live in a `DECISIONS.md`, Arbiter doesn't touch it: your design rules go in `DESIGN-DECISIONS.md`.
 
 </details>
 
@@ -404,12 +404,14 @@ npx arbiter pull           # Arbiter Team: bring comments and requests back
 | Command | What it does |
 |---|---|
 | `arbiter publish` | Board online at arbiter.design, with comments. Prints the share link. |
+| `arbiter publish --invite <code>` | A new board's first publish, with the invite code you were sent. Later publishes don't need it, and it isn't saved. |
 | `arbiter publish --to <url\|pages>` | Your own hosted Arbiter, or GitHub Pages. |
 | `arbiter publish --auto` | Republish whenever the record changes. |
 | `arbiter publish --on-push` | Write a GitHub Actions workflow that republishes on every push. |
 | `arbiter publish --password [pw]` | Ask for a password before showing the board. No value makes one up. `--no-password` takes it off. |
 | `arbiter unpublish --yes` | Delete the board, its pictures and its comments, saving the comments to the repo first. |
 | `arbiter unpublish <board link> --admin --yes` | For whoever runs the server: take down any board on it, with the admin token in `ARBITER_ADMIN_TOKEN`. |
+| `arbiter invite "<who it's for>"` | For whoever runs the server: make an invite code, good for 1 board (`--boards 3` for more), with the admin token in `ARBITER_ADMIN_TOKEN`. `--list` shows every invite; `--off <id>` switches one off. |
 | `arbiter pull` | Bring comments and reactions into `.arbiter/comments.json`, and requests into `.arbiter/requests.json`. |
 | `arbiter export [--feature f] [--include-rules] [--open]` | Static folder of the board for people without the repo. |
 

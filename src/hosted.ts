@@ -45,6 +45,8 @@ const LINK_FILE = 'hosted.json';
 const TOKEN_FILE = 'hosted.token';
 export const TOKEN_ENV = 'ARBITER_PUBLISH_TOKEN';
 export const ADMIN_ENV = 'ARBITER_ADMIN_TOKEN';
+/** An invite code for the first publish, instead of --invite. */
+export const INVITE_ENV = 'ARBITER_INVITE';
 const IMAGE_TYPES: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
 
 export function readLink(paths: Paths): HostedLink | null {
@@ -202,8 +204,10 @@ export function newPassword(): string {
  * readable without it. Keeps every request under Vercel's 4.5 MB body cap however many screens there are.
  *
  * `password`: a string sets it, null takes it off, left out leaves it as it is.
+ * `invite`: the code a new board needs while the service is invite-only. Only the first publish sends
+ * it; after that the publish token does, so it's never saved.
  */
-export async function publishHosted(paths: Paths, serviceUrl: string, opts: { admin?: string; password?: string | null } = {}): Promise<{ link: HostedLink; candidates: number; snapshots: number; skipped: string[]; created: boolean }> {
+export async function publishHosted(paths: Paths, serviceUrl: string, opts: { admin?: string; password?: string | null; invite?: string } = {}): Promise<{ link: HostedLink; candidates: number; snapshots: number; skipped: string[]; created: boolean }> {
   const base = serviceUrl.replace(/\/$/, '');
   let link = readLink(paths);
   let created = false;
@@ -214,8 +218,15 @@ export async function publishHosted(paths: Paths, serviceUrl: string, opts: { ad
       throw new Error(`no .arbiter/hosted.json for ${base} — publish once from a laptop and commit that file, so CI updates the existing board instead of creating a new one`);
     }
     const admin = opts.admin ?? process.env[ADMIN_ENV];
-    const r = await api(`${base}/api/projects`, { method: 'POST', body: JSON.stringify({ name: path.basename(paths.root) }), admin });
+    const invite = (opts.invite ?? process.env[INVITE_ENV])?.trim() || undefined;
+    const r = await api(`${base}/api/projects`, { method: 'POST', body: JSON.stringify({ name: path.basename(paths.root), ...(invite ? { invite } : {}) }), admin });
     if (r.status === 401) throw new Error(`${base} only lets an admin create boards. Ask whoever runs it for the token, then: npx arbiter publish --to ${base} --admin-token <token>`);
+    // Invite-only: the service says why, and where to ask. Asked without a code, say how to use one.
+    if (r.status === 403 && typeof r.body.error === 'string') {
+      // A self-hosted server is named again in the line, so the command works as typed.
+      const to = base === 'https://arbiter.design' ? '' : ` --to ${base}`;
+      throw new Error(r.body.invite === 'required' ? `${r.body.error}\n    With an invite code: npx arbiter publish --invite <code>${to}` : r.body.error);
+    }
     // The service says which limit it was: this network's, or everyone's.
     if (r.status === 429) throw new Error(typeof r.body.error === 'string' ? r.body.error : `${base} is busy right now — try again in an hour`);
     if (!r.ok) throw new Error(`could not create project on ${base}: ${r.body.error ?? r.status}`);
@@ -333,4 +344,35 @@ export async function takedownHosted(link: string, admin: string): Promise<{ sha
   if (r.status === 405) throw new Error(`${board.origin} can't delete boards yet — it runs an older Arbiter than this one. Nothing was deleted.`);
   if (!r.ok) throw new Error(`delete failed: ${r.body.error ?? r.status}. Nothing was deleted.`);
   return { shareUrl: board.shareUrl, pictures: Number(r.body.pictures ?? 0), comments: Number(r.body.comments ?? 0) };
+}
+
+// ── invites ────────────────────────────────────────────────────────────────
+// While the team board is invite-only, a new board needs an invite code. The admin makes them,
+// with the server's admin token, and hands each to someone by hand.
+
+export interface Invite { id: string; note: string; boardsLeft: number; made: number; created: string; off: string | null }
+
+async function inviteCall(base: string, admin: string, route: string, init: RequestInit = {}): Promise<Record<string, unknown>> {
+  const r = await api(`${base}${route}`, { ...init, admin });
+  if (r.status === 401) throw new Error(`${base} refused the admin token (${ADMIN_ENV})`);
+  // An older service has no invites at all: Next answers its unknown routes with a 404 page, not JSON.
+  if (r.status === 404 && typeof r.body.error !== 'string') throw new Error(`${base} doesn't do invites yet: it runs an older Arbiter than this one`);
+  if (!r.ok) throw new Error(String(r.body.error ?? r.status));
+  return r.body;
+}
+
+/** A new invite. Its code comes back this once; the service keeps only a hash. */
+export async function makeInvite(base: string, admin: string, opts: { note?: string; boards?: number } = {}): Promise<{ id: string; code: string; note: string; boards: number }> {
+  const b = await inviteCall(base, admin, '/api/invites', { method: 'POST', body: JSON.stringify({ note: opts.note ?? '', ...(opts.boards !== undefined ? { boards: opts.boards } : {}) }) });
+  return { id: String(b.id), code: String(b.code), note: String(b.note ?? ''), boards: Number(b.boards) };
+}
+
+export async function listInvites(base: string, admin: string): Promise<Invite[]> {
+  return ((await inviteCall(base, admin, '/api/invites')).invites ?? []) as Invite[];
+}
+
+/** It makes no more boards. Boards it made stay up. */
+export async function switchOffInvite(base: string, admin: string, id: string): Promise<{ note: string | null; already: boolean }> {
+  const b = await inviteCall(base, admin, `/api/invites/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  return { note: typeof b.note === 'string' ? b.note : null, already: !!b.already };
 }

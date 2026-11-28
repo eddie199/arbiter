@@ -9,6 +9,7 @@ import { Icon } from '@/components/ui/icons';
 import { Faint } from '@/components/ui/type';
 import { errorsOf, post } from './api';
 import { go, href } from './route';
+import { arbiter } from './bits';
 
 /** A change's name from its area and title, the way the board files it: "Review inbox — Sorting". */
 export const nameOf = (area: string, title: string): string => {
@@ -30,7 +31,7 @@ export function ChangeMenu({ c, area, short, areas, others, waiting, refresh }: 
   const copy = (text: string, done: string) => {
     void navigator.clipboard?.writeText(text).then(() => { setNote(done); setTimeout(() => setNote(null), 1500); }).catch(() => {});
   };
-  const picture = c.work ? `npx arbiter snapshot ${JSON.stringify(c.name)} --file shot.png` : `npx arbiter candidate ${c.id} --snapshot shot.png`;
+  const picture = c.work ? arbiter(`snapshot ${JSON.stringify(c.name)} --file shot.png`) : arbiter(`candidate ${c.id} --snapshot shot.png`);
   return (
     <div className="flex shrink-0 items-center gap-2 pt-0.5">
       {note ? <Faint aria-live="polite">{note}</Faint> : null}

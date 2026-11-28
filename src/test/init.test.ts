@@ -67,7 +67,10 @@ test('install asks the check-in question once; nobody at the terminal leaves it 
   assert.equal(unasked.onboarded, undefined, 'no answer recorded that nobody gave');
   assert.equal(unasked.checkin, undefined);
   assert.match(checkinHandoff(), /npx arbiter setup --checkin feature/);
-  assert.match(checkinHandoff(), /ask the user now, in chat/);
+  assert.match(checkinHandoff(), /Agent: nobody saw this at a terminal\. Tell the user now, in chat, in these words:/);
+  assert.match(checkinHandoff(), /"Arbiter is installed\. One question before you start: how should Arbiter check in while you work\?"/);
+  assert.match(checkinHandoff(), /ask it as one pick-one question on its own/);
+  assert.match(checkinHandoff(), /When you're ready to review what you've built, type \/arbiter\./);
 
   // The agent asked in chat and passes the answer along.
   await init({ cwd, yes: true, skipInstall: true, checkin: 'quiet' });

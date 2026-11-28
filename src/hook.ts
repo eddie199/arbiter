@@ -34,16 +34,18 @@ export function hookInstalled(root: string): boolean {
   }
 }
 
-export interface HookStep { file: string; outcome: 'created' | 'updated' | 'unchanged' | 'skipped'; note?: string }
+export interface HookStep { file: string; outcome: 'created' | 'updated' | 'unchanged' | 'skipped'; note?: string; attention?: boolean }
 
 /**
  * Write the script, and add the entry to .claude/settings.json beside whatever is there. A
  * settings file that isn't plain JSON is left alone: rewriting it could lose what someone wrote.
  */
-export function installHook(root: string): HookStep[] {
+export function installHook(root: string, rules: string = 'DECISIONS.md', command = 'npx arbiter'): HookStep[] {
   const steps: HookStep[] = [];
   const script = path.join(root, SCRIPT);
-  const content = fs.readFileSync(TEMPLATE, 'utf8').replace(/\r\n/g, '\n');
+  // What it tells the agent names the rules file and the command as this project has them.
+  const named = fs.readFileSync(TEMPLATE, 'utf8').replace(/\r\n/g, '\n').split('DECISIONS.md').join(rules);
+  const content = command === 'npx arbiter' ? named : named.replace(/npx arbiter(?![A-Za-z])/g, command);
   const before = fs.existsSync(script) ? fs.readFileSync(script, 'utf8') : null;
   if (before === content) steps.push({ file: '.claude/hooks/arbiter-board.cjs', outcome: 'unchanged' });
   else {
@@ -59,7 +61,7 @@ export function installHook(root: string): HookStep[] {
     try {
       settings = JSON.parse(fs.readFileSync(file, 'utf8')) as Settings;
     } catch {
-      steps.push({ file: '.claude/settings.json', outcome: 'skipped', note: `not plain JSON, so left alone. Add a UserPromptSubmit hook running: ${HOOK_COMMAND}` });
+      steps.push({ file: '.claude/settings.json', outcome: 'skipped', attention: true, note: `not plain JSON, so Arbiter left it alone. Add a UserPromptSubmit hook that runs: ${HOOK_COMMAND}` });
       return steps;
     }
   }

@@ -20,7 +20,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { addDevDependency, detectPm, init, selfVersion, skillPath, SKILL_MARKER, type Client } from './init';
 import { WORKFLOW_FILE } from './publish';
-import { findRoot, readConfig, resolvePaths, type Paths } from '../store';
+import { findRoot, readConfig, resolvePaths, rulesMovedLine, type Paths } from '../store';
 
 export interface UpdateStatus {
   /** The version running now. */
@@ -90,6 +90,7 @@ export async function update(opts: UpdateOptions = {}): Promise<UpdateResult> {
   }
 
   // 2. the skill — from the copy that was just installed, so a new template lands, not this one's
+  const rulesBefore = readConfig(paths)?.decisions;
   try {
     if (installed && installed.version !== selfVersion()) {
       execFileSync(process.execPath, [installed.bin, 'init', '--yes', '--skip-install'], { cwd: root, stdio: ['ignore', 'ignore', 'pipe'] });
@@ -101,6 +102,9 @@ export async function update(opts: UpdateOptions = {}): Promise<UpdateResult> {
   } catch (e) {
     fail('skill', `init failed: ${(e as Error).message.split('\n')[0]}`);
   }
+  // An install from before 0.1.10 took the project's own DECISIONS.md as the rules file; init moves the rules out.
+  const rulesAfter = readConfig(resolvePaths(root))?.decisions;
+  if (rulesAfter && rulesAfter !== rulesBefore) done('rules', rulesMovedLine(rulesAfter, true));
 
   // 3. the publish workflow, if publish --on-push wrote one: it pins a version
   const wf = path.join(root, WORKFLOW_FILE);

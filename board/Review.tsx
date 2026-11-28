@@ -12,7 +12,7 @@ import { ActionItem, ActionMenu, ActionSeparator, barDots, DOTS, dotsTrigger } f
 import { Icon } from '@/components/ui/icons';
 import { When } from '@/components/When';
 import { BeforeNow } from './Versions';
-import { CHIP, ClashBadge } from './bits';
+import { CHIP, ClashBadge, rulesFile } from './bits';
 import { CompactIcon, ListIcon, SingleIcon, ViewToggle } from './Toolbar';
 import type { Agent, PendingDecision, ReviewState } from './types';
 import { errorsOf, post, whenAgent, type Reply } from './api';
@@ -400,7 +400,7 @@ function DecisionCard({ d, i, n, agent, keys, wide, nav, compact, onJudged }: { 
     skip,
   ] : [
     { key: 'c', label: 'Confirm', variant: 'primary', tip: 'Keeps it as it is. It joins the board as approved.', run: () => void send({ as: 'accept' }) },
-    ...(d.level !== 'polish' ? [{ key: 'r', label: 'Make it a rule', tip: 'Adds it to DECISIONS.md, so your agent follows it from now on.', run: () => void send({ as: 'rule' }) }] : []),
+    ...(d.level !== 'polish' ? [{ key: 'r', label: 'Make it a rule', tip: `Adds it to ${rulesFile()}, so your agent follows it from now on.`, run: () => void send({ as: 'rule' }) }] : []),
     skip,
     { key: 'f', label: 'Fix', variant: 'ghost' as const, tip: 'Say what it should be instead. Your agent makes the change.', run: () => { setFix(''); setPanel({ kind: 'fix' }); } },
   ];
@@ -440,7 +440,7 @@ function DecisionCard({ d, i, n, agent, keys, wide, nav, compact, onJudged }: { 
       <Id>{d.id}</Id>
       <Badge tone="info">{cap(d.level)}</Badge>
       <Badge>{dim}</Badge>
-      {r ? <ClashBadge with="Rule" tip={`Clashes with ${r.id}, a rule in DECISIONS.md`} /> : null}
+      {r ? <ClashBadge with="Rule" tip={`Clashes with ${r.id}, a rule in ${rulesFile()}`} /> : null}
       {d.codeClash ? <ClashBadge with="Code" tip="Clashes with the code: the files it names say otherwise" /> : null}
       <Faint className="ml-auto"><When iso={d.date} />{n ? ` · ${(i ?? 0) + 1} of ${n}` : ''}</Faint>
     </span>

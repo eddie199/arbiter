@@ -178,7 +178,10 @@ export function mergeHandoffs(earlier: Handoff | null, h: Handoff): Handoff {
  */
 export function saveHandoff(paths: Paths, h: Handoff): void {
   fs.mkdirSync(paths.archiveDir, { recursive: true });
-  writeAtomic(path.join(paths.archiveDir, FILE), JSON.stringify(h, null, 2) + '\n');
+  // The next step names the rules file as DECISIONS.md; a project whose rules are elsewhere hears its own.
+  const rules = path.basename(paths.decisions);
+  const named = rules === 'DECISIONS.md' || !h.next ? h : { ...h, next: h.next.split('DECISIONS.md').join(rules) };
+  writeAtomic(path.join(paths.archiveDir, FILE), JSON.stringify(named, null, 2) + '\n');
   const gi = path.join(paths.archiveDir, '.gitignore');
   const lines = (fs.existsSync(gi) ? fs.readFileSync(gi, 'utf8') : '').split(/\r?\n/).filter(Boolean);
   const missing = [FILE, SEEN].filter((x) => !lines.includes(x));
